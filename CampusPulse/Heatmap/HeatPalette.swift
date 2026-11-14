@@ -11,11 +11,12 @@ enum HeatPalette {
     }
 
     static let stops: [Stop] = [
-        Stop(location: 0.00, red: 0.82, green: 0.82, blue: 0.84), // soft white
-        Stop(location: 0.30, red: 1.00, green: 0.72, blue: 0.72), // blush
-        Stop(location: 0.55, red: 0.96, green: 0.36, blue: 0.36), // light red
-        Stop(location: 0.78, red: 0.773, green: 0.020, blue: 0.047), // Badger red
-        Stop(location: 1.00, red: 1.00, green: 0.10, blue: 0.12), // hot red
+        Stop(location: 0.00, red: 0.22, green: 0.36, blue: 1.00), // deep blue
+        Stop(location: 0.22, red: 0.10, green: 0.76, blue: 1.00), // cyan
+        Stop(location: 0.42, red: 0.18, green: 0.92, blue: 0.56), // green
+        Stop(location: 0.62, red: 1.00, green: 0.88, blue: 0.22), // yellow
+        Stop(location: 0.80, red: 1.00, green: 0.54, blue: 0.14), // orange
+        Stop(location: 1.00, red: 1.00, green: 0.20, blue: 0.27), // red
     ]
 
     static func rgb(at value: Double) -> (red: Double, green: Double, blue: Double) {
