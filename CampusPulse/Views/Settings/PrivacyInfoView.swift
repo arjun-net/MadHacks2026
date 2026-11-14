@@ -99,9 +99,12 @@ struct AboutView: View {
                 .padding(18)
                 .card(cornerRadius: Theme.Radius.lg)
 
-                Text("Made with ♥ at MadHacks 2026")
-                    .font(.cpCaption)
-                    .foregroundStyle(Theme.Colors.textTertiary)
+                VStack(spacing: 4) {
+                    Text("Made with ♥ at MadHacks 2026")
+                    Text("Map data © OpenStreetMap contributors")
+                }
+                .font(.cpCaption)
+                .foregroundStyle(Theme.Colors.textTertiary)
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.tabBarClearance)
@@ -119,7 +122,7 @@ struct AppGlyph: View {
             let size = min(proxy.size.width, proxy.size.height)
             ZStack {
                 RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(red: 0.1, green: 0.11, blue: 0.2), Color(red: 0.04, green: 0.04, blue: 0.08)], startPoint: .top, endPoint: .bottom))
+                    .fill(LinearGradient(colors: [Color(white: 0.10), Color(white: 0.02)], startPoint: .top, endPoint: .bottom))
                 Circle()
                     .fill(RadialGradient(
                         gradient: Gradient(colors: [HeatPalette.color(at: 1), HeatPalette.color(at: 0.65), HeatPalette.color(at: 0.3).opacity(0.6), .clear]),

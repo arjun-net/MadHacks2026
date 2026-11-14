@@ -2,8 +2,8 @@ import SwiftUI
 
 enum Theme {
     enum Colors {
-        static let background = Color(red: 0.027, green: 0.031, blue: 0.051)
-        static let elevated = Color(red: 0.067, green: 0.075, blue: 0.11)
+        static let background = Color(red: 0.02, green: 0.02, blue: 0.02)
+        static let elevated = Color(red: 0.075, green: 0.075, blue: 0.075)
         static let surface = Color.white.opacity(0.06)
         static let surfaceStrong = Color.white.opacity(0.10)
         static let stroke = Color.white.opacity(0.10)
@@ -12,11 +12,15 @@ enum Theme {
         static let textSecondary = Color.white.opacity(0.64)
         static let textTertiary = Color.white.opacity(0.42)
 
-        static let accent = Color(red: 0.43, green: 0.56, blue: 1.0)
-        static let accentSecondary = Color(red: 0.74, green: 0.43, blue: 1.0)
-        static let live = Color(red: 0.27, green: 0.96, blue: 0.62)
-        static let warning = Color(red: 1.0, green: 0.72, blue: 0.25)
-        static let danger = Color(red: 1.0, green: 0.36, blue: 0.40)
+        /// Badger red (#C5050C) family.
+        static let badgerRed = Color(red: 0.773, green: 0.020, blue: 0.047)
+        static let accent = Color(red: 0.90, green: 0.10, blue: 0.13)
+        static let accentSecondary = Color(red: 0.55, green: 0.0, blue: 0.03)
+        static let live = Color(red: 1.0, green: 0.23, blue: 0.23)
+        static let warning = Color(white: 0.86)
+        static let danger = Color(red: 1.0, green: 0.30, blue: 0.30)
+        /// Neutral tile color for secondary icons.
+        static let graphite = Color(white: 0.30)
     }
 
     enum Gradients {
@@ -31,7 +35,7 @@ enum Theme {
             endPoint: .bottomTrailing
         )
         static let live = LinearGradient(
-            colors: [Colors.live, Color(red: 0.2, green: 0.75, blue: 1.0)],
+            colors: [Colors.live, Colors.badgerRed],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

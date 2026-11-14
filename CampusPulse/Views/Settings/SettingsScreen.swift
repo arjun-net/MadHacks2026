@@ -21,7 +21,7 @@ struct SettingsScreen: View {
                     NavigationLink {
                         UniversityPickerView(viewModel: viewModel)
                     } label: {
-                        SettingsRow(symbol: "building.columns.fill", color: .indigo, title: "University", value: viewModel.selectedCampus.shortName)
+                        SettingsRow(symbol: "building.columns.fill", color: Theme.Colors.badgerRed, title: "University", value: viewModel.selectedCampus.shortName)
                     }
                 } header: {
                     Text("Campus")
@@ -33,14 +33,14 @@ struct SettingsScreen: View {
                     } label: {
                         SettingsRow(
                             symbol: "location.fill",
-                            color: Color(red: 0.2, green: 0.78, blue: 0.45),
+                            color: Theme.Colors.badgerRed,
                             title: "Location Sharing",
                             value: viewModel.sharingStatusLabel
                         )
                     }
 
                     HStack {
-                        SettingsLabel(symbol: "location.circle.fill", color: .blue, title: "Location Access")
+                        SettingsLabel(symbol: "location.circle.fill", color: Theme.Colors.graphite, title: "Location Access")
                         Spacer()
                         HStack(spacing: 6) {
                             Circle()
@@ -52,10 +52,10 @@ struct SettingsScreen: View {
                     }
 
                     Toggle(isOn: $preferences.shareOnlyOnCampus) {
-                        SettingsLabel(symbol: "mappin.and.ellipse", color: .teal, title: "Only Share on Campus")
+                        SettingsLabel(symbol: "mappin.and.ellipse", color: Theme.Colors.graphite, title: "Only Share on Campus")
                     }
                     Toggle(isOn: $preferences.pauseOvernight) {
-                        SettingsLabel(symbol: "moon.zzz.fill", color: .purple, title: "Pause Overnight")
+                        SettingsLabel(symbol: "moon.zzz.fill", color: Theme.Colors.graphite, title: "Pause Overnight")
                     }
                 } header: {
                     Text("Location")
@@ -65,13 +65,13 @@ struct SettingsScreen: View {
 
                 Section {
                     Toggle(isOn: $preferences.busyAreaAlerts) {
-                        SettingsLabel(symbol: "flame.fill", color: .orange, title: "Busy Area Alerts")
+                        SettingsLabel(symbol: "flame.fill", color: Theme.Colors.badgerRed, title: "Busy Area Alerts")
                     }
                     Toggle(isOn: $preferences.quietSpotAlerts) {
-                        SettingsLabel(symbol: "leaf.fill", color: .green, title: "Quiet Study Spots")
+                        SettingsLabel(symbol: "leaf.fill", color: Theme.Colors.graphite, title: "Quiet Study Spots")
                     }
                     Toggle(isOn: $preferences.weeklyRecap) {
-                        SettingsLabel(symbol: "calendar", color: .pink, title: "Weekly Campus Recap")
+                        SettingsLabel(symbol: "calendar", color: Theme.Colors.graphite, title: "Weekly Campus Recap")
                     }
                 } header: {
                     Text("Notifications")
@@ -83,7 +83,7 @@ struct SettingsScreen: View {
                     NavigationLink {
                         PrivacyInfoView()
                     } label: {
-                        SettingsLabel(symbol: "hand.raised.fill", color: .blue, title: "How Your Data Is Protected")
+                        SettingsLabel(symbol: "hand.raised.fill", color: Theme.Colors.graphite, title: "How Your Data Is Protected")
                     }
                     Button(role: .destructive) {
                         isConfirmingDelete = true

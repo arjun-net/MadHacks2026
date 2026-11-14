@@ -103,9 +103,13 @@ struct CampusMapView: UIViewRepresentable {
 
             let campusRect = campus.boundaryRect
 
+            if let basemap = Basemap.forCampus(campus) {
+                mapView.addOverlay(BasemapOverlay(basemap: basemap), level: .aboveLabels)
+            }
+
             let overlay = HeatmapOverlay(bounds: campus.heatmapBounds)
             self.overlay = overlay
-            mapView.addOverlay(overlay, level: .aboveRoads)
+            mapView.addOverlay(overlay, level: .aboveLabels)
 
             annotations = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, AreaAnnotation(area: $0)) })
             mapView.addAnnotations(Array(annotations.values))
@@ -166,6 +170,9 @@ struct CampusMapView: UIViewRepresentable {
         // MARK: MKMapViewDelegate
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let overlay = overlay as? BasemapOverlay {
+                return BasemapRenderer(overlay: overlay)
+            }
             if let overlay = overlay as? HeatmapOverlay {
                 let renderer = HeatmapOverlayRenderer(overlay: overlay)
                 animator.attach(renderer)
