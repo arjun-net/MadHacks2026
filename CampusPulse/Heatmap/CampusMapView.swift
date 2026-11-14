@@ -10,7 +10,7 @@ struct CampusMapView: UIViewRepresentable {
     let selectedAreaID: String?
     let recenterToken: Int
     /// Space covered by floating chrome, so recentering frames campus in the visible area.
-    var contentInsets = UIEdgeInsets(top: 130, left: 0, bottom: 230, right: 40)
+    var contentInsets = UIEdgeInsets(top: 130, left: 14, bottom: 230, right: 14)
     var onSelectArea: (String?) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
@@ -101,6 +101,8 @@ struct CampusMapView: UIViewRepresentable {
             mapView.removeOverlays(mapView.overlays)
             mapView.removeAnnotations(mapView.annotations.filter { $0 is AreaAnnotation })
 
+            let campusRect = campus.boundaryRect
+
             let overlay = HeatmapOverlay(bounds: campus.heatmapBounds)
             self.overlay = overlay
             mapView.addOverlay(overlay, level: .aboveRoads)
@@ -108,10 +110,12 @@ struct CampusMapView: UIViewRepresentable {
             annotations = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, AreaAnnotation(area: $0)) })
             mapView.addAnnotations(Array(annotations.values))
 
-            let boundary = campus.mapRect.insetBy(dx: -campus.mapRect.width * 1.2, dy: -campus.mapRect.height * 1.2)
+            // Keep the camera on campus: limited panning and zoom-out.
+            let focusArea = campus.focusRect
+            let boundary = campusRect.union(focusArea).insetBy(dx: -focusArea.width, dy: -focusArea.height * 1.5)
             mapView.setCameraBoundary(MKMapView.CameraBoundary(mapRect: boundary), animated: false)
             mapView.setCameraZoomRange(
-                MKMapView.CameraZoomRange(minCenterCoordinateDistance: 250, maxCenterCoordinateDistance: 14_000),
+                MKMapView.CameraZoomRange(minCenterCoordinateDistance: 250, maxCenterCoordinateDistance: 20_000),
                 animated: false
             )
             mapView.region = campus.region
@@ -147,7 +151,7 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         func recenter(_ mapView: MKMapView, animated: Bool) {
-            mapView.setVisibleMapRect(parent.campus.mapRect, edgePadding: parent.contentInsets, animated: animated)
+            mapView.setVisibleMapRect(parent.campus.focusRect, edgePadding: parent.contentInsets, animated: animated)
         }
 
         func focus(on area: CampusArea, in mapView: MKMapView) {
@@ -162,10 +166,12 @@ struct CampusMapView: UIViewRepresentable {
         // MARK: MKMapViewDelegate
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            guard let overlay = overlay as? HeatmapOverlay else { return MKOverlayRenderer(overlay: overlay) }
-            let renderer = HeatmapOverlayRenderer(overlay: overlay)
-            animator.attach(renderer)
-            return renderer
+            if let overlay = overlay as? HeatmapOverlay {
+                let renderer = HeatmapOverlayRenderer(overlay: overlay)
+                animator.attach(renderer)
+                return renderer
+            }
+            return MKOverlayRenderer(overlay: overlay)
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {

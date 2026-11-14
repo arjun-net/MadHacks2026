@@ -13,6 +13,62 @@ struct Campus: Identifiable, Hashable, Sendable {
     let participationScale: Double
     /// Newly launched campuses may not yet have enough participants to show data.
     let isPilot: Bool
+    /// Hand-drawn campus outline. When nil, an outline is derived from the campus areas.
+    var customBoundary: [Coordinate]? = nil
+
+    /// Closed outline of campus used to frame, mask and clip the map.
+    var boundary: [Coordinate] {
+        customBoundary ?? Self.paddedHull(around: areas.map(\.coordinate), paddingMeters: 170)
+    }
+
+    /// The part of campus to frame on screen: the tracked buildings plus a margin.
+    /// (The outline can include large outlying land, like nature preserves.)
+    var focusRect: MKMapRect {
+        let rect = areas
+            .map { MKMapPoint($0.coordinate.clCoordinate) }
+            .reduce(MKMapRect.null) { $0.union(MKMapRect(origin: $1, size: MKMapSize(width: 0, height: 0))) }
+        let margin = MKMapPointsPerMeterAtLatitude(center.latitude) * 140
+        return rect.insetBy(dx: -margin, dy: -margin)
+    }
+
+    /// Map rect enclosing the campus outline.
+    var boundaryRect: MKMapRect {
+        boundary
+            .map { MKMapPoint($0.clCoordinate) }
+            .reduce(MKMapRect.null) { $0.union(MKMapRect(origin: $1, size: MKMapSize(width: 0, height: 0))) }
+    }
+
+    /// Convex hull of the points, pushed outward from its center so buildings sit inside the edge.
+    private static func paddedHull(around points: [Coordinate], paddingMeters: Double) -> [Coordinate] {
+        guard points.count >= 3 else { return points }
+        let sorted = points.sorted { ($0.longitude, $0.latitude) < ($1.longitude, $1.latitude) }
+        func cross(_ o: Coordinate, _ a: Coordinate, _ b: Coordinate) -> Double {
+            (a.longitude - o.longitude) * (b.latitude - o.latitude) - (a.latitude - o.latitude) * (b.longitude - o.longitude)
+        }
+        var lower: [Coordinate] = []
+        for p in sorted {
+            while lower.count >= 2, cross(lower[lower.count - 2], lower[lower.count - 1], p) <= 0 { lower.removeLast() }
+            lower.append(p)
+        }
+        var upper: [Coordinate] = []
+        for p in sorted.reversed() {
+            while upper.count >= 2, cross(upper[upper.count - 2], upper[upper.count - 1], p) <= 0 { upper.removeLast() }
+            upper.append(p)
+        }
+        let hull = Array(lower.dropLast() + upper.dropLast())
+        let centroid = Coordinate(
+            hull.map(\.latitude).reduce(0, +) / Double(hull.count),
+            hull.map(\.longitude).reduce(0, +) / Double(hull.count)
+        )
+        return hull.map { point in
+            let distance = max(1, centroid.distance(to: point))
+            let scale = (distance + paddingMeters) / distance
+            return Coordinate(
+                centroid.latitude + (point.latitude - centroid.latitude) * scale,
+                centroid.longitude + (point.longitude - centroid.longitude) * scale
+            )
+        }
+    }
 
     var region: MKCoordinateRegion {
         MKCoordinateRegion(

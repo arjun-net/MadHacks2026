@@ -39,6 +39,12 @@ enum CampusCatalog {
                        category: .dining, coordinate: Coordinate(43.0763, -89.4183), radiusMeters: 55, popularity: 0.58),
             CampusArea(id: "camp-randall", name: "Camp Randall Stadium", shortName: "Camp Randall",
                        category: .athletics, coordinate: Coordinate(43.0699, -89.4127), radiusMeters: 90, popularity: 0.3),
+            CampusArea(id: "bascom-hill", name: "Bascom Hill", shortName: "Bascom Hill",
+                       category: .outdoors, coordinate: Coordinate(43.0757, -89.4022), radiusMeters: 70, popularity: 0.5),
+            CampusArea(id: "sellery-hall", name: "Sellery Hall", shortName: "Sellery",
+                       category: .housing, coordinate: Coordinate(43.0728, -89.3993), radiusMeters: 45, popularity: 0.45),
+            CampusArea(id: "kohl-center", name: "Kohl Center", shortName: "Kohl Center",
+                       category: .athletics, coordinate: Coordinate(43.0694, -89.3968), radiusMeters: 75, popularity: 0.32),
         ],
         participationScale: 1.0,
         isPilot: false
