@@ -1,0 +1,703 @@
+{
+  "campus": "UW-Madison",
+  "buildings": [
+    {
+      "id": "college_library",
+      "name": "College Library (Helen C. White Hall)",
+      "type": "study",
+      "center": [43.0768, -89.4009],
+      "perimeter_polygon": [
+        [43.0772, -89.4005],
+        [43.0770, -89.3998],
+        [43.0764, -89.4002],
+        [43.0766, -89.4010]
+      ]
+    },
+    {
+      "id": "engineering_hall",
+      "name": "Engineering Hall",
+      "type": "class",
+      "center": [43.0712, -89.4112],
+      "perimeter_polygon": [
+        [43.0716, -89.4115],
+        [43.0715, -89.4105],
+        [43.0708, -89.4106],
+        [43.0709, -89.4116]
+      ]
+    },
+    {
+      "id": "gordon_dining",
+      "name": "Gordon Avenue Dining & Market",
+      "type": "dining",
+      "center": [43.0730, -89.4060],
+      "perimeter_polygon": [
+        [43.0733, -89.4055],
+        [43.0735, -89.4048],
+        [43.0727, -89.4049],
+        [43.0728, -89.4056]
+      ]
+    },
+    {
+      "id": "dorm_se",
+      "name": "SE Residence Halls (Chadbourne/Barnard)",
+      "type": "dorm",
+      "center": [43.0745, -89.3980],
+      "perimeter_polygon": [
+        [43.0752, -89.3974],
+        [43.0751, -89.3968],
+        [43.0740, -89.3970],
+        [43.0741, -89.3976]
+      ]
+    },
+    {
+      "id": "memorial_union",
+      "name": "Memorial Union",
+      "type": "social",
+      "center": [43.0778, -89.4023],
+      "perimeter_polygon": [
+        [43.0782, -89.4028],
+        [43.0781, -89.4019],
+        [43.0775, -89.4020],
+        [43.0775, -89.4027]
+      ]
+    },
+    {
+      "id": "gym_nat",
+      "name": "Nicholas Recreation Center",
+      "type": "gym",
+      "center": [43.0712, -89.3997],
+      "perimeter_polygon": [
+        [43.0716, -89.3993],
+        [43.0716, -89.3987],
+        [43.0709, -89.3987],
+        [43.0709, -89.3994]
+      ]
+    },
+    {
+      "id": "union_south",
+      "name": "Union South",
+      "type": "social",
+      "center": [43.0707, -89.4060],
+      "perimeter_polygon": [
+        [43.0711, -89.4064],
+        [43.0710, -89.4056],
+        [43.0704, -89.4057],
+        [43.0705, -89.4065]
+      ]
+    },
+
+    {
+      "id": "bascom_hall",
+      "name": "Bascom Hall",
+      "type": "class",
+      "center": [43.0766, -89.4124],
+      "perimeter_polygon": [
+        [43.0769, -89.4128],
+        [43.0769, -89.4120],
+        [43.0763, -89.4120],
+        [43.0763, -89.4128]
+      ]
+    },
+    {
+      "id": "science_hall",
+      "name": "Science Hall",
+      "type": "class",
+      "center": [43.0776, -89.4114],
+      "perimeter_polygon": [
+        [43.0780, -89.4117],
+        [43.0779, -89.4110],
+        [43.0773, -89.4111],
+        [43.0774, -89.4118]
+      ]
+    },
+    {
+      "id": "van_hise",
+      "name": "Van Hise Hall (Languages)",
+      "type": "class",
+      "center": [43.0755, -89.4038],
+      "perimeter_polygon": [
+        [43.0759, -89.4042],
+        [43.0758, -89.4034],
+        [43.0751, -89.4035],
+        [43.0752, -89.4043]
+      ]
+    },
+    {
+      "id": "humanities",
+      "name": "Humanities Building",
+      "type": "class",
+      "center": [43.0747, -89.4030],
+      "perimeter_polygon": [
+        [43.0752, -89.4034],
+        [43.0751, -89.4025],
+        [43.0742, -89.4026],
+        [43.0743, -89.4035]
+      ]
+    },
+    {
+      "id": "social_sciences",
+      "name": "Social Science Building",
+      "type": "class",
+      "center": [43.0747, -89.4022],
+      "perimeter_polygon": [
+        [43.0751, -89.4024],
+        [43.0750, -89.4018],
+        [43.0743, -89.4019],
+        [43.0744, -89.4025]
+      ]
+    },
+    {
+      "id": "ingraham",
+      "name": "Ingraham Hall",
+      "type": "class",
+      "center": [43.0754, -89.4020],
+      "perimeter_polygon": [
+        [43.0758, -89.4023],
+        [43.0757, -89.4018],
+        [43.0751, -89.4019],
+        [43.0752, -89.4024]
+      ]
+    },
+    {
+      "id": "chamberlin_hall",
+      "name": "Chamberlin Hall (Physics)",
+      "type": "class",
+      "center": [43.0730, -89.4010],
+      "perimeter_polygon": [
+        [43.0734, -89.4013],
+        [43.0733, -89.4007],
+        [43.0727, -89.4008],
+        [43.0728, -89.4014]
+      ]
+    },
+    {
+      "id": "sterling_hall",
+      "name": "Sterling Hall",
+      "type": "class",
+      "center": [43.0738, -89.4017],
+      "perimeter_polygon": [
+        [43.0742, -89.4020],
+        [43.0741, -89.4014],
+        [43.0735, -89.4015],
+        [43.0736, -89.4021]
+      ]
+    },
+    {
+      "id": "chemistry_building",
+      "name": "Chemistry Building",
+      "type": "class",
+      "center": [43.0730, -89.4034],
+      "perimeter_polygon": [
+        [43.0733, -89.4037],
+        [43.0732, -89.4031],
+        [43.0727, -89.4032],
+        [43.0728, -89.4038]
+      ]
+    },
+    {
+      "id": "weeks_hall",
+      "name": "Weeks Hall (Geosciences)",
+      "type": "class",
+      "center": [43.0721, -89.4029],
+      "perimeter_polygon": [
+        [43.0724, -89.4032],
+        [43.0724, -89.4026],
+        [43.0718, -89.4026],
+        [43.0718, -89.4032]
+      ]
+    },
+    {
+      "id": "chazen_museum",
+      "name": "Chazen Museum of Art",
+      "type": "study",
+      "center": [43.0752, -89.4010],
+      "perimeter_polygon": [
+        [43.0756, -89.4013],
+        [43.0755, -89.4007],
+        [43.0749, -89.4008],
+        [43.0750, -89.4014]
+      ]
+    },
+    {
+      "id": "education_bldg",
+      "name": "Education Building",
+      "type": "class",
+      "center": [43.0760, -89.4014],
+      "perimeter_polygon": [
+        [43.0763, -89.4017],
+        [43.0762, -89.4012],
+        [43.0757, -89.4013],
+        [43.0758, -89.4018]
+      ]
+    },
+    {
+      "id": "grainger_hall",
+      "name": "Grainger Hall (Wisconsin School of Business)",
+      "type": "class",
+      "center": [43.0755, -89.4060],
+      "perimeter_polygon": [
+        [43.0759, -89.4063],
+        [43.0758, -89.4057],
+        [43.0752, -89.4058],
+        [43.0753, -89.4064]
+      ]
+    },
+    {
+      "id": "human_ecology",
+      "name": "School of Human Ecology",
+      "type": "class",
+      "center": [43.0765, -89.4037],
+      "perimeter_polygon": [
+        [43.0768, -89.4040],
+        [43.0767, -89.4035],
+        [43.0762, -89.4036],
+        [43.0763, -89.4041]
+      ]
+    },
+    {
+      "id": "law_school",
+      "name": "Law School",
+      "type": "class",
+      "center": [43.0747, -89.4052],
+      "perimeter_polygon": [
+        [43.0751, -89.4055],
+        [43.0750, -89.4049],
+        [43.0744, -89.4050],
+        [43.0745, -89.4056]
+      ]
+    },
+    {
+      "id": "vilas_hall",
+      "name": "Vilas Hall (Communication Arts / Journalism)",
+      "type": "class",
+      "center": [43.0750, -89.3996],
+      "perimeter_polygon": [
+        [43.0753, -89.3999],
+        [43.0752, -89.3993],
+        [43.0747, -89.3994],
+        [43.0748, -89.4000]
+      ]
+    },
+    {
+      "id": "memorial_library",
+      "name": "Memorial Library",
+      "type": "study",
+      "center": [43.0749, -89.3997],
+      "perimeter_polygon": [
+        [43.0752, -89.4000],
+        [43.0752, -89.3994],
+        [43.0746, -89.3994],
+        [43.0746, -89.4000]
+      ]
+    },
+    {
+      "id": "steenbock_library",
+      "name": "Steenbock Library (Agricultural & Life Sciences)",
+      "type": "study",
+      "center": [43.0724, -89.4075],
+      "perimeter_polygon": [
+        [43.0728, -89.4078],
+        [43.0727, -89.4072],
+        [43.0721, -89.4073],
+        [43.0722, -89.4079]
+      ]
+    },
+    {
+      "id": "art_library",
+      "name": "Kohler Art Library (Elvehjem Building)",
+      "type": "study",
+      "center": [43.0729, -89.4009],
+      "perimeter_polygon": [
+        [43.0732, -89.4012],
+        [43.0731, -89.4006],
+        [43.0726, -89.4007],
+        [43.0727, -89.4013]
+      ]
+    },
+    {
+      "id": "ebling_library",
+      "name": "Ebling Library (Health Sciences Learning Center)",
+      "type": "study",
+      "center": [43.0726, -89.4098],
+      "perimeter_polygon": [
+        [43.0729, -89.4101],
+        [43.0728, -89.4095],
+        [43.0723, -89.4096],
+        [43.0724, -89.4102]
+      ]
+    },
+
+    {
+      "id": "computer_sciences",
+      "name": "Computer Sciences Building (Hill Center)",
+      "type": "class",
+      "center": [43.0740, -89.4039],
+      "perimeter_polygon": [
+        [43.0744, -89.4042],
+        [43.0743, -89.4036],
+        [43.0737, -89.4037],
+        [43.0738, -89.4043]
+      ]
+    },
+    {
+      "id": "mechanical_engineering",
+      "name": "Mechanical Engineering Building",
+      "type": "class",
+      "center": [43.0718, -89.4105],
+      "perimeter_polygon": [
+        [43.0722, -89.4108],
+        [43.0721, -89.4102],
+        [43.0715, -89.4103],
+        [43.0716, -89.4109]
+      ]
+    },
+    {
+      "id": "materials_science",
+      "name": "Materials Science & Engineering Building",
+      "type": "class",
+      "center": [43.0714, -89.4098],
+      "perimeter_polygon": [
+        [43.0717, -89.4101],
+        [43.0716, -89.4096],
+        [43.0711, -89.4097],
+        [43.0712, -89.4102]
+      ]
+    },
+    {
+      "id": "wendt_library",
+      "name": "Wendt Commons (Engineering Library)",
+      "type": "study",
+      "center": [43.0710, -89.4084],
+      "perimeter_polygon": [
+        [43.0713, -89.4087],
+        [43.0712, -89.4082],
+        [43.0708, -89.4082],
+        [43.0709, -89.4087]
+      ]
+    },
+    {
+      "id": "kemper_chemistry",
+      "name": "Kemper K. Knapp / Biochemistry (Hector F. DeLuca) Building",
+      "type": "class",
+      "center": [43.0738, -89.4062],
+      "perimeter_polygon": [
+        [43.0741, -89.4065],
+        [43.0740, -89.4059],
+        [43.0735, -89.4060],
+        [43.0736, -89.4066]
+      ]
+    },
+    {
+      "id": "biotech_center",
+      "name": "Biotechnology Center (Genetics/Biotech)",
+      "type": "class",
+      "center": [43.0752, -89.4055],
+      "perimeter_polygon": [
+        [43.0755, -89.4058],
+        [43.0754, -89.4053],
+        [43.0749, -89.4054],
+        [43.0750, -89.4059]
+      ]
+    },
+    {
+      "id": "rustjergen",
+      "name": "Microbial Sciences Building",
+      "type": "class",
+      "center": [43.0741, -89.4070],
+      "perimeter_polygon": [
+        [43.0744, -89.4073],
+        [43.0743, -89.4068],
+        [43.0738, -89.4069],
+        [43.0739, -89.4074]
+      ]
+    },
+    {
+      "id": "integrated_likeness",
+      "name": "Integrated Liberal Studies (Meiklejohn House area)",
+      "type": "class",
+      "center": [43.0750, -89.4046],
+      "perimeter_polygon": [
+        [43.0753, -89.4049],
+        [43.0752, -89.4044],
+        [43.0747, -89.4045],
+        [43.0748, -89.4050]
+      ]
+    },
+    {
+      "id": "chadbourne_res",
+      "name": "Chadbourne Residential College",
+      "type": "dorm",
+      "center": [43.0740, -89.3970],
+      "perimeter_polygon": [
+        [43.0742, -89.3967],
+        [43.0742, -89.3964],
+        [43.0739, -89.3964],
+        [43.0739, -89.3967]
+      ]
+    },
+    {
+      "id": "barnard_res",
+      "name": "Barnard Residence Hall",
+      "type": "dorm",
+      "center": [43.0747, -89.3969],
+      "perimeter_polygon": [
+        [43.0749, -89.3971],
+        [43.0749, -89.3968],
+        [43.0745, -89.3968],
+        [43.0745, -89.3971]
+      ]
+    },
+    {
+      "id": "sellery_hall",
+      "name": "Sellery Residence Hall",
+      "type": "dorm",
+      "center": [43.0689, -89.3976],
+      "perimeter_polygon": [
+        [43.0692, -89.3979],
+        [43.0692, -89.3973],
+        [43.0686, -89.3973],
+        [43.0686, -89.3979]
+      ]
+    },
+    {
+      "id": "witte_hall",
+      "name": "Witte Residence Hall",
+      "type": "dorm",
+      "center": [43.0682, -89.3986],
+      "perimeter_polygon": [
+        [43.0685, -89.3989],
+        [43.0685, -89.3983],
+        [43.0679, -89.3983],
+        [43.0679, -89.3989]
+      ]
+    },
+    {
+      "id": "smith_res",
+      "name": "Smith Residence Hall",
+      "type": "dorm",
+      "center": [43.0690, -89.3966],
+      "perimeter_polygon": [
+        [43.0692, -89.3968],
+        [43.0692, -89.3964],
+        [43.0688, -89.3964],
+        [43.0688, -89.3968]
+      ]
+    },
+    {
+      "id": "ogg_res",
+      "name": "Ogg Residence Hall",
+      "type": "dorm",
+      "center": [43.0682, -89.3972],
+      "perimeter_polygon": [
+        [43.0685, -89.3974],
+        [43.0685, -89.3970],
+        [43.0679, -89.3970],
+        [43.0679, -89.3974]
+      ]
+    },
+    {
+      "id": "lowell_res",
+      "name": "Lowell Residence Hall",
+      "type": "dorm",
+      "center": [43.0693, -89.3968],
+      "perimeter_polygon": [
+        [43.0695, -89.3970],
+        [43.0695, -89.3966],
+        [43.0691, -89.3966],
+        [43.0691, -89.3970]
+      ]
+    },
+    {
+      "id": "johnson_wirtz",
+      "name": "Johnson & Wirtz (Social Work dorm area)",
+      "type": "dorm",
+      "center": [43.0696, -89.3988],
+      "perimeter_polygon": [
+        [43.0698, -89.3990],
+        [43.0698, -89.3986],
+        [43.0694, -89.3986],
+        [43.0694, -89.3990]
+      ]
+    },
+    {
+      "id": "slichter_hall",
+      "name": "Slichter Residence Hall",
+      "type": "dorm",
+      "center": [43.0752, -89.3939],
+      "perimeter_polygon": [
+        [43.0755, -89.3941],
+        [43.0755, -89.3937],
+        [43.0750, -89.3937],
+        [43.0750, -89.3941]
+      ]
+    },
+    {
+      "id": "trippl_hall",
+      "name": "Tripp Residence Hall",
+      "type": "dorm",
+      "center": [43.0754, -89.3931],
+      "perimeter_polygon": [
+        [43.0756, -89.3933],
+        [43.0756, -89.3929],
+        [43.0752, -89.3929],
+        [43.0752, -89.3933]
+      ]
+    },
+    {
+      "id": "adams_hall",
+      "name": "Adams Residence Hall",
+      "type": "dorm",
+      "center": [43.0756, -89.3923],
+      "perimeter_polygon": [
+        [43.0758, -89.3925],
+        [43.0758, -89.3921],
+        [43.0754, -89.3921],
+        [43.0754, -89.3925]
+      ]
+    },
+    {
+      "id": "cole_hall",
+      "name": "Cole Residence Hall",
+      "type": "dorm",
+      "center": [43.0756, -89.3947],
+      "perimeter_polygon": [
+        [43.0758, -89.3949],
+        [43.0758, -89.3945],
+        [43.0754, -89.3945],
+        [43.0754, -89.3949]
+      ]
+    },
+    {
+      "id": "leopold_hall",
+      "name": "Leopold Residence Hall",
+      "type": "dorm",
+      "center": [43.0766, -89.3945],
+      "perimeter_polygon": [
+        [43.0768, -89.3947],
+        [43.0768, -89.3943],
+        [43.0764, -89.3943],
+        [43.0764, -89.3949]
+      ]
+    },
+    {
+      "id": "kronshage_hall",
+      "name": "Kronshage Residence Hall",
+      "type": "dorm",
+      "center": [43.0770, -89.3944],
+      "perimeter_polygon": [
+        [43.0772, -89.3946],
+        [43.0772, -89.3942],
+        [43.0768, -89.3942],
+        [43.0768, -89.3946]
+      ]
+    },
+    {
+      "id": "sullivan_hall",
+      "name": "Sullivan Residence Hall",
+      "type": "dorm",
+      "center": [43.0767, -89.3938],
+      "perimeter_polygon": [
+        [43.0769, -89.3940],
+        [43.0769, -89.3936],
+        [43.0765, -89.3936],
+        [43.0765, -89.3940]
+      ]
+    },
+    {
+      "id": "phillips_hall",
+      "name": "Phillips Residence Hall",
+      "type": "dorm",
+      "center": [43.0769, -89.3934],
+      "perimeter_polygon": [
+        [43.0771, -89.3936],
+        [43.0771, -89.3932],
+        [43.0767, -89.3932],
+        [43.0767, -89.3936]
+      ]
+    },
+    {
+      "id": "bradley_hall",
+      "name": "Bradley Residence Hall",
+      "type": "dorm",
+      "center": [43.0758, -89.3942],
+      "perimeter_polygon": [
+        [43.0760, -89.3944],
+        [43.0760, -89.3940],
+        [43.0756, -89.3940],
+        [43.0756, -89.3944]
+      ]
+    },
+    {
+      "id": "dejope_hall",
+      "name": "Dejope Residence Hall",
+      "type": "dorm",
+      "center": [43.0758, -89.3922],
+      "perimeter_polygon": [
+        [43.0760, -89.3924],
+        [43.0760, -89.3920],
+        [43.0756, -89.3920],
+        [43.0756, -89.3924]
+      ]
+    },
+    {
+      "id": "waters_hall",
+      "name": "Waters Residence Hall",
+      "type": "dorm",
+      "center": [43.0755, -89.3919],
+      "perimeter_polygon": [
+        [43.0757, -89.3921],
+        [43.0757, -89.3917],
+        [43.0753, -89.3917],
+        [43.0753, -89.3921]
+      ]
+    },
+    {
+      "id": "merit_hall",
+      "name": "Merit Residence Hall",
+      "type": "dorm",
+      "center": [43.0691, -89.3955],
+      "perimeter_polygon": [
+        [43.0693, -89.3957],
+        [43.0693, -89.3953],
+        [43.0689, -89.3953],
+        [43.0689, -89.3957]
+      ]
+    },
+    {
+      "id": "witte_dining",
+      "name": "Witte/Sellery Dining (SE Dorms Dining Hall)",
+      "type": "dining",
+      "center": [43.0685, -89.3980],
+      "perimeter_polygon": [
+        [43.0687, -89.3982],
+        [43.0687, -89.3978],
+        [43.0683, -89.3978],
+        [43.0683, -89.3982]
+      ]
+    },
+    {
+      "id": "lakeshore_market",
+      "name": "Lakeshore Market & Dining (Lakeshore dorms)",
+      "type": "dining",
+      "center": [43.0760, -89.3940],
+      "perimeter_polygon": [
+        [43.0762, -89.3942],
+        [43.0762, -89.3938],
+        [43.0758, -89.3938],
+        [43.0758, -89.3942]
+      ]
+    },
+    {
+      "id": "four_lakes_market",
+      "name": "Four Lakes Market (Dejope dining)",
+      "type": "dining",
+      "center": [43.0759, -89.3926],
+      "perimeter_polygon": [
+        [43.0761, -89.3928],
+        [43.0761, -89.3924],
+        [43.0757, -89.3924],
+        [43.0757, -89.3928]
+      ]
+    }
+  ]
+}

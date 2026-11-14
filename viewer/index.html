@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campus Pulse — Heatmap Viewer</title>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Top bar -->
+  <header class="glass topbar">
+    <div class="brand">
+      <span class="pulse-dot"></span>
+      <h1>Campus Pulse</h1>
+      <span class="sub">UW-Madison · Student Density Heatmap</span>
+    </div>
+    <div class="toggles">
+      <button id="toggle-heat" class="toggle-btn active" title="Toggle density heatmap">Heatmap</button>
+      <button id="toggle-paths" class="toggle-btn" title="Toggle all-agent trace paths">Paths</button>
+    </div>
+    <label class="upload-btn" for="csv-input">
+      <input type="file" id="csv-input" accept=".csv" hidden />
+      Load CSV
+    </label>
+  </header>
+
+  <!-- Agent detail panel -->
+  <aside id="agent-panel" class="glass agent-panel" hidden>
+    <button id="agent-close" class="panel-close" title="Close">×</button>
+    <div id="agent-panel-title" class="panel-title">Agent</div>
+    <div id="agent-panel-body" class="panel-body"></div>
+  </aside>
+
+  <!-- Timeline dock -->
+  <section class="glass dock">
+    <div class="dock-row">
+      <button id="play-btn" class="icon-btn" title="Play / Pause">▶</button>
+      <span id="time-label" class="time-label">--:--</span>
+      <input type="range" id="time-slider" min="0" max="719" value="0" step="1" disabled />
+      <label class="speed-label">
+        <select id="speed-select">
+          <option value="250">0.25×</option>
+          <option value="100" selected>1×</option>
+          <option value="50">2×</option>
+          <option value="25">4×</option>
+        </select>
+      </label>
+    </div>
+    <div class="ticks">
+      <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+    </div>
+  </section>
+
+  <!-- Info panel -->
+  <aside class="glass info">
+    <div id="status" class="status">Drop or load <code>campus_simulation_history.csv</code> to begin.</div>
+    <div id="stats" class="stats" hidden>
+      <div class="stat"><span id="stat-pings" class="stat-num">0</span><span class="stat-label">pings at t</span></div>
+      <div class="stat"><span id="stat-agents" class="stat-num">0</span><span class="stat-label">agents</span></div>
+      <div class="stat"><span id="stat-frames" class="stat-num">0</span><span class="stat-label">time steps</span></div>
+    </div>
+    <div class="legend">
+      <span class="legend-title">Density</span>
+      <div class="legend-bar"></div>
+      <div class="legend-labels"><span>low</span><span>high</span></div>
+    </div>
+  </aside>
+
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
