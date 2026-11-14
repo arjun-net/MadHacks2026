@@ -110,7 +110,8 @@ final class HeatmapAnimator: NSObject {
                 : 1 - pow(-2 * progress + 2, 3) / 2
             let grid = from.blended(with: to, fraction: Float(eased))
             currentGrid = grid
-            renderer?.image = grid.makeImage()
+            // Cheaper frames mid-transition; full detail once it settles.
+            renderer?.image = grid.makeImage(scale: progress >= 1 ? 2 : 1)
             needsRedraw = true
             if progress >= 1 {
                 fromGrid = nil

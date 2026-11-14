@@ -18,7 +18,7 @@ struct HeatmapGrid: Sendable {
     static func render(
         cells: [DensityCell],
         in mapRect: MKMapRect,
-        width: Int = 240,
+        width: Int = 400,
         sigmaMeters: Double = 62,
         referenceDensity: Float = 60
     ) -> HeatmapGrid {
@@ -85,30 +85,54 @@ struct HeatmapGrid: Sendable {
         return result
     }
 
-    func makeImage() -> CGImage? {
+    /// Colors the field into an image `scale`× larger than the grid. Density values are
+    /// interpolated *before* coloring, so edges stay smooth instead of showing blocky color steps.
+    func makeImage(scale: Int = 2) -> CGImage? {
         let lut = HeatPalette.lookupTable
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let levels = Float(HeatPalette.lookupLevels - 1)
+        let outWidth = width * scale
+        let outHeight = height * scale
+        let maxX = Float(width - 1)
+        let maxY = Float(height - 1)
+        let inverseScale = 1 / Float(scale)
+        var pixels = [UInt8](repeating: 0, count: outWidth * outHeight * 4)
+
         pixels.withUnsafeMutableBufferPointer { out in
             lut.withUnsafeBufferPointer { table in
                 values.withUnsafeBufferPointer { field in
-                    for i in 0..<field.count {
-                        let index = Int(field[i] * 255) * 4
-                        let o = i * 4
-                        out[o] = table[index]
-                        out[o + 1] = table[index + 1]
-                        out[o + 2] = table[index + 2]
-                        out[o + 3] = table[index + 3]
+                    for oy in 0..<outHeight {
+                        let fy = min(maxY, max(0, (Float(oy) + 0.5) * inverseScale - 0.5))
+                        let y0 = Int(fy)
+                        let y1 = min(y0 + 1, height - 1)
+                        let ty = fy - Float(y0)
+                        let row0 = y0 * width
+                        let row1 = y1 * width
+                        for ox in 0..<outWidth {
+                            let fx = min(maxX, max(0, (Float(ox) + 0.5) * inverseScale - 0.5))
+                            let x0 = Int(fx)
+                            let x1 = min(x0 + 1, width - 1)
+                            let tx = fx - Float(x0)
+                            let top = field[row0 + x0] + (field[row0 + x1] - field[row0 + x0]) * tx
+                            let bottom = field[row1 + x0] + (field[row1 + x1] - field[row1 + x0]) * tx
+                            let value = top + (bottom - top) * ty
+                            let index = Int(value * levels) * 4
+                            let o = (oy * outWidth + ox) * 4
+                            out[o] = table[index]
+                            out[o + 1] = table[index + 1]
+                            out[o + 2] = table[index + 2]
+                            out[o + 3] = table[index + 3]
+                        }
                     }
                 }
             }
         }
         guard let provider = CGDataProvider(data: Data(pixels) as CFData) else { return nil }
         return CGImage(
-            width: width,
-            height: height,
+            width: outWidth,
+            height: outHeight,
             bitsPerComponent: 8,
             bitsPerPixel: 32,
-            bytesPerRow: width * 4,
+            bytesPerRow: outWidth * 4,
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
             provider: provider,

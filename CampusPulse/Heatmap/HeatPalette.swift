@@ -57,11 +57,14 @@ enum HeatPalette {
         return smooth * (0.5 + 0.38 * t)
     }
 
-    /// 256-entry premultiplied RGBA lookup table used by the renderer.
+    /// Number of entries in the lookup table; more levels means smoother gradients (less banding).
+    static let lookupLevels = 1024
+
+    /// Premultiplied RGBA lookup table used by the renderer.
     static let lookupTable: [UInt8] = {
-        var table = [UInt8](repeating: 0, count: 256 * 4)
-        for i in 0..<256 {
-            let raw = Double(i) / 255
+        var table = [UInt8](repeating: 0, count: lookupLevels * 4)
+        for i in 0..<lookupLevels {
+            let raw = Double(i) / Double(lookupLevels - 1)
             let t = pow(raw, 0.8) // lift low densities a touch so quiet areas still read
             let c = rgb(at: t)
             let a = alpha(at: raw)
