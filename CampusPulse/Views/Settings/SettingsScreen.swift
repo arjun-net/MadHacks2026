@@ -204,21 +204,21 @@ private struct CampusBanner: View {
                 .shadow(color: Theme.Colors.accent.opacity(0.5), radius: 12)
             VStack(alignment: .leading, spacing: 3) {
                 Text(campus.name)
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .lineLimit(2)
                 HStack(spacing: 6) {
                     Text(campus.location)
                     if campus.isPilot {
                         Text("PILOT")
-                            .font(.cpMicro)
+                            .typeStyle(.micro)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Theme.Colors.warning.opacity(0.2), in: Capsule())
                             .foregroundStyle(Theme.Colors.warning)
                     }
                 }
-                .font(.cpCaption)
+                .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
             }
             Spacer(minLength: 0)

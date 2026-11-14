@@ -15,7 +15,7 @@ struct PrivacyPoint: View {
                 .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text(detail)
                     .font(.system(size: 14))

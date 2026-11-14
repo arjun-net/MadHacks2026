@@ -39,7 +39,7 @@ struct FloatingTabBar: View {
                             .font(.system(size: 17, weight: .semibold))
                             .frame(height: 20)
                         Text(tab.title)
-                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                            .font(.system(size: 10.5, weight: .semibold))
                     }
                     .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.5))
                     .frame(maxWidth: .infinity)

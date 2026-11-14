@@ -9,10 +9,10 @@ struct PrivacyInfoView: View {
                         .font(.system(size: 40))
                         .foregroundStyle(Theme.Gradients.live)
                     Text("Built for crowds, not individuals")
-                        .font(.cpTitle)
+                        .typeStyle(.title)
                         .foregroundStyle(Theme.Colors.textPrimary)
                     Text("Campus Pulse answers one question: how busy is each part of campus right now? It's designed so it can't answer \"where is a specific student?\"")
-                        .font(.cpBody)
+                        .typeStyle(.body)
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
 
@@ -68,13 +68,13 @@ struct AboutView: View {
                     AppGlyph()
                         .frame(width: 96, height: 96)
                     Text("Campus Pulse")
-                        .font(.cpTitle)
+                        .typeStyle(.title)
                         .foregroundStyle(Theme.Colors.textPrimary)
                     Text("Version \(version)")
-                        .font(.cpCaption)
+                        .typeStyle(.caption)
                         .foregroundStyle(Theme.Colors.textTertiary)
                     Text("See where campus is buzzing, and where it's calm, in real time. Powered entirely by students who choose to share, anonymously.")
-                        .font(.cpBody)
+                        .typeStyle(.body)
                         .foregroundStyle(Theme.Colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
@@ -87,11 +87,11 @@ struct AboutView: View {
                         HStack(spacing: 12) {
                             AreaIconTile(symbol: level.symbol, color: level.color, size: 32)
                             Text(level.title)
-                                .font(.cpHeadline)
+                                .typeStyle(.headline)
                                 .foregroundStyle(Theme.Colors.textPrimary)
                             Spacer()
                             Text(level.subtitle)
-                                .font(.cpCaption)
+                                .typeStyle(.caption)
                                 .foregroundStyle(Theme.Colors.textSecondary)
                         }
                     }
@@ -103,7 +103,7 @@ struct AboutView: View {
                     Text("Made with ♥ at MadHacks 2026")
                     Text("Map data © OpenStreetMap contributors")
                 }
-                .font(.cpCaption)
+                .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
             }
             .padding(.horizontal, Theme.Spacing.md)

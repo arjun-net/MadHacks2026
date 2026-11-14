@@ -89,8 +89,7 @@ extension View {
     /// Small, tracked, uppercase section label.
     func sectionLabelStyle() -> some View {
         self
-            .font(.cpMicro)
-            .tracking(1.1)
+            .typeStyle(.micro)
             .textCase(.uppercase)
             .foregroundStyle(Theme.Colors.textTertiary)
     }

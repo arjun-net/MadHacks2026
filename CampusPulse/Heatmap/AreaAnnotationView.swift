@@ -55,8 +55,7 @@ final class AreaAnnotationView: MKAnnotationView {
         icon.tintColor = UIColor.white.withAlphaComponent(0.75)
         icon.setContentHuggingPriority(.required, for: .horizontal)
 
-        let base = UIFont.systemFont(ofSize: 12, weight: .semibold)
-        label.font = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: 12) } ?? base
+        label.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
         label.textColor = .white
 
         stack.axis = .horizontal

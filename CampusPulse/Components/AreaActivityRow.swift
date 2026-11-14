@@ -9,7 +9,7 @@ struct AreaActivityRow: View {
         HStack(spacing: 12) {
             if let rank {
                 Text("\(rank)")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.Colors.textTertiary)
                     .frame(width: 14)
             }
@@ -18,7 +18,7 @@ struct AreaActivityRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(activity.area.name)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
@@ -27,7 +27,7 @@ struct AreaActivityRow: View {
                 HStack(spacing: 8) {
                     ActivityBar(intensity: activity.intensity, height: 5)
                     Text(activity.countLabel)
-                        .font(.cpCaption)
+                        .typeStyle(.caption)
                         .foregroundStyle(Theme.Colors.textTertiary)
                         .lineLimit(1)
                         .fixedSize()

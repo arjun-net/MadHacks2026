@@ -42,11 +42,11 @@ struct LocationSharingScreen: View {
 
             VStack(spacing: 6) {
                 Text(viewModel.statusTitle)
-                    .font(.cpTitle)
+                    .typeStyle(.title)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .contentTransition(.opacity)
                 Text(viewModel.statusSubtitle)
-                    .font(.cpBody)
+                    .typeStyle(.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -72,10 +72,10 @@ struct LocationSharingScreen: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Share my location")
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text("Anonymous · about every 2 min")
-                    .font(.cpCaption)
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
 
@@ -236,7 +236,7 @@ private struct StatusTile<Value: View>: View {
                 Text(title).sectionLabelStyle()
             }
             value()
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -287,7 +287,7 @@ private struct HowItWorksStep: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text(detail)
                     .font(.system(size: 14))

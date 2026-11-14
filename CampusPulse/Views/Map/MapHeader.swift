@@ -14,8 +14,7 @@ struct MapHeader: View {
                 HStack(spacing: 6) {
                     PulsingDot(color: Theme.Colors.live, size: 7)
                     Text("LIVE")
-                        .font(.cpMicro)
-                        .tracking(1.3)
+                        .typeStyle(.micro)
                         .foregroundStyle(Theme.Colors.live)
                     Text("·")
                         .foregroundStyle(Theme.Colors.textTertiary)
@@ -29,7 +28,7 @@ struct MapHeader: View {
                     }
                 }
                 Text(campus.shortName)
-                    .font(.cpTitle)
+                    .typeStyle(.title)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -81,7 +80,7 @@ struct SharingStatusPill: View {
                     .font(.system(size: 12, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
                 Text(label)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold))
             }
             .foregroundStyle(tint)
             .padding(.horizontal, 12)

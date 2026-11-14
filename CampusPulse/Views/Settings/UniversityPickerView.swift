@@ -31,7 +31,7 @@ struct UniversityPickerView: View {
                                         .foregroundStyle(Theme.Colors.textPrimary)
                                     if campus.isPilot {
                                         Text("PILOT")
-                                            .font(.cpMicro)
+                                            .typeStyle(.micro)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
                                             .background(Theme.Colors.warning.opacity(0.2), in: Capsule())

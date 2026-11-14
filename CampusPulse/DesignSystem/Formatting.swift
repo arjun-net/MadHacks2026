@@ -26,6 +26,14 @@ enum Formatting {
         }
     }
 
+    /// "3 PM", "12 AM", or "3a" when `compact`.
+    static func hour(_ hour: Double, compact: Bool = false) -> String {
+        let h = ((Int(hour) % 24) + 24) % 24
+        let display = h % 12 == 0 ? 12 : h % 12
+        let suffix = h < 12 ? (compact ? "a" : " AM") : (compact ? "p" : " PM")
+        return "\(display)\(suffix)"
+    }
+
     /// "1:42" countdown.
     static func countdown(until date: Date, now: Date = .now) -> String {
         let seconds = max(0, Int(date.timeIntervalSince(now).rounded(.up)))

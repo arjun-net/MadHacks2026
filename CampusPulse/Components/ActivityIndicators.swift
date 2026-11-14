@@ -37,7 +37,7 @@ struct ActivityLevelBadge: View {
             }
             Text(level.title)
         }
-        .font(.system(size: 11, weight: .bold, design: .rounded))
+        .font(.system(size: 11, weight: .bold))
         .foregroundStyle(level.color)
         .padding(.horizontal, 8)
         .padding(.vertical, 3.5)
@@ -181,7 +181,7 @@ struct HeatLegend: View {
                 .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5))
             Text("Packed")
         }
-        .font(.system(size: 11, weight: .semibold, design: .rounded))
+        .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(Theme.Colors.textSecondary)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

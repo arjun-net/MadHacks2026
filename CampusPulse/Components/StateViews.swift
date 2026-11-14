@@ -24,10 +24,10 @@ struct StatusMessageView<Actions: View>: View {
             }
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.cpTitle3)
+                    .typeStyle(.title3)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text(message)
-                    .font(.cpBody)
+                    .typeStyle(.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -53,7 +53,7 @@ struct LoadingStateView: View {
             ProgressView()
                 .tint(.white)
             Text(message)
-                .font(.cpSubheadline)
+                .typeStyle(.subheadline)
                 .foregroundStyle(Theme.Colors.textSecondary)
         }
         .padding(.horizontal, 18)
@@ -89,7 +89,7 @@ struct ErrorStateView: View {
         ) {
             Button(action: retry) {
                 Label("Try Again", systemImage: "arrow.clockwise")
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
                     .background(Theme.Gradients.accent, in: Capsule())
@@ -112,7 +112,7 @@ struct PermissionDeniedView: View {
         ) {
             Button(action: openSettings) {
                 Label("Open Settings", systemImage: "gear")
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
                     .background(Color.white.opacity(0.12), in: Capsule())

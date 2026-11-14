@@ -43,6 +43,9 @@ struct ActivityScreen: View {
             .refreshable { await viewModel.refresh() }
             .background(ScreenBackground())
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: AreaRoute.self) { route in
+                AreaDetailScreen(areaID: route.areaID, viewModel: viewModel, onShowOnMap: onShowOnMap)
+            }
         }
     }
 
@@ -51,13 +54,13 @@ struct ActivityScreen: View {
             HStack(spacing: 6) {
                 PulsingDot(color: Theme.Colors.live, size: 7)
                 Text(viewModel.campus.name)
-                    .font(.cpCaption)
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline) {
                 Text("Activity")
-                    .font(.cpLargeTitle)
+                    .typeStyle(.largeTitle)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Spacer()
                 UpdatedAgoText(date: viewModel.snapshot?.generatedAt)
@@ -72,15 +75,52 @@ struct ActivityScreen: View {
     private func content(_ snapshot: CampusSnapshot) -> some View {
         OverviewCard(snapshot: snapshot, participantsText: viewModel.participantsText, activeAreasText: viewModel.activeAreasText)
 
+        FilterBar(
+            filters: viewModel.availableFilters,
+            selection: $viewModel.filter,
+            count: viewModel.count(for:)
+        )
+
+        // With only a handful of matches, the ranked sections would just repeat the list.
+        if viewModel.allAreas.count > 5 {
+            rankedSections
+        }
+
+        section(title: viewModel.filter == .all ? "All areas" : viewModel.filter.title) {
+            sortMenu
+        } content: {
+            VStack(spacing: 0) {
+                ForEach(viewModel.allAreas) { activity in
+                    NavigationLink(value: AreaRoute(areaID: activity.id)) {
+                        CompactAreaRow(activity: activity)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(RowButtonStyle())
+                    if activity.id != viewModel.allAreas.last?.id {
+                        Divider().overlay(Color.white.opacity(0.04))
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+            .card(cornerRadius: Theme.Radius.lg)
+        }
+
+        privacyFooter
+    }
+
+    @ViewBuilder
+    private var rankedSections: some View {
         section(title: "Busiest right now", trailing: "Top 5") {
             VStack(spacing: 0) {
                 ForEach(Array(viewModel.busiest.enumerated()), id: \.element.id) { index, activity in
-                    Button { onShowOnMap(activity.id) } label: {
+                    NavigationLink(value: AreaRoute(areaID: activity.id)) {
                         AreaActivityRow(activity: activity, rank: index + 1)
                             .padding(.vertical, 12)
                     }
-                    .buttonStyle(PressableButtonStyle())
-                    .accessibilityHint("Shows this area on the map")
+                    .buttonStyle(RowButtonStyle())
+                    .accessibilityHint("Shows usual busy times and past activity")
                     if index < viewModel.busiest.count - 1 {
                         Divider().overlay(Color.white.opacity(0.04))
                     }
@@ -95,7 +135,10 @@ struct ActivityScreen: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
                     ForEach(viewModel.quietSpots) { activity in
-                        QuietSpotCard(activity: activity)
+                        NavigationLink(value: AreaRoute(areaID: activity.id)) {
+                            QuietSpotCard(activity: activity)
+                        }
+                        .buttonStyle(RowButtonStyle())
                     }
                 }
                 .scrollTargetLayout()
@@ -104,23 +147,28 @@ struct ActivityScreen: View {
             .scrollIndicators(.hidden)
             .scrollClipDisabled()
         }
+    }
 
-        section(title: "All areas", trailing: "\(viewModel.allAreas.count) tracked") {
-            VStack(spacing: 0) {
-                ForEach(viewModel.allAreas) { activity in
-                    CompactAreaRow(activity: activity)
-                        .padding(.vertical, 10)
-                    if activity.id != viewModel.allAreas.last?.id {
-                        Divider().overlay(Color.white.opacity(0.04))
-                    }
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort", selection: $viewModel.sort) {
+                ForEach(AreaSort.allCases) { sort in
+                    Label(sort.title, systemImage: sort.symbol).tag(sort)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .card(cornerRadius: Theme.Radius.lg)
+        } label: {
+            HStack(spacing: 4) {
+                Text("\(viewModel.allAreas.count) · \(viewModel.sort.shortTitle)")
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundStyle(Theme.Colors.textSecondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.white.opacity(0.07), in: Capsule())
         }
-
-        privacyFooter
+        .accessibilityLabel("Sort areas, currently \(viewModel.sort.title)")
     }
 
     private var loadingContent: some View {
@@ -157,18 +205,86 @@ struct ActivityScreen: View {
     }
 
     private func section<Content: View>(title: String, trailing: String, @ViewBuilder content: () -> Content) -> some View {
+        section(title: title) {
+            Text(trailing)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Theme.Colors.textTertiary)
+        } content: {
+            content()
+        }
+    }
+
+    private func section<Trailing: View, Content: View>(
+        title: String,
+        @ViewBuilder trailing: () -> Trailing,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(title).sectionLabelStyle()
+                    .contentTransition(.opacity)
                 Spacer()
-                Text(trailing)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.Colors.textTertiary)
+                trailing()
             }
             .padding(.horizontal, 4)
             content()
         }
     }
+}
+
+// MARK: - Filters
+
+/// Horizontally scrolling category chips (Study, Dining, …).
+private struct FilterBar: View {
+    let filters: [AreaFilter]
+    @Binding var selection: AreaFilter
+    let count: (AreaFilter) -> Int
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(filters) { filter in
+                    let selected = filter == selection
+                    Button {
+                        withAnimation(Theme.Motion.snappy) { selection = filter }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: filter.symbol)
+                                .font(.system(size: 11.5, weight: .semibold))
+                            Text(filter.title)
+                                .font(.system(size: 13.5, weight: .semibold))
+                            if filter != .all {
+                                Text("\(count(filter))")
+                                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
+                                    .opacity(0.55)
+                            }
+                        }
+                        .foregroundStyle(selected ? Theme.Colors.background : Theme.Colors.textSecondary)
+                        .padding(.horizontal, 13)
+                        .frame(height: 34)
+                        .background {
+                            Capsule().fill(selected ? Theme.Colors.textPrimary : Color.white.opacity(0.07))
+                        }
+                        .overlay {
+                            Capsule().strokeBorder(Color.white.opacity(selected ? 0 : 0.08), lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(filter.title), \(count(filter)) places")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+        }
+        .scrollIndicators(.hidden)
+        .padding(.horizontal, -Theme.Spacing.md)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+/// Navigation value for an area's detail screen.
+struct AreaRoute: Hashable {
+    let areaID: String
 }
 
 // MARK: - Overview
@@ -189,10 +305,10 @@ private struct OverviewCard: View {
                             .foregroundStyle(snapshot.level.color)
                             .contentTransition(.symbolEffect(.replace))
                         Text(snapshot.level.title)
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(Theme.Colors.textPrimary)
                         Text("\(Int((snapshot.overallIntensity * 100).rounded()))%")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
                             .foregroundStyle(Theme.Colors.textTertiary)
                             .contentTransition(.numericText())
                     }
@@ -206,7 +322,7 @@ private struct OverviewCard: View {
                         Image(systemName: snapshot.trend.symbol)
                         Text(snapshot.trend.title)
                     }
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(snapshot.level.color)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -234,7 +350,7 @@ private struct OverviewCard: View {
     private func metric(value: String, label: String, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(value)
-                .font(.cpMetricSmall)
+                .typeStyle(.metricSmall)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .contentTransition(.numericText())
             Label(label, systemImage: symbol)
@@ -336,11 +452,11 @@ private struct QuietSpotCard: View {
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(activity.area.name)
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .lineLimit(2, reservesSpace: true)
                 Text(activity.area.category.title)
-                    .font(.cpCaption)
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
             Sparkline(values: activity.history, color: activity.level.color, lineWidth: 1.5)
@@ -370,9 +486,12 @@ private struct CompactAreaRow: View {
             ActivityBar(intensity: activity.intensity, height: 4)
                 .frame(width: 64)
             Text(activity.level.title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(activity.level.color)
                 .frame(width: 66, alignment: .trailing)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.Colors.textTertiary)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(activity.area.name), \(activity.level.title)")

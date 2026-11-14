@@ -68,15 +68,78 @@ enum Theme {
     static let tabBarClearance: CGFloat = 76
 }
 
+// MARK: - Typography
+//
+// Editorial, quiet type: New York (serif) for hero display moments, SF Pro for
+// everything else. Headlines run tight (negative tracking), labels run wide.
+// No rounded faces — they read as generic/toy-like.
+
 extension Font {
-    static let cpLargeTitle = Font.system(size: 34, weight: .bold, design: .rounded)
-    static let cpTitle = Font.system(size: 22, weight: .bold, design: .rounded)
-    static let cpTitle3 = Font.system(size: 19, weight: .semibold, design: .rounded)
-    static let cpHeadline = Font.system(size: 16, weight: .semibold, design: .rounded)
+    // Display — serif, light-ish weight, set tight.
+    static let cpLargeTitle = Font.system(size: 36, weight: .medium, design: .serif)
+    static let cpTitle = Font.system(size: 26, weight: .medium, design: .serif)
+
+    // Sans hierarchy.
+    static let cpTitle3 = Font.system(size: 19, weight: .semibold)
+    static let cpHeadline = Font.system(size: 16, weight: .semibold)
     static let cpBody = Font.system(size: 15, weight: .regular)
     static let cpSubheadline = Font.system(size: 14, weight: .medium)
-    static let cpCaption = Font.system(size: 12, weight: .medium)
-    static let cpMicro = Font.system(size: 10.5, weight: .bold, design: .rounded)
-    static let cpMetric = Font.system(size: 30, weight: .bold, design: .rounded).monospacedDigit()
-    static let cpMetricSmall = Font.system(size: 20, weight: .bold, design: .rounded).monospacedDigit()
+    static let cpCaption = Font.system(size: 12.5, weight: .regular)
+    static let cpMicro = Font.system(size: 10.5, weight: .semibold)
+
+    // Numbers — sans, tabular, slightly heavy so they anchor a card.
+    static let cpMetric = Font.system(size: 32, weight: .semibold).monospacedDigit()
+    static let cpMetricSmall = Font.system(size: 22, weight: .semibold).monospacedDigit()
+}
+
+/// Font + tracking pairs. Use `.typeStyle(.title)` so tracking stays consistent.
+enum TypeStyle {
+    case largeTitle, title, title3, headline, body, subheadline, caption, micro, metric, metricSmall
+
+    var font: Font {
+        switch self {
+        case .largeTitle: .cpLargeTitle
+        case .title: .cpTitle
+        case .title3: .cpTitle3
+        case .headline: .cpHeadline
+        case .body: .cpBody
+        case .subheadline: .cpSubheadline
+        case .caption: .cpCaption
+        case .micro: .cpMicro
+        case .metric: .cpMetric
+        case .metricSmall: .cpMetricSmall
+        }
+    }
+
+    var tracking: CGFloat {
+        switch self {
+        case .largeTitle: -0.9
+        case .title: -0.5
+        case .title3: -0.35
+        case .headline: -0.25
+        case .body: -0.1
+        case .subheadline: -0.1
+        case .caption: 0
+        case .micro: 1.4
+        case .metric: -1.0
+        case .metricSmall: -0.5
+        }
+    }
+
+    var lineSpacing: CGFloat {
+        switch self {
+        case .body, .subheadline: 3
+        case .caption: 2
+        default: 0
+        }
+    }
+}
+
+extension View {
+    func typeStyle(_ style: TypeStyle) -> some View {
+        self
+            .font(style.font)
+            .tracking(style.tracking)
+            .lineSpacing(style.lineSpacing)
+    }
 }

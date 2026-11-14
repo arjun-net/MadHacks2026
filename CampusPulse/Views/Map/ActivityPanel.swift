@@ -69,7 +69,7 @@ struct ActivityPanel: View {
                         .foregroundStyle(snapshot.level.color)
                         .contentTransition(.interpolate)
                 }
-                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .font(.system(size: 19, weight: .bold))
 
                 HStack(spacing: 5) {
                     Image(systemName: "person.2.fill")
@@ -77,7 +77,7 @@ struct ActivityPanel: View {
                     Text("≈ \(Formatting.number(snapshot.participantCount)) students sharing")
                         .contentTransition(.numericText(value: Double(snapshot.participantCount)))
                 }
-                .font(.cpCaption)
+                .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
 
                 if let top = snapshot.busiest(1).first {
@@ -88,7 +88,7 @@ struct ActivityPanel: View {
                         Text("Busiest: \(top.area.shortName)")
                             .lineLimit(1)
                     }
-                    .font(.cpCaption)
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
                 }
             }
@@ -129,10 +129,10 @@ struct ActivityPanel: View {
             AreaIconTile(symbol: "eye.slash.fill", color: Theme.Colors.accent, size: 50)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Waiting for more students")
-                    .font(.cpHeadline)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text("Activity appears once enough people share.")
-                    .font(.cpCaption)
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
             Spacer(minLength: 0)
@@ -155,7 +155,7 @@ struct ActivityPanel: View {
                     Image(systemName: snapshot.trend.symbol)
                     Text(snapshot.trend.title)
                 }
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.Colors.textTertiary)
             }
 
@@ -227,11 +227,11 @@ struct AreaFocusCard: View {
                 AreaIconTile(symbol: activity.area.symbol, color: activity.level.color, size: 44)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(activity.area.name)
-                        .font(.cpHeadline)
+                        .typeStyle(.headline)
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .lineLimit(1)
                     Text("\(activity.area.category.title) · \(activity.countLabel)")
-                        .font(.cpCaption)
+                        .typeStyle(.caption)
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
                 Spacer(minLength: 4)
@@ -254,7 +254,7 @@ struct AreaFocusCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Trend").sectionLabelStyle()
                     Label(activity.trend.shortTitle, systemImage: activity.trend.symbol)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.Colors.textPrimary)
                 }
                 Spacer()
