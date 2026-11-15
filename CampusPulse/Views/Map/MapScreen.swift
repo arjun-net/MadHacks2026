@@ -33,8 +33,6 @@ struct MapScreen: View {
 
             edgeScrims
 
-            stateOverlay
-
             VStack(spacing: 12) {
                 MapHeader(
                     campus: viewModel.campus,
@@ -59,6 +57,7 @@ struct MapScreen: View {
                 Spacer(minLength: 0)
 
                 VStack(alignment: .leading, spacing: 10) {
+                    statusBar
                     if let focused = viewModel.selectedActivity {
                         AreaFocusCard(
                             activity: focused,
@@ -81,6 +80,7 @@ struct MapScreen: View {
         }
         .animation(Theme.Motion.smooth, value: viewModel.selectedAreaID)
         .animation(Theme.Motion.smooth, value: viewModel.isHeatmapVisible)
+        .animation(Theme.Motion.smooth, value: viewModel.loadState)
         .onChange(of: viewModel.campus.id) { _, _ in viewModel.campusDidChange() }
     }
 
@@ -97,26 +97,56 @@ struct MapScreen: View {
         .allowsHitTesting(false)
     }
 
+    /// Loading, empty and error messages as a slim bar at the bottom, never over the middle of
+    /// the map: a card there swallowed pinches, so the map couldn't be zoomed until it went away.
+    /// Only the error bar takes touches (for Try again).
     @ViewBuilder
-    private var stateOverlay: some View {
+    private var statusBar: some View {
         if viewModel.showsInitialLoading {
-            LoadingStateView()
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            MapStatusBar(text: "Loading campus activity…", showsProgress: true)
+                .allowsHitTesting(false)
+                .transition(.opacity)
         } else if case .failed(let message) = viewModel.loadState {
-            ErrorStateView(message: message, retry: viewModel.retry)
-                .paper(cornerRadius: Theme.Radius.sm)
-                .padding(.horizontal, 24)
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-        } else if viewModel.loadState == .empty {
-            EmptyActivityView(
-                threshold: viewModel.snapshot?.privacyThreshold ?? AppConfig.privacyThreshold,
-                campusName: viewModel.campus.shortName
-            )
-            .paper(cornerRadius: Theme.Radius.sm)
-            .padding(.horizontal, 24)
-            .offset(y: -60)
-            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            MapStatusBar(text: message, isError: true, onRetry: viewModel.retry)
+                .transition(.opacity)
+        } else if viewModel.loadState == .empty, viewModel.selectedActivity == nil {
+            MapStatusBar(text: "Not enough people sharing at \(viewModel.campus.shortName) to show crowds yet.")
+                .allowsHitTesting(false)
+                .transition(.opacity)
         }
+    }
+}
+
+/// One line of map status over the bottom of the map.
+private struct MapStatusBar: View {
+    let text: String
+    var showsProgress = false
+    var isError = false
+    var onRetry: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if showsProgress {
+                ProgressView().controlSize(.small).tint(Theme.Colors.ink)
+            } else if isError {
+                Image(systemName: "exclamationmark.circle")
+                    .foregroundStyle(Theme.Colors.warning)
+            }
+            Text(text)
+                .typeStyle(.subheadline)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if let onRetry {
+                Button("Try again", action: onRetry)
+                    .typeStyle(.button)
+                    .foregroundStyle(Theme.Colors.accent)
+                    .frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, onRetry == nil ? 12 : 2)
+        .paper(cornerRadius: Theme.Radius.sm)
     }
 }
 
