@@ -24,7 +24,7 @@ struct UniversityPickerView: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 12) {
-                            SettingsIcon(symbol: "building.columns.fill", color: campus.isPilot ? Theme.Colors.graphite : Theme.Colors.badgerRed)
+                            SettingsIcon(symbol: "building.columns.fill", color: campus.isPilot ? Theme.Colors.graphite : Theme.Colors.accent)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(campus.name)

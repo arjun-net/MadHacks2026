@@ -89,11 +89,9 @@ enum Theme {
         static let textSecondary = Color(light: Hex(0x5E554A), dark: night(0xBDB2A2, 0xC9AFAB, 0xAEB5BE))
         static let textTertiary = Color(light: Hex(0x6E6357), dark: night(0xA39886, 0xB0928D, 0x949CA6))
 
-        // Badger red. `accent` is for text and icons; `accentFill` for filled buttons and badges.
+        // press red. `accent` is for text and icons; `accentFill` for filled buttons and badges.
         static let accent = Color(light: Hex(0x9B0000), dark: night(0xE0605A, 0xFF6B66, 0xE8605C))
         static let accentFill = Color(light: Hex(0x9B0000), dark: night(0x9B0000, 0xC5050C, 0xA80F14))
-        static let badgerRed = accent
-        static let accentSecondary = accent
         static let onAccent = Color(light: Hex(0xFFFDF8), dark: night(0xFFFDF8, 0xFFFFFF, 0xFFFFFF))
         static let live = accent
 
@@ -116,13 +114,6 @@ enum Theme {
             light: Hex(0x503C1E, alpha: 0.10),
             dark: night(Hex(0x000000, alpha: 0.4), Hex(0x000000, alpha: 0.5), Hex(0x000000, alpha: 0.45))
         )
-    }
-
-    enum Gradients {
-        // Solid now; kept so call sites compile until they're migrated.
-        static let accent = LinearGradient(colors: [Colors.accent, Colors.accent], startPoint: .top, endPoint: .bottom)
-        static let glassStroke = LinearGradient(colors: [Colors.ink, Colors.ink], startPoint: .top, endPoint: .bottom)
-        static let live = LinearGradient(colors: [Colors.accent, Colors.accent], startPoint: .top, endPoint: .bottom)
     }
 
     enum Spacing {

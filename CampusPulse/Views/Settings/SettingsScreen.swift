@@ -23,7 +23,7 @@ struct SettingsScreen: View {
                     NavigationLink {
                         UniversityPickerView(viewModel: viewModel)
                     } label: {
-                        SettingsRow(symbol: "building.columns.fill", color: Theme.Colors.badgerRed, title: "University", value: viewModel.selectedCampus.shortName)
+                        SettingsRow(symbol: "building.columns.fill", color: Theme.Colors.accent, title: "University", value: viewModel.selectedCampus.shortName)
                     }
                 } header: {
                     Text("Campus").sectionLabelStyle()
@@ -36,7 +36,7 @@ struct SettingsScreen: View {
                     } label: {
                         SettingsRow(
                             symbol: "location.fill",
-                            color: Theme.Colors.badgerRed,
+                            color: Theme.Colors.accent,
                             title: "Location Sharing",
                             value: viewModel.sharingStatusLabel
                         )
@@ -87,7 +87,7 @@ struct SettingsScreen: View {
 
                 Section {
                     Toggle(isOn: $preferences.busyAreaAlerts) {
-                        SettingsLabel(symbol: "flame.fill", color: Theme.Colors.badgerRed, title: "Busy Area Alerts")
+                        SettingsLabel(symbol: "flame.fill", color: Theme.Colors.accent, title: "Busy Area Alerts")
                     }
                     Toggle(isOn: $preferences.quietSpotAlerts) {
                         SettingsLabel(symbol: "leaf.fill", color: Theme.Colors.graphite, title: "Quiet Study Spots")

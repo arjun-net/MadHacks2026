@@ -23,7 +23,7 @@ enum AppTab: String, CaseIterable, Identifiable {
 }
 
 /// Newspaper tab bar: flush square segments with ink dividers and a hard offset shadow.
-/// The selected segment is filled ink (Day) or Badger red (Night) and slides between tabs.
+/// The selected segment is filled ink (Day) or press red (Night) and slides between tabs.
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
     @Namespace private var namespace

@@ -53,7 +53,7 @@ final class LocationSharingViewModel {
         switch status {
         case .active: Theme.Colors.live
         case .permissionDenied: Theme.Colors.danger
-        case .off: Color.white.opacity(0.45)
+        case .off: Theme.Colors.textTertiary
         }
     }
 }

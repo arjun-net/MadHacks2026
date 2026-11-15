@@ -19,7 +19,7 @@ enum HeatPalette {
         }
     }
 
-    /// Light: sand → amber → brick → Badger red → oxblood.
+    /// Light: sand → amber → brick → press red → oxblood.
     static let lightStops: [Stop] = [
         Stop(location: 0.00, hex: 0xF3DFB3),
         Stop(location: 0.30, hex: 0xE9A55A),
