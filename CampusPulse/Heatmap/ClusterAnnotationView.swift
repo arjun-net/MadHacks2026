@@ -162,11 +162,13 @@ final class ClusterAnnotationView: MKAnnotationView {
 /// How far to zoom in when a group is opened, so its places show one by one.
 enum GroupZoom {
     /// Room one marker with its name needs from its neighbors, in screen points.
-    private static let markerRoom = CGSize(width: 110, height: 54)
+    private static let markerRoom = CGSize(width: 150, height: 74)
+    /// Opening a group always zooms in at least this much, when the places still fit.
+    private static let minimumFactor: CGFloat = 2.5
 
     /// `points` are the places' positions on screen now. Returns how many times closer to zoom
-    /// (at least 1, at most `maxFactor`): enough that no two places overlap, but never so much
-    /// that any of them leaves `available`.
+    /// (at least 1, at most `maxFactor`): enough that no two places overlap, with room to
+    /// spare, but never so much that any of them leaves `available`.
     static func factor(points: [CGPoint], available: CGSize, maxFactor: CGFloat) -> CGFloat {
         guard points.count > 1 else { return 1 }
         var needed: CGFloat = 1
@@ -179,6 +181,12 @@ enum GroupZoom {
         let xs = points.map(\.x), ys = points.map(\.y)
         let spread = CGSize(width: xs.max()! - xs.min()! + markerRoom.width, height: ys.max()! - ys.min()! + markerRoom.height)
         let fit = min(available.width / spread.width, available.height / spread.height)
-        return max(1, min(needed, fit, maxFactor))
+        return max(1, min(max(needed, minimumFactor), fit, maxFactor))
     }
+}
+
+/// Ease in and out with a soft start and landing (smootherstep).
+func smootherStep(_ t: Double) -> Double {
+    let t = min(1, max(0, t))
+    return t * t * t * (t * (t * 6 - 15) + 10)
 }

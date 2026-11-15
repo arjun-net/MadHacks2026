@@ -147,7 +147,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private let pitch: Float = 54 * .pi / 180
     private let distanceRange: ClosedRange<Float> = 300...6500
     private var velocity = SIMD2<Float>.zero
-    private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval)?
+    private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval, easeInOut: Bool)?
     private var displayLink: CADisplayLink?
     private var lastTick: CFTimeInterval = 0
     private var lastPanLocation: CGPoint?
@@ -429,7 +429,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         to.target = SIMD2((xs.min()! + xs.max()!) / 2, (zs.min()! + zs.max()!) / 2)
         to.distance = max(distanceRange.lowerBound, camera.distance / Float(factor))
         openedDistance = to.distance
-        animateCamera(to: to, duration: 0.6)
+        animateCamera(to: to, duration: 0.85, easeInOut: true)
         updateOverlay()
     }
 
@@ -805,13 +805,14 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         }
     }
 
-    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4) {
+    /// `easeInOut` starts gently too (opening a group); otherwise it starts fast and settles.
+    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4, easeInOut: Bool = false) {
         velocity = .zero
         var to = clamped(state)
         // Turn the short way round.
         let turn = remainder(to.heading - camera.heading, 2 * .pi)
         to.heading = camera.heading + turn
-        cameraAnimation = (camera, to, CACurrentMediaTime(), duration)
+        cameraAnimation = (camera, to, CACurrentMediaTime(), duration, easeInOut)
         startTicking()
     }
 
@@ -837,9 +838,13 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
         if let animation = cameraAnimation {
             let t = min(1, (now - animation.start) / animation.duration)
-            let e = Float(1 - pow(1 - t, 3))
-            camera.target = animation.from.target + (animation.to.target - animation.from.target) * e
+            let e = Float(animation.easeInOut ? smootherStep(t) : 1 - pow(1 - t, 3))
             camera.distance = animation.from.distance * pow(animation.to.distance / animation.from.distance, e)
+            // The target follows how far the zoom has come, so the group holds steady on screen
+            // instead of sliding while the camera closes in.
+            let from = animation.from.distance, to = animation.to.distance
+            let moved = from == to ? e : (1 / camera.distance - 1 / from) / (1 / to - 1 / from)
+            camera.target = animation.from.target + (animation.to.target - animation.from.target) * moved
             camera.heading = animation.from.heading + (animation.to.heading - animation.from.heading) * e
             if t >= 1 { cameraAnimation = nil } else { active = true }
         } else if simd_length(velocity) > 8 {

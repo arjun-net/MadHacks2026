@@ -120,6 +120,7 @@ struct CampusMapView: UIViewRepresentable {
             animator.reset()
             openedIDs = []
             poppingIDs = []
+            stopGlide()
 
             mapView.removeOverlays(mapView.overlays)
             mapView.removeAnnotations(mapView.annotations.filter { $0 is AreaAnnotation })
@@ -227,7 +228,66 @@ struct CampusMapView: UIViewRepresentable {
             let pointsPerMapPoint = Double(mapView.bounds.width) / visible.width * factor
             let size = MKMapSize(width: Double(available.width) / pointsPerMapPoint, height: Double(available.height) / pointsPerMapPoint)
             let target = MKMapRect(origin: MKMapPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), size: size)
-            mapView.setVisibleMapRect(target, edgePadding: insets, animated: true)
+            // The whole screen's worth of map once the group sits in the open middle.
+            let fitted = mapView.mapRectThatFits(target, edgePadding: insets)
+            glide(mapView, to: MKMapPoint(x: fitted.midX, y: fitted.midY), distance: currentDistance * fitted.width / visible.width)
+        }
+
+        // MARK: Camera glide
+
+        private var glideLink: CADisplayLink?
+        private var glideState: (from: MKMapPoint, to: MKMapPoint, fromDistance: Double, toDistance: Double, start: CFTimeInterval)?
+        private weak var glideMap: MKMapView?
+        private static let glideDuration: CFTimeInterval = 0.85
+
+        /// A slow, eased flight to a new center and zoom, drawn by us every frame; MapKit's own
+        /// animation is short and lurches at the start. Zoom changes evenly in scale, so the
+        /// map never seems to speed up as it gets closer.
+        private func glide(_ mapView: MKMapView, to center: MKMapPoint, distance: CLLocationDistance) {
+            let range = mapView.cameraZoomRange
+            let toDistance = min(range?.maxCenterCoordinateDistance ?? .greatestFiniteMagnitude, max(range?.minCenterCoordinateDistance ?? 0, distance))
+            let from = mapView.visibleMapRect
+            glideState = (MKMapPoint(x: from.midX, y: from.midY), center, mapView.camera.centerCoordinateDistance, toDistance, CACurrentMediaTime())
+            glideMap = mapView
+            if glideLink == nil {
+                let link = CADisplayLink(target: self, selector: #selector(glideStep(_:)))
+                link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+                link.add(to: .main, forMode: .common)
+                glideLink = link
+            }
+        }
+
+        @objc private func glideStep(_ link: CADisplayLink) {
+            guard let state = glideState, let mapView = glideMap, !isTouching(mapView) else { return stopGlide() }
+            let t = min(1, (CACurrentMediaTime() - state.start) / Self.glideDuration)
+            let e = smootherStep(t)
+            // Distance moves evenly on a log scale; the center follows how far the zoom has
+            // come, so the group stays steady under the finger's spot rather than sliding.
+            let distance = state.fromDistance * pow(state.toDistance / state.fromDistance, e)
+            let zoomProgress = state.fromDistance == state.toDistance
+                ? e
+                : (1 / distance - 1 / state.fromDistance) / (1 / state.toDistance - 1 / state.fromDistance)
+            let center = MKMapPoint(
+                x: state.from.x + (state.to.x - state.from.x) * zoomProgress,
+                y: state.from.y + (state.to.y - state.from.y) * zoomProgress
+            )
+            mapView.camera = MKMapCamera(lookingAtCenter: center.coordinate, fromDistance: distance, pitch: 0, heading: 0)
+            canvas?.sync()
+            if t >= 1 { stopGlide() }
+        }
+
+        private func stopGlide() {
+            glideLink?.invalidate()
+            glideLink = nil
+            glideState = nil
+        }
+
+        /// A finger on the map takes over from the glide.
+        private func isTouching(_ mapView: MKMapView) -> Bool {
+            // MapKit keeps its pan and pinch on the map itself or its scroll container.
+            ([mapView] + mapView.subviews).contains { view in
+                view.gestureRecognizers?.contains { $0.state == .began || $0.state == .changed } == true
+            }
         }
 
         /// Lets the opened group's places merge again.
@@ -241,10 +301,12 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         func recenter(_ mapView: MKMapView, animated: Bool) {
+            stopGlide()
             mapView.setVisibleMapRect(parent.campus.focusRect, edgePadding: parent.contentInsets, animated: animated)
         }
 
         func focus(on area: CampusArea, in mapView: MKMapView) {
+            stopGlide()
             let center = MKMapPoint(area.coordinate.clCoordinate)
             let span = MKMapPointsPerMeterAtLatitude(area.coordinate.latitude) * 420
             let rect = MKMapRect(x: center.x - span / 2, y: center.y - span / 2, width: span, height: span)
@@ -295,7 +357,8 @@ struct CampusMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             canvas?.cameraDidStop()
-            if !openedIDs.isEmpty, mapView.camera.centerCoordinateDistance > openedDistance * 1.6 {
+            // Not mid-glide: the glide starts far out, on its way in to the group.
+            if !openedIDs.isEmpty, glideState == nil, mapView.camera.centerCoordinateDistance > openedDistance * 1.6 {
                 closeOpenedGroup(in: mapView)
             }
         }
