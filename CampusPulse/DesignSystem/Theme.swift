@@ -162,7 +162,9 @@ enum Theme {
 //   campus name, titles, section headings and the big numbers. Only at 18 pt and up; it's a
 //   display face.
 // - Atkinson Hyperlegible, drawn by the Braille Institute for telling letters apart at a glance,
-//   for everything you read: text, rows, labels, buttons.
+//   for everything you read: text, rows, labels, buttons. The bundled Regular and Bold are
+//   edited to draw zero as a plain oval instead of slashed (the slash read as "Ø" in counts);
+//   the font has no unslashed alternate. The OFL allows this (no Reserved Font Name).
 // Labels are sentence case and untracked; headings do the shouting, in size, not capitals.
 // The one exception: the campus name atop the map stays in Playfair Display, like a nameplate.
 
@@ -172,7 +174,6 @@ enum FontName {
     static let displayBold = "BigShouldersDisplay-Bold"
     static let text = "AtkinsonHyperlegible-Regular"
     static let textBold = "AtkinsonHyperlegible-Bold"
-    static let textItalic = "AtkinsonHyperlegible-Italic"
     /// Only for the campus name at the top of the map.
     static let mastheadSerif = "PlayfairDisplay-Black"
 }
