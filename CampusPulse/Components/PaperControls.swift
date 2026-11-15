@@ -83,26 +83,44 @@ struct PaperSegmentedPicker<Value: Hashable>: View {
     }
 }
 
-/// A card of rows under a section header, with an optional footnote.
-/// Put a `RowRule()` between rows.
+/// A grouped settings section: small caps header, a card of rows, and an optional footnote.
+/// Header and footnote line up with the row text inside the card. Put a `RowRule()` between rows.
+/// `boxed: false` leaves the content uncarded (for a control that's already a box, like a picker).
 struct SettingsSection<Content: View>: View {
     let title: String
     var footer: String?
+    var boxed = true
     @ViewBuilder var content: Content
 
+    /// Matches the rows' horizontal padding, so header, text and footnote share one left edge.
+    static var textInset: CGFloat { 14 }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: title)
-            VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.cpMicro)
+                .tracking(1.4)
+                .textCase(.uppercase)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .padding(.horizontal, Self.textInset)
+                .accessibilityAddTraits(.isHeader)
+
+            if boxed {
+                VStack(spacing: 0) {
+                    content
+                }
+                .card(cornerRadius: Theme.Radius.sm)
+            } else {
                 content
             }
-            .card(cornerRadius: Theme.Radius.sm)
+
             if let footer {
                 Text(footer)
                     .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, Self.textInset)
+                    .padding(.top, 2)
             }
         }
     }

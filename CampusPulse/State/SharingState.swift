@@ -32,7 +32,7 @@ enum PermissionDisplay: Equatable {
 
     var tint: Color {
         switch self {
-        case .allowed: Theme.Colors.live
+        case .allowed: Theme.Colors.positive
         case .denied: Theme.Colors.danger
         case .notRequested: Theme.Colors.warning
         }

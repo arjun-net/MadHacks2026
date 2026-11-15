@@ -34,7 +34,7 @@ struct LocationSharingScreen: View {
             .animation(Theme.Motion.smooth, value: viewModel.status)
         }
         .scrollIndicators(.hidden)
-        .background(ScreenBackground())
+        .background(ScreenBackground(ruled: false))
         .navigationTitle("Location Sharing")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

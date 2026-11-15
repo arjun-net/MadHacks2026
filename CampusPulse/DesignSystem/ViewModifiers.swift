@@ -120,14 +120,28 @@ struct SectionHeader: View {
     }
 }
 
-/// Flat newsprint page background. Day mode adds a faint ruled-paper texture.
+extension View {
+    /// Solid page color behind the status bar, so rows scrolling up don't run under the clock.
+    /// (A zero-height top inset whose background extends up into the status bar area.)
+    func statusBarBackdrop() -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear
+                .frame(height: 0)
+                .background(Theme.Colors.background)
+        }
+    }
+}
+
+/// Flat newsprint page background. Day mode adds a faint ruled-paper texture unless `ruled` is off
+/// (Settings turns it off: the lines fight with stacked rows of cards).
 struct ScreenBackground: View {
+    var ruled = true
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             Theme.Colors.background
-            if colorScheme == .light {
+            if ruled, colorScheme == .light {
                 Canvas { context, size in
                     var y: CGFloat = 28
                     var path = Path()

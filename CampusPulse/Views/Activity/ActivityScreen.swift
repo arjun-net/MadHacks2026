@@ -41,6 +41,7 @@ struct ActivityScreen: View {
             .scrollIndicators(.hidden)
             .refreshable { await viewModel.refresh() }
             .background(ScreenBackground())
+            .statusBarBackdrop()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: AreaRoute.self) { route in
                 AreaDetailScreen(areaID: route.areaID, viewModel: viewModel, onShowOnMap: onShowOnMap)

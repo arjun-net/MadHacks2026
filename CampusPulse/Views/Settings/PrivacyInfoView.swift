@@ -38,7 +38,7 @@ struct PrivacyInfoView: View {
             .padding(.vertical, 12)
             .padding(.bottom, Theme.tabBarClearance)
         }
-        .background(ScreenBackground())
+        .background(ScreenBackground(ruled: false))
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -109,7 +109,7 @@ struct AboutView: View {
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.tabBarClearance)
         }
-        .background(ScreenBackground())
+        .background(ScreenBackground(ruled: false))
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

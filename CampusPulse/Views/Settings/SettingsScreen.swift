@@ -11,7 +11,7 @@ struct SettingsScreen: View {
 
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 26) {
+                VStack(alignment: .leading, spacing: 28) {
                     header
 
                     CampusBanner(campus: viewModel.selectedCampus)
@@ -70,19 +70,17 @@ struct SettingsScreen: View {
                     }
 
                     // The picker is its own bordered box, so it isn't wrapped in a card.
-                    VStack(alignment: .leading, spacing: 10) {
-                        SectionHeader(title: "Display")
+                    SettingsSection(
+                        title: "Display",
+                        footer: "Day Edition is the default. Night Edition is easier on the eyes after dark.",
+                        boxed: false
+                    ) {
                         PaperSegmentedPicker(
                             title: "Appearance",
                             options: Appearance.allCases,
                             selection: $preferences.appearance,
                             label: \.title
                         )
-                        Text("Day Edition is the default. Night Edition is easier on the eyes after dark.")
-                            .typeStyle(.caption)
-                            .foregroundStyle(Theme.Colors.textTertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.horizontal, 4)
                     }
 
                     SettingsSection(
@@ -168,7 +166,8 @@ struct SettingsScreen: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .background(ScreenBackground())
+            .background(ScreenBackground(ruled: false))
+            .statusBarBackdrop()
             .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog(
                 "Reset your device ID?",

@@ -41,7 +41,7 @@ struct UniversityPickerView: View {
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
-        .background(ScreenBackground())
+        .background(ScreenBackground(ruled: false))
         .navigationTitle("University")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
