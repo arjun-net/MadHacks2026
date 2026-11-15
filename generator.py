@@ -4,10 +4,11 @@
 Population model:
 - Residents (1 - commuter_share) live in a dorm, sleep on campus, may eat
   at dining halls.
-- Commuters (commuter_share, default 60%) appear at a campus-edge gate
-  (chosen from `commuter_gates`) in the morning (6:00-12:00), spend the
-  day on campus, and leave from the SAME gate in the evening (17:00-23:00).
-  They never generate dining-hall visits.
+- Commuters (commuter_share, default 60%) live off campus in a `housing`
+  building (chosen from buildings.json, least-filled first), walk to
+  campus in the morning (6:00-12:00), spend the day on campus, and walk
+  back home in the evening (17:00-23:00).  They never generate
+  dining-hall visits.
 
 Each agent's day is assembled chronologically: classes are placed per the
 archetype's class_pattern (morning / afternoon / spread), gaps are filled
@@ -21,13 +22,17 @@ Usage:
 
 import argparse
 import collections
+import concurrent.futures as cf
 import csv
 import json
+import math
 import os
 import random
+import time
 from datetime import datetime, timedelta, timezone
 
 from router import Router
+from router import METERS_PER_DEG_LAT, METERS_PER_DEG_LNG
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BUILDINGS_PATH = os.path.join(HERE, "configs", "buildings.json")
@@ -69,8 +74,40 @@ def random_point_in_polygon(polygon, rng, max_attempts=200):
     return sum(lats) / len(lats), sum(lngs) / len(lngs)
 
 
-def jitter(rng, lat, lng, amt=8e-5):
-    return lat + rng.uniform(-amt, amt), lng + rng.uniform(-amt, amt)
+def entrance_point(building, rng, frac_range=(0.25, 0.45)):
+    """Agent's hold point for a building: slightly inside the entrance door,
+    NOT a random interior point. Transit paths route to the building's door;
+    a random interior destination forced a long straight tail (through the
+    footprint or across open ground) from door to dest — the "beaming"
+    artifact. Keeping dest within a few meters of the door keeps every
+    transit leg on the routed walkway."""
+    poly = building["perimeter_polygon"]
+    clat = sum(p[0] for p in poly) / len(poly)
+    clng = sum(p[1] for p in poly) / len(poly)
+    door = ROUTER.door_of(building) if ROUTER else (clat, clng)
+    frac = rng.uniform(*frac_range)
+    return (door[0] + (clat - door[0]) * frac,
+            door[1] + (clng - door[1]) * frac)
+
+
+def jitter(rng, lat, lng, amt=None):
+    """Small GPS-accuracy wobble, applied per ping.
+
+    amt: offset in meters. Configurable via schedules.json ->
+    simulation.ping_jitter_meters. Default 2m (~ half a phone's typical
+    GPS spread while standing still)."""
+    if amt is None:
+        amt = PING_JITTER_M
+    if amt <= 0:
+        return lat, lng
+    # Gaussian offset, radius scaled to meters then converted to degrees
+    theta = rng.uniform(0, 2 * math.pi)
+    r = abs(rng.gauss(0, amt / 2))
+    return (lat + r * math.cos(theta) / METERS_PER_DEG_LAT,
+            lng + r * math.sin(theta) / METERS_PER_DEG_LNG)
+
+
+PING_JITTER_M = 2.0  # default; overridden from schedules.json in simulate()
 
 
 # ── Config ──────────────────────────────────────────────────────────────
@@ -85,7 +122,8 @@ def load_configs():
     pools = {}
     for b in buildings:
         pools.setdefault(b["type"], []).append(b["id"])
-    for needed in ("class", "study", "dining", "social", "gym", "dorm"):
+    for needed in ("class", "study", "dining", "social", "gym", "dorm",
+                   "housing"):
         if needed not in pools:
             raise SystemExit(f"No buildings of type '{needed}' in buildings.json")
     return schedules, by_id, pools
@@ -107,9 +145,10 @@ def seg(state, target, kind, p0, p1, start, end, waypoints=None):
 ROUTER = None
 
 
-def build_agent_day(arch, pools, behavior, gates, rng, commuter, home_id=None):
-    """Return (segments, home_id). Segments are chronological; commuters
-    have segments only between arrival at and departure from their gate."""
+def build_agent_day(arch, pools, behavior, rng, commuter, home_id=None):
+    """Return (segments, home_id). Segments are chronological; both
+    residents and commuters start asleep at home (residents in a dorm,
+    commuters in their off-campus apartment) and return home at night."""
     dep_lo, dep_hi = behavior["depart_window_minutes"]
     ret_lo, ret_hi = behavior["return_window_minutes"]
     lunch_lo, lunch_hi = behavior["lunch_window"]
@@ -119,8 +158,8 @@ def build_agent_day(arch, pools, behavior, gates, rng, commuter, home_id=None):
     transit_rng = behavior["transit_minutes_gate"] if commuter else behavior["transit_minutes_dorm"]
 
     if commuter:
-        gate = rng.choice(gates)
-        home_id, home_pt = gate["id"], (gate["lat"], gate["lng"])
+        home_id = rng.choice(pools["housing"])
+        home_pt = random_point_in_polygon(BY_ID[home_id]["perimeter_polygon"], rng)
     else:
         if home_id is None:
             home_id = rng.choice(pools["dorm"])
@@ -148,8 +187,7 @@ def build_agent_day(arch, pools, behavior, gates, rng, commuter, home_id=None):
     t_dep = int(rng.triangular(dep_lo, max(dep_lo + 20, min(dep_hi, cap)), dep_lo + 120))
 
     segments = []
-    if not commuter:
-        segments.append(seg("SLEEP", home_id, "point", home_pt, None, 0, t_dep))
+    segments.append(seg("SLEEP", home_id, "point", home_pt, None, 0, t_dep))
 
     state = {"cursor": t_dep, "loc": home_pt, "last_b": home_id,
              "lunch": False, "dinner": False, "gym": False, "club": False}
@@ -161,7 +199,7 @@ def build_agent_day(arch, pools, behavior, gates, rng, commuter, home_id=None):
         c = state["cursor"]
         d = rng.randint(*transit_rng)
         if b_id != state["last_b"]:
-            dest = random_point_in_polygon(BY_ID[b_id]["perimeter_polygon"], rng)
+            dest = entrance_point(BY_ID[b_id], rng)
             if c + d >= DAY_MINUTES:
                 return False
             wpts = router_route(state["loc"], state["last_b"], b_id, dest)
@@ -260,10 +298,10 @@ def simulate(schedules, buildings_by_id, pools):
 
     all_buildings = list(buildings_by_id.values())
     ROUTER = Router(all_buildings)
+    prewarm_router(ROUTER, all_buildings)
 
     sim = schedules["simulation"]
     behavior = schedules["behavior"]
-    gates = schedules["commuter_gates"]
     n_agents = sim["agents"]
     ping = sim["ping_interval_minutes"]
     commuter_share = behavior["commuter_share"]
@@ -274,10 +312,17 @@ def simulate(schedules, buildings_by_id, pools):
     # dorms (incl. every Lakeshore hall) get students even at low agent counts.
     statuses = [rng.random() < commuter_share for _ in range(n_agents)]
     dorm_ids = list(pools["dorm"])
+    housing_ids = list(pools["housing"])
     homes = {}
     counts = collections.Counter()
+    hcounts = collections.Counter()
     for i, is_commuter in enumerate(statuses):
         if is_commuter:
+            # Least-filled apartment wins each pick, so all housing
+            # buildings get commuters even at low agent counts.
+            home = min(housing_ids, key=lambda d: (hcounts[d], rng.random()))
+            homes[i] = home
+            hcounts[home] += 1
             continue
         home = min(dorm_ids, key=lambda d: (counts[d], rng.random()))
         homes[i] = home
@@ -292,10 +337,13 @@ def simulate(schedules, buildings_by_id, pools):
         commuter = statuses[agent_id]
         arch = archetypes[rng.choices(names, weights=weights, k=1)[0]]
         segments, home = build_agent_day(
-            arch, pools, behavior, gates, rng, commuter,
+            arch, pools, behavior, rng, commuter,
             home_id=homes.get(agent_id),
         )
         agents.append({"id": agent_id, "segments": segments})
+
+    global PING_JITTER_M
+    PING_JITTER_M = float(sim.get("ping_jitter_meters", PING_JITTER_M))
 
     sim_day = datetime(2026, 1, 1, tzinfo=timezone.utc)  # fixed sim day, UTC
     rows, coord_rows = [], []
@@ -324,6 +372,44 @@ def simulate(schedules, buildings_by_id, pools):
             })
         t += ping
     return rows, coord_rows
+
+
+def prewarm_router(router_obj, all_buildings, workers=None):
+    """Precompute every door-to-door route in parallel (ProcessPoolExecutor,
+    chunked) so simulate() only does cache lookups. The Mac's 4P+6E cores
+cut the ~4-5 min single-core A* precompute to roughly a minute."""
+    workers = workers or min(6, (os.cpu_count() or 4))
+    if workers <= 1 or len(all_buildings) < 8:
+        return
+    pairs = [(a["id"], b["id"])
+             for a in all_buildings for b in all_buildings if a["id"] < b["id"]]
+    n_per = max(1, math.ceil(len(pairs) / workers))
+    chunks = [pairs[i:i + n_per] for i in range(0, len(pairs), n_per)]
+    t0 = time.time()
+    with cf.ProcessPoolExecutor(max_workers=workers) as ex:
+        futs = [ex.submit(_prewarm_chunk, ch) for ch in chunks]
+        n = 0
+        for f in cf.as_completed(futs):
+            for (ka, kb), path in f.result().items():
+                router_obj._path_cache[(ka, kb)] = path
+                n += 1
+    print(f"prewarmed {n} routes across {workers} workers "
+          f"in {time.time() - t0:.1f}s")
+
+
+def _prewarm_chunk(pairs):
+    """Worker: build own Router, route chunk, return {(idA,idB): path|None}."""
+    import json as _json
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "configs", "buildings.json")) as f:
+        bl = _json.load(f)["buildings"]
+    r = Router(bl)
+    out = {}
+    for ka, kb in pairs:
+        a = next(b for b in bl if b["id"] == ka)
+        b = next(b for b in bl if b["id"] == kb)
+        out[(ka, kb)] = r.route_buildings(a, b)
+    return out
 
 
 def router_route(loc, from_b, to_b, dest):

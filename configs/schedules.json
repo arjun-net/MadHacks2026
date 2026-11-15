@@ -8,39 +8,52 @@
     "output": "data/campus_simulation_history.csv",
     "output_coords": "data/campus_simulation_coords.csv"
   },
-
   "behavior": {
     "commuter_share": 0.6,
-    "depart_window_minutes": [330, 720],
-    "return_window_minutes": [1020, 1380],
+    "depart_window_minutes": [
+      330,
+      720
+    ],
+    "return_window_minutes": [
+      1020,
+      1380
+    ],
     "return_mode_minute": 1080,
-    "transit_minutes_dorm": [8, 20],
-    "transit_minutes_gate": [10, 25],
+    "transit_minutes_dorm": [
+      8,
+      20
+    ],
+    "transit_minutes_gate": [
+      10,
+      25
+    ],
     "gym_probability": 0.35,
     "club_meeting_probability": 0.4,
     "resident_lunch_probability": 0.7,
     "resident_dinner_probability": 0.5,
-    "lunch_window": [690, 840],
-    "dinner_window": [1020, 1140],
+    "lunch_window": [
+      690,
+      840
+    ],
+    "dinner_window": [
+      1020,
+      1140
+    ],
     "club_earliest_minutes": 960
   },
-
-  "commuter_gates": [
-    {"id": "gate_johnson_st", "lat": 43.0728, "lng": -89.3885},
-    {"id": "gate_park_regent", "lat": 43.0700, "lng": -89.4065},
-    {"id": "gate_lake_mendota", "lat": 43.0810, "lng": -89.3965},
-    {"id": "gate_university_bay", "lat": 43.0742, "lng": -89.4195},
-    {"id": "gate_monona_shore", "lat": 43.0660, "lng": -89.3865},
-    {"id": "gate_day_st", "lat": 43.0765, "lng": -89.3860}
-  ],
-
   "archetypes": [
     {
       "name": "STEM Heavyweight",
-      "weight": 0.30,
+      "weight": 0.3,
       "class_pattern": "spread",
-      "n_classes": [2, 4],
-      "class_duration_minutes": [50, 120],
+      "n_classes": [
+        2,
+        4
+      ],
+      "class_duration_minutes": [
+        50,
+        120
+      ],
       "study_preference": 0.6,
       "social_preference": 0.2,
       "residential_only": true
@@ -49,8 +62,14 @@
       "name": "Humanities Drifter",
       "weight": 0.25,
       "class_pattern": "morning",
-      "n_classes": [1, 3],
-      "class_duration_minutes": [50, 90],
+      "n_classes": [
+        1,
+        3
+      ],
+      "class_duration_minutes": [
+        50,
+        90
+      ],
       "study_preference": 0.7,
       "social_preference": 0.3,
       "residential_only": true
@@ -59,18 +78,30 @@
       "name": "Social Connector",
       "weight": 0.25,
       "class_pattern": "afternoon",
-      "n_classes": [1, 3],
-      "class_duration_minutes": [50, 110],
+      "n_classes": [
+        1,
+        3
+      ],
+      "class_duration_minutes": [
+        50,
+        110
+      ],
       "study_preference": 0.3,
       "social_preference": 0.5,
       "residential_only": true
     },
     {
       "name": "Night Owl Crammer",
-      "weight": 0.20,
+      "weight": 0.2,
       "class_pattern": "afternoon",
-      "n_classes": [2, 3],
-      "class_duration_minutes": [50, 100],
+      "n_classes": [
+        2,
+        3
+      ],
+      "class_duration_minutes": [
+        50,
+        100
+      ],
       "study_preference": 0.8,
       "social_preference": 0.2,
       "residential_only": true

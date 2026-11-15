@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Campus Pulse — Path Tracer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* tracer-specific */
+    .path-list-item { display:flex; align-items:center; gap:8px; padding:6px 8px;
+      border-radius:8px; cursor:pointer; font-size:12px; color:var(--text-dim); }
+    .path-list-item:hover { background:rgba(255,255,255,0.06); }
+    .path-list-item.selected { background:rgba(74,222,128,0.14); color:var(--text); }
+    .path-swatch { width:18px; height:3px; border-radius:2px; flex:none; }
+    .path-list-item .del { margin-left:auto; opacity:0.5; cursor:pointer;
+      background:none; border:none; color:var(--accent-hot); font-size:14px; }
+    .path-list-item .del:hover { opacity:1; }
+    .trace-dot { width:10px; height:10px; border-radius:50%; background:#38bdf8;
+      border:2px solid rgba(255,255,255,0.85); box-shadow:0 0 6px rgba(56,189,248,0.8);
+      pointer-events:none; }
+    .kbd { font-family:ui-monospace,monospace; font-size:11px; background:rgba(255,255,255,0.08);
+      padding:1px 5px; border-radius:4px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <header class="topbar glass">
+    <div class="brand">
+      <span class="pulse-dot"></span>
+      <h1>Path Tracer</h1>
+      <span class="sub">trace walking paths the sim is missing</span>
+    </div>
+    <div class="toggles">
+      <button id="toggle-buildings" class="toggle-btn active" title="Toggle building footprints">Buildings</button>
+      <button id="toggle-existing" class="toggle-btn active" title="Toggle OSM/corridor paths">OSM paths</button>
+    </div>
+    <div class="top-actions">
+      <span id="save-status" class="save-status"></span>
+      <button id="btn-download" class="toggle-btn" title="Download traced_paths.json">Download</button>
+      <button id="btn-save" class="upload-btn" title="Write traced paths to configs/traced_paths.json">Save to config</button>
+    </div>
+  </header>
+
+  <aside class="dock glass">
+    <div class="dock-title">traced paths <span id="path-count" style="color:var(--text-dim)"></span></div>
+    <div id="path-list" class="bldg-list"></div>
+    <div style="padding:10px 12px; border-top:1px solid var(--glass-border)">
+      <button id="btn-new" class="btn" style="width:100%">+ new path</button>
+    </div>
+  </aside>
+
+  <aside class="panel glass" id="trace-panel" hidden>
+    <button id="tp-close" class="panel-close" title="Close">×</button>
+    <div class="panel-title">tracing</div>
+    <div class="panel-row"><span>path</span><b id="tp-name">—</b></div>
+    <div class="panel-row"><span>vertices</span><b id="tp-count">0</b></div>
+    <div class="panel-row"><span>length</span><b id="tp-length">0 m</b></div>
+    <label class="field">name
+      <input id="tp-name-input" type="text" placeholder="e.g. east campus shortcut" />
+    </label>
+    <div class="panel-actions">
+      <button id="tp-undo" class="btn">undo</button>
+      <button id="tp-connect" class="btn">connect</button>
+      <button id="tp-done" class="btn">done</button>
+    </div>
+    <div class="panel-note">
+      <b>Place</b>: click the map to drop vertices (click a dot to remove it).
+      <b>Connect</b>: click the dots in the order the path runs.
+      <span class="kbd">Z</span> undo ·
+      <span class="kbd">Enter</span> done · <span class="kbd">Esc</span> cancel.
+      Drag pans, wheel zooms.
+    </div>
+  </aside>
+
+  <aside class="info glass">
+    <div id="status" class="status">+ new path → place vertices, then connect them in order. Saved to configs/traced_paths.json.</div>
+    <div class="legend">
+      <span class="legend-title">Layers</span>
+      <div class="legend-items">
+        <span class="key"><i class="swatch" style="background:#38bdf8; height:3px; width:16px; border-radius:2px"></i>traced (yours)</span>
+        <span class="key"><i class="swatch" style="background:#5b6a7f; height:3px; width:16px; border-radius:2px"></i>existing OSM</span>
+        <span class="key"><i class="swatch" style="background:rgba(96,165,250,0.25); width:12px; height:12px; border-radius:3px"></i>building</span>
+      </div>
+    </div>
+  </aside>
+
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+  <script src="tracer.js"></script>
+</body>
+</html>
