@@ -12,6 +12,8 @@ struct PopularTimesSection: View {
     private var isToday: Bool { shownWeekday == insights.todayWeekday }
     private var values: [HourlyValue] { insights.typical(weekday: shownWeekday) }
     private var currentHour: Double { Double(Int(insights.generatedAt.fractionalHour)) }
+    /// What's usual for the current hour on the shown day.
+    private var usualNow: Double { values.first { $0.hour == currentHour }?.intensity ?? 0 }
 
     /// Calendar weekdays starting from the locale's first weekday.
     private var orderedWeekdays: [Int] {
@@ -102,19 +104,39 @@ struct PopularTimesSection: View {
                     width: .fixed(8)
                 )
                 .cornerRadius(1)
-                .foregroundStyle(barColor(for: value))
+                // The current hour's usual is the grey part above a quieter-than-usual live bar.
+                .foregroundStyle(isToday && value.hour == currentHour ? Theme.Colors.textTertiary.opacity(0.4) : barColor(for: value))
             }
 
             if isToday {
-                // Live reading drawn as a marker over the current hour's bar.
-                RuleMark(
-                    xStart: .value("Hour", currentHour - 0.42),
-                    xEnd: .value("Hour", currentHour + 0.42),
-                    y: .value("Live", liveIntensity)
+                // The current hour: the live reading as its own bar over the usual one.
+                BarMark(
+                    x: .value("Hour", currentHour),
+                    yStart: .value("Base", yDomain.lowerBound),
+                    yEnd: .value("Live", max(liveIntensity, yDomain.lowerBound)),
+                    width: .fixed(8)
                 )
-                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
-                .foregroundStyle(Theme.Colors.textPrimary)
-                .annotation(position: .top, spacing: 4) {
+                .cornerRadius(1)
+                .foregroundStyle(selectedHour == nil || selectedHour == currentHour ? Theme.Colors.accent : Theme.Colors.accent.opacity(0.3))
+
+                // Busier than usual: a notch in the live bar where usual would end.
+                if liveIntensity > usualNow + 0.02, usualNow > yDomain.lowerBound {
+                    RuleMark(
+                        xStart: .value("Hour", currentHour - 0.2),
+                        xEnd: .value("Hour", currentHour + 0.2),
+                        y: .value("Usual", usualNow)
+                    )
+                    .lineStyle(StrokeStyle(lineWidth: 1.5))
+                    .foregroundStyle(Theme.Colors.paper)
+                }
+
+                // Label over the taller of the two, in the headroom `yDomain` keeps for it.
+                PointMark(
+                    x: .value("Hour", currentHour),
+                    y: .value("Top", max(liveIntensity, usualNow))
+                )
+                .symbolSize(0)
+                .annotation(position: .top, spacing: 3, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
                     Text("Live")
                         .typeStyle(.badge)
                         .foregroundStyle(Theme.Colors.accent)
@@ -151,11 +173,13 @@ struct PopularTimesSection: View {
     }
 
     /// Starts just below the quietest hour so the shape of the day reads clearly,
-    /// like a relative "popular times" chart (there's no y-axis to misread).
+    /// like a relative "popular times" chart (there's no y-axis to misread). On today, the top
+    /// leaves room for the "Live" label over the tallest bar.
     private var yDomain: ClosedRange<Double> {
         let low = values.map(\.intensity).min() ?? 0
-        let high = max(values.map(\.intensity).max() ?? 1, liveIntensity)
-        return max(0, low - (high - low) * 0.25)...(high * 1.08)
+        let high = max(values.map(\.intensity).max() ?? 1, isToday ? liveIntensity : 0, 0.01)
+        let bottom = max(0, low - (high - low) * 0.25)
+        return bottom...(high + (high - bottom) * (isToday ? 0.2 : 0.08))
     }
 
     private func barColor(for value: HourlyValue) -> Color {
