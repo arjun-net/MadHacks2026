@@ -146,8 +146,8 @@ async fn heatmap_for(
     };
     let count = rows.len();
     let mut data: BTreeMap<String, Vec<LatLng>> = BTreeMap::new();
-    for (t, lat, lng, building) in rows {
-        data.entry(iso(t)).or_default().push(LatLng { lat, lng, building });
+    for (t, lat, lng, building, device_id) in rows {
+        data.entry(iso(t)).or_default().push(LatLng { lat, lng, building, device_id });
     }
     Json(HeatmapOut { start: iso(start), end: iso(end), count, data }).into_response()
 }

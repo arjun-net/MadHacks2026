@@ -28,12 +28,13 @@ pub struct Accepted {
     pub accepted: usize,
 }
 
-/// The building appears last in each returned heatmap point.
+/// The building and device_id appear last in each returned heatmap point.
 #[derive(Serialize, Clone)]
 pub struct LatLng {
     pub lat: f64,
     pub lng: f64,
     pub building: Option<String>,
+    pub device_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -54,8 +55,8 @@ pub struct Point {
     pub building: Option<String>,
 }
 
-/// (time, lat, lng, building)
-pub type Row = (DateTime<Utc>, f64, f64, Option<String>);
+/// (time, lat, lng, building, device_id)
+pub type Row = (DateTime<Utc>, f64, f64, Option<String>, Option<String>);
 
 /// minLng, minLat, maxLng, maxLat
 pub type BBox = (f64, f64, f64, f64);

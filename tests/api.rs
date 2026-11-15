@@ -56,6 +56,7 @@ async fn ingest_and_heatmap_grouped() {
     let keys: Vec<&String> = body["data"].as_object().unwrap().keys().collect();
     assert_eq!(keys, ["2026-11-14T22:34:00Z", "2026-11-14T22:36:00Z"]);
     assert_eq!(body["data"]["2026-11-14T22:34:00Z"].as_array().unwrap().len(), 2);
+    assert_eq!(body["data"]["2026-11-14T22:36:00Z"][0]["device_id"], "a");
 }
 
 #[tokio::test]

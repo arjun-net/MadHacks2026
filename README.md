@@ -19,7 +19,7 @@ Timestamps are ISO-8601 with timezone (e.g. `2026-11-14T22:34:00Z`); naive times
 | GET | `/heatmap?start=&end=[&bbox=minLng,minLat,maxLng,maxLat][&limit=]` | points in `[start,end)`; `limit` default 50000, max 200000 |
 | GET | `/health` | `{"status":"ok","store_ok":bool}` |
 
-Heatmap response: `{"start","end","count","data":{"<timestamp>":[{"lat","lng"},...]}}`, keys in ascending order.
+Heatmap response: `{"start","end","count","data":{"<timestamp>":[{"lat","lng","building","device_id"},...]}}`, keys in ascending order.
 
 Writes are buffered and flushed every 5s or 100 points, so a heatmap read right after a POST may not include it yet.
 

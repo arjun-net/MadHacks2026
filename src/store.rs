@@ -14,7 +14,7 @@ const INSERT_RAW: &str = r#"
 "#;
 
 const QUERY_RAW: &str = r#"
-    SELECT "time", latitude, longitude, building FROM public.location_events
+    SELECT "time", latitude, longitude, building, device_id FROM public.location_events
     WHERE "time" >= $1 AND "time" < $2
       AND ($3::float8 IS NULL OR
            (longitude BETWEEN $3 AND $5 AND latitude BETWEEN $4 AND $6))
@@ -22,7 +22,7 @@ const QUERY_RAW: &str = r#"
 "#;
 
 const QUERY_BROAD: &str = r#"
-    SELECT "time", latitude, longitude, building FROM public.location_events_broad
+    SELECT "time", latitude, longitude, building, device_id FROM public.location_events_broad
     WHERE "time" >= $1 AND "time" < $2
       AND ($3::float8 IS NULL OR
            (longitude BETWEEN $3 AND $5 AND latitude BETWEEN $4 AND $6))
@@ -85,7 +85,7 @@ impl Store {
             Store::Memory(mutex) => {
                 let mut memory = mutex.lock().unwrap();
                 memory.raw.extend(points.iter().map(|p| {
-                    (p.time, p.lat, p.lng, p.building.clone())
+                    (p.time, p.lat, p.lng, p.building.clone(), Some(p.device_id.clone()))
                 }));
                 Ok(())
             }
@@ -146,7 +146,7 @@ impl Store {
                     Dataset::Broad => &memory.broad,
                 };
                 let mut out: Vec<Row> = source.iter()
-                    .filter(|(t, lat, lng, _building)| {
+                    .filter(|(t, lat, lng, _building, _device_id)| {
                         *t >= start && *t < end
                             && bbox.is_none_or(|(min_lng, min_lat, max_lng, max_lat)| {
                                 *lat >= min_lat && *lat <= max_lat
@@ -185,7 +185,7 @@ impl Store {
             Store::Memory(mutex) => {
                 let memory = mutex.lock().unwrap();
                 let mut counts: std::collections::BTreeMap<String, i64> = Default::default();
-                for (_, _, _, building) in memory.raw.iter().filter(|r| r.0 >= since && r.0 <= until) {
+                for (_, _, _, building, _) in memory.raw.iter().filter(|r| r.0 >= since && r.0 <= until) {
                     if let Some(name) = building {
                         *counts.entry(name.clone()).or_default() += 1;
                     }

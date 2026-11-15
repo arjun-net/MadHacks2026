@@ -387,11 +387,15 @@ components:
         accepted: { type: integer, minimum: 1 }
     LatLng:
       type: object
-      required: [lat, lng, building]
+      required: [lat, lng, building, device_id]
       properties:
         lat: { type: number }
         lng: { type: number }
         building: { type: string, nullable: true }
+        device_id:
+          type: string
+          nullable: true
+          description: The reporting device. `"unknown"` if the client sent none; null for bulk-loaded rows without one.
     HeatmapOut:
       type: object
       required: [start, end, count, data]
@@ -411,8 +415,8 @@ components:
         count: 2
         data:
           "2026-11-14T22:34:00Z":
-            - { lat: 43.07287, lng: -89.40664, building: morgridge_hall }
-            - { lat: 43.074, lng: -89.39, building: null }
+            - { lat: 43.07287, lng: -89.40664, building: morgridge_hall, device_id: ios-7f3a }
+            - { lat: 43.074, lng: -89.39, building: null, device_id: ios-7f3a }
     BuildingCounts:
       type: object
       required: [window_minutes, total, counts]
