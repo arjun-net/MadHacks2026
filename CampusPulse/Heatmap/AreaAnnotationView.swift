@@ -2,6 +2,19 @@ import MapKit
 import SwiftUI
 import UIKit
 
+extension MKAnnotationView {
+    /// Grows the marker in from a dot: places coming out of an opened group, and the group
+    /// marker coming back when they merge again.
+    func popIn(delay: TimeInterval = 0) {
+        alpha = 0
+        transform = CGAffineTransform(scaleX: 0.4, y: 0.4)
+        UIView.animate(withDuration: 0.5, delay: delay, usingSpringWithDamping: 0.72, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.alpha = 1
+            self.transform = .identity
+        }
+    }
+}
+
 final class AreaAnnotation: NSObject, MKAnnotation {
     let area: CampusArea
     var level: ActivityLevel?
@@ -182,16 +195,6 @@ final class AreaAnnotationView: MKAnnotationView {
         ])
         label.layer.shadowColor = paper.cgColor
         label.layer.rasterizationScale = max(traits.displayScale, 2)
-    }
-
-    /// Grows the marker in from a dot, for places appearing out of an opened group.
-    func popIn(delay: TimeInterval = 0) {
-        alpha = 0
-        transform = CGAffineTransform(scaleX: 0.4, y: 0.4)
-        UIView.animate(withDuration: 0.5, delay: delay, usingSpringWithDamping: 0.72, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-            self.alpha = 1
-            self.transform = .identity
-        }
     }
 
     override func prepareForReuse() {

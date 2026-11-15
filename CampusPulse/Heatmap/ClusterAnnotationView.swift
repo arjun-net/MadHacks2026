@@ -83,6 +83,13 @@ final class ClusterAnnotationView: MKAnnotationView {
         }
     }
 
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        layer.removeAllAnimations()
+        alpha = 1
+        transform = .identity
+    }
+
     @objc private func tapped() {
         onTap?()
     }

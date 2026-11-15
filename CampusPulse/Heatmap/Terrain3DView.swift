@@ -882,7 +882,11 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     /// marker, led by the busiest (or selected) place, instead of disappearing.
     private func updateOverlay() {
         guard bounds.width > 0 else { return }
-        if !openedIDs.isEmpty, cameraAnimation == nil, camera.distance > openedDistance * 1.6 {
+        // Zooming out past where the group opened merges it again (checked every frame, so
+        // it happens mid-pinch).
+        var regrouping: Set<String> = []
+        if !openedIDs.isEmpty, cameraAnimation == nil, camera.distance > openedDistance * 1.15 {
+            regrouping = openedIDs
             openedIDs = []
             markerOrder = sortedMarkers()
         }
@@ -938,6 +942,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
                 clusterMembers[used] = ids
                 cluster.configure(members: group.members) { [levels] in levels[$0] }
             }
+            if ids.contains(where: regrouping.contains) { cluster.popIn() }
             cluster.center = snapped(CGPoint(x: group.anchor.x + cluster.centerOffset.x, y: group.anchor.y + cluster.centerOffset.y))
             cluster.isHidden = false
             cluster.layer.zPosition = 15_000 - CGFloat(group.depth)

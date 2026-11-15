@@ -103,6 +103,10 @@ struct CampusMapView: UIViewRepresentable {
         private var openedIDs: Set<String> = []
         /// Camera distance the opened group was framed at; zooming well past it closes the group.
         private var openedDistance: CLLocationDistance = 0
+        /// Places just merged back; the group marker they land in grows in.
+        private var regroupingIDs: Set<String> = []
+        /// Zooming out this far past an opened group's framing merges it again.
+        private static let regroupZoomOut = 1.15
         /// Opened places whose markers haven't appeared yet; they grow in when they do.
         private var poppingIDs: Set<String> = []
         private var gridTask: Task<Void, Never>?
@@ -289,6 +293,9 @@ struct CampusMapView: UIViewRepresentable {
             if t >= 1 {
                 stopGlide()
                 canvas?.cameraDidStop()
+                // Where the glide really landed (MapKit may have clamped it) is the baseline
+                // for zooming back out.
+                if !openedIDs.isEmpty { openedDistance = mapView.camera.centerCoordinateDistance }
             }
         }
 
@@ -311,10 +318,13 @@ struct CampusMapView: UIViewRepresentable {
         private func closeOpenedGroup(in mapView: MKMapView) {
             guard !openedIDs.isEmpty else { return }
             let members = openedIDs.compactMap { annotations[$0] }
+            regroupingIDs = openedIDs
             openedIDs = []
             poppingIDs = []
             mapView.removeAnnotations(members)
             mapView.addAnnotations(members)
+            // Places that didn't land in a group (still far apart) mustn't pop a later one.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.regroupingIDs = [] }
         }
 
         func recenter(_ mapView: MKMapView, animated: Bool) {
@@ -372,15 +382,23 @@ struct CampusMapView: UIViewRepresentable {
 
         func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
             canvas?.sync()
+            // Checked while the fingers are still pinching, so places merge as you zoom out.
+            closeOpenedGroupIfZoomedOut(mapView)
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             guard glideState == nil else { return }
             canvas?.cameraDidStop()
             // Not mid-glide: the glide starts far out, on its way in to the group.
-            if !openedIDs.isEmpty, glideState == nil, mapView.camera.centerCoordinateDistance > openedDistance * 1.6 {
-                closeOpenedGroup(in: mapView)
-            }
+            closeOpenedGroupIfZoomedOut(mapView)
+        }
+
+        /// Merges the opened group again once the map is zoomed out past where it opened.
+        /// Not mid-glide: the glide starts far out, on its way in to the group.
+        private func closeOpenedGroupIfZoomedOut(_ mapView: MKMapView) {
+            guard !openedIDs.isEmpty, glideState == nil,
+                  mapView.camera.centerCoordinateDistance > openedDistance * Self.regroupZoomOut else { return }
+            closeOpenedGroup(in: mapView)
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
@@ -390,6 +408,11 @@ struct CampusMapView: UIViewRepresentable {
                     for: cluster
                 ) as? ClusterAnnotationView
                 view.map { configure($0, for: cluster) }
+                let memberIDs = cluster.memberAnnotations.compactMap { ($0 as? AreaAnnotation)?.area.id }
+                if !regroupingIDs.isEmpty, memberIDs.contains(where: regroupingIDs.contains) {
+                    regroupingIDs.subtract(memberIDs)
+                    view?.popIn()
+                }
                 view?.onTap = { [weak self, weak mapView, weak view] in
                     guard let self, let mapView, let cluster = view?.annotation as? MKClusterAnnotation else { return }
                     self.haptics.impactOccurred()
