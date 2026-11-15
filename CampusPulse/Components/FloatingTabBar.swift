@@ -50,6 +50,8 @@ struct FloatingTabBar: View {
                             .frame(height: 18)
                         Text(tab.title)
                             .typeStyle(.tab)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .foregroundStyle(isSelected ? selectedText : Theme.Colors.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

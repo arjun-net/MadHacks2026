@@ -306,9 +306,20 @@ private struct OverviewCard: View {
     let participantsText: String
     let activeAreasText: String
 
+    /// The ring grows with Dynamic Type so the percentage and level stay inside it.
+    @ScaledMetric(relativeTo: .title) private var gaugeSize: CGFloat = 124
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// Side by side normally; stacked at accessibility text sizes so the stats keep their width.
+    private var summaryLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
+            : AnyLayout(HStackLayout(spacing: 20))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 20) {
+            summaryLayout {
                 ZStack {
                     ActivityGauge(intensity: snapshot.overallIntensity, lineWidth: 8, style: .ring)
                     VStack(spacing: 0) {
@@ -325,7 +336,7 @@ private struct OverviewCard: View {
                             .foregroundStyle(Theme.Colors.textPrimary)
                     }
                 }
-                .frame(width: 124, height: 124)
+                .frame(width: gaugeSize, height: gaugeSize)
 
                 VStack(alignment: .leading, spacing: 14) {
                     metric(value: participantsText, label: "students sharing", symbol: "person.2.fill")
@@ -340,6 +351,7 @@ private struct OverviewCard: View {
                     .padding(.vertical, 5)
                     .overlay(Rectangle().strokeBorder(snapshot.level.textColor, lineWidth: Theme.Stroke.hairline))
                 }
+                .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
 
