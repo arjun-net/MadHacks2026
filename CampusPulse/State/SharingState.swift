@@ -93,11 +93,12 @@ final class SharingState {
             self?.authorizationDidChange(status)
         }
         if !isSimulated { watchNetwork() }
-        // Sharing is on by default: ask for permission on first launch, then start sending.
+        // Sharing is on by default. Permission is asked from onboarding on first launch
+        // (or here on later launches, if it was never answered).
         if isEnabled {
             switch self.permission {
             case .allowed: startReporting()
-            case .notRequested where !isSimulated: provider.requestAuthorization()
+            case .notRequested where !isSimulated && preferences.hasOnboarded: provider.requestAuthorization()
             default: break
             }
         }

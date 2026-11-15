@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab = .map
     @State private var isSharingSheetPresented = false
+    @State private var isOnboardingPresented: Bool
     @State private var mapViewModel: MapViewModel
     @State private var activityViewModel: ActivityViewModel
     @State private var sharingViewModel: LocationSharingViewModel
@@ -13,6 +14,7 @@ struct RootView: View {
 
     init(container: AppContainer) {
         self.container = container
+        _isOnboardingPresented = State(initialValue: !container.preferences.hasOnboarded && !container.store.isPreview)
         _mapViewModel = State(initialValue: MapViewModel(store: container.store, sharing: container.sharing))
         _activityViewModel = State(initialValue: ActivityViewModel(store: container.store))
         _sharingViewModel = State(initialValue: LocationSharingViewModel(sharing: container.sharing, store: container.store))
@@ -66,6 +68,12 @@ struct RootView: View {
             .presentationBackground(Theme.Colors.background)
             .presentationCornerRadius(Theme.Radius.xl)
         }
+        .fullScreenCover(isPresented: $isOnboardingPresented) {
+            OnboardingView(
+                onShare: { finishOnboarding(sharing: true) },
+                onSkip: { finishOnboarding(sharing: false) }
+            )
+        }
         .task {
             container.store.start()
             applyDebugLaunchOptions()
@@ -78,7 +86,7 @@ struct RootView: View {
         }
     }
 
-    /// `-screen activity|settings|sharing|panel|denied` jumps straight to a screen (debug builds only).
+    /// `-screen activity|settings|sharing|panel|denied|onboarding` jumps straight to a screen (debug builds only).
     private func applyDebugLaunchOptions() {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "screen") {
@@ -86,12 +94,20 @@ struct RootView: View {
         case "settings": selectedTab = .settings
         case "sharing": isSharingSheetPresented = true
         case "panel": mapViewModel.isPanelExpanded = true
+        case "onboarding": isOnboardingPresented = true
         case "denied":
             container.sharing.simulate(permission: .denied)
             isSharingSheetPresented = true
         default: break
         }
         #endif
+    }
+
+    /// Sharing asks iOS for location access right after the intro closes.
+    private func finishOnboarding(sharing: Bool) {
+        container.preferences.hasOnboarded = true
+        isOnboardingPresented = false
+        container.sharing.setEnabled(sharing)
     }
 
     private func openAreaDetails(_ areaID: String) {
