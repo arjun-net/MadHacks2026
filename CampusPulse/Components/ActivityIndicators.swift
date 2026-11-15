@@ -208,7 +208,7 @@ struct HeatLegend: View {
     var body: some View {
         HStack(spacing: 8) {
             Text("Quiet")
-            Rectangle()
+            Capsule()
                 .fill(HeatPalette.linearGradient)
                 .frame(width: 70, height: 6)
             Text("Packed")

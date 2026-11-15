@@ -35,7 +35,7 @@ struct UniversityPickerView: View {
                                             .typeStyle(.micro)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
-                                            .overlay(Rectangle().strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
+                                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
                                             .foregroundStyle(Theme.Colors.warning)
                                     }
                                 }

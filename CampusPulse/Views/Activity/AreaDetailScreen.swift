@@ -131,7 +131,7 @@ private struct LiveCard: View {
             .foregroundStyle(Theme.Colors.ink)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .overlay(Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
 
             Rectangle().fill(Theme.Colors.rule).frame(height: 1)
 
@@ -246,11 +246,11 @@ private struct PopularTimesSection: View {
                         .frame(height: 32)
                         .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
                         .background {
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
                                 .fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
                         }
                         .overlay {
-                            Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
                         }
                         .overlay(alignment: .bottom) {
                             if day == insights.todayWeekday, !selected {

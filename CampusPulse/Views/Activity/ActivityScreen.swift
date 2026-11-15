@@ -169,7 +169,7 @@ struct ActivityScreen: View {
             .foregroundStyle(Theme.Colors.accent)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .overlay(Rectangle().strokeBorder(Theme.Colors.accent, lineWidth: Theme.Stroke.hairline))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.accent, lineWidth: Theme.Stroke.hairline))
             .padding(.vertical, 8)
             .contentShape(Rectangle())
         }
@@ -273,10 +273,10 @@ private struct FilterBar: View {
                         .padding(.horizontal, 12)
                         .frame(height: 34)
                         .background {
-                            Rectangle().fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
                         }
                         .overlay {
-                            Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
                         }
                         .padding(.vertical, 5)
                         .contentShape(Rectangle())
@@ -349,7 +349,7 @@ private struct OverviewCard: View {
                     .foregroundStyle(snapshot.level.textColor)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .overlay(Rectangle().strokeBorder(snapshot.level.textColor, lineWidth: Theme.Stroke.hairline))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(snapshot.level.textColor, lineWidth: Theme.Stroke.hairline))
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)

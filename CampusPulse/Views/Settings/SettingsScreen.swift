@@ -185,8 +185,8 @@ struct SettingsIcon: View {
             .imageScale(.medium)
             .foregroundStyle(color)
             .frame(width: 29, height: 29)
-            .background(Theme.Colors.surface, in: Rectangle())
-            .overlay(Rectangle().strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
+            .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
     }
 }
 
@@ -229,7 +229,7 @@ private struct CampusBanner: View {
                 .imageScale(.large)
                 .foregroundStyle(Theme.Colors.onAccent)
                 .frame(width: 54, height: 54)
-                .background(Theme.Colors.accentFill, in: Rectangle())
+                .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(campus.name)
                     .typeStyle(.title3)
@@ -242,7 +242,7 @@ private struct CampusBanner: View {
                             .typeStyle(.micro)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .overlay(Rectangle().strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
                             .foregroundStyle(Theme.Colors.warning)
                     }
                 }

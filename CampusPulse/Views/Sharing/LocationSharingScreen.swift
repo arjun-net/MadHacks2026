@@ -64,8 +64,8 @@ struct LocationSharingScreen: View {
                 .imageScale(.large)
                 .foregroundStyle(viewModel.isSharingOn ? Theme.Colors.onAccent : Theme.Colors.ink)
                 .frame(width: 42, height: 42)
-                .background(viewModel.isSharingOn ? Theme.Colors.accentFill : Theme.Colors.surface, in: Rectangle())
-                .overlay(Rectangle().strokeBorder(viewModel.isSharingOn ? Color.clear : Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
+                .background(viewModel.isSharingOn ? Theme.Colors.accentFill : Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(viewModel.isSharingOn ? Color.clear : Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
                 .contentTransition(.symbolEffect(.replace))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -271,7 +271,7 @@ private struct HowItWorksStep: View {
                     .imageScale(.medium)
                     .foregroundStyle(Theme.Colors.onAccent)
                     .frame(width: 34, height: 34)
-                    .background(Theme.Colors.accentFill, in: Rectangle())
+                    .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
                 if !isLast {
                     Rectangle()
                         .fill(Theme.Colors.rule)

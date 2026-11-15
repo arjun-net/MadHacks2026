@@ -70,8 +70,8 @@ struct FloatingTabBar: View {
             }
         }
         .frame(height: 56)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
-        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .clipShape(Rectangle())
+        .paper(cornerRadius: 0, hardShadow: true)
         .frame(maxWidth: 320)
         .padding(.horizontal, 40)
         .sensoryFeedback(.selection, trigger: selection)

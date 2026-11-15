@@ -127,10 +127,10 @@ enum Theme {
     }
 
     enum Radius {
-        static let sm: CGFloat = 2
-        static let md: CGFloat = 2
-        static let lg: CGFloat = 2
-        static let xl: CGFloat = 4
+        static let sm: CGFloat = 5
+        static let md: CGFloat = 5
+        static let lg: CGFloat = 5
+        static let xl: CGFloat = 7
     }
 
     enum Stroke {

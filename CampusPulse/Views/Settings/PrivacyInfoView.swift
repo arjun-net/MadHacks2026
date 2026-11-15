@@ -121,12 +121,12 @@ struct AppGlyph: View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
             ZStack {
-                Rectangle()
+                RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
                     .fill(Theme.Colors.hardShadow)
                     .offset(Theme.Shadow.offset)
-                Rectangle()
+                RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
                     .fill(Theme.Colors.accentFill)
-                    .overlay(Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
                 Image(systemName: "waveform.path.ecg")
                     .resizable()
                     .scaledToFit()
