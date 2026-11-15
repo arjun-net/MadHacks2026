@@ -23,6 +23,14 @@ final class LocationSharingViewModel {
     var nextUpdateAt: Date? { sharing.nextUpdateAt }
     var updateInterval: TimeInterval { sharing.updateInterval }
     var campusName: String { store.campus.shortName }
+    var pendingCount: Int { sharing.pendingCount }
+
+    /// Sharing is on but stops when the app is closed, because permission is only "While Using".
+    var needsAlwaysPermission: Bool { isActive && !sharing.hasAlwaysPermission }
+    /// True while iOS will still show the "Always" prompt; otherwise the user goes to Settings.
+    var canPromptForAlways: Bool { sharing.canPromptForAlways }
+
+    func requestAlwaysPermission() { sharing.requestAlwaysPermission() }
     var isActive: Bool { status == .active }
 
     var statusTitle: String {

@@ -32,6 +32,12 @@ final class LocationProvider: NSObject {
         manager.requestWhenInUseAuthorization()
     }
 
+    /// Upgrade from "While Using" to "Always" so sharing survives the app being closed.
+    /// iOS shows this prompt at most once; after that the user has to change it in Settings.
+    func requestAlwaysAuthorization() {
+        manager.requestAlwaysAuthorization()
+    }
+
     func start() {
         guard !isUpdating else { return }
         isUpdating = true
@@ -40,12 +46,25 @@ final class LocationProvider: NSObject {
             manager.showsBackgroundLocationIndicator = true
         }
         manager.startUpdatingLocation()
+        updateRelaunchMonitoring()
+    }
+
+    /// With "Always" permission, significant-change monitoring makes iOS relaunch the app in the
+    /// background after it's been closed or killed, which restarts the 2-minute schedule.
+    private func updateRelaunchMonitoring() {
+        guard CLLocationManager.significantLocationChangeMonitoringAvailable() else { return }
+        if isUpdating, manager.authorizationStatus == .authorizedAlways {
+            manager.startMonitoringSignificantLocationChanges()
+        } else {
+            manager.stopMonitoringSignificantLocationChanges()
+        }
     }
 
     func stop() {
         guard isUpdating else { return }
         isUpdating = false
         manager.stopUpdatingLocation()
+        updateRelaunchMonitoring()
         if Self.supportsBackgroundLocation {
             manager.allowsBackgroundLocationUpdates = false
         }
@@ -94,7 +113,10 @@ extension LocationProvider: CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
-        MainActor.assumeIsolated { onAuthorizationChange?(status) }
+        MainActor.assumeIsolated {
+            updateRelaunchMonitoring()
+            onAuthorizationChange?(status)
+        }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

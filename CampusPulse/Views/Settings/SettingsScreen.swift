@@ -49,7 +49,7 @@ struct SettingsScreen: View {
                                 RoundedRectangle(cornerRadius: 1.5)
                                     .fill(viewModel.permission.tint)
                                     .frame(width: 7, height: 7)
-                                Text(viewModel.permission.displayName)
+                                Text(viewModel.permissionLabel)
                                     .typeStyle(.subheadline)
                                     .foregroundStyle(Theme.Colors.textSecondary)
                             }

@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     let container: AppContainer
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab: AppTab = .map
     @State private var isSharingSheetPresented = false
     @State private var mapViewModel: MapViewModel
@@ -67,6 +68,12 @@ struct RootView: View {
         .task {
             container.store.start()
             applyDebugLaunchOptions()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Only active/background matter; inactive is a brief transition (app switcher, alerts).
+            guard phase != .inactive else { return }
+            container.store.setForeground(phase == .active)
+            if phase == .active { Task { await container.sharing.flushPending() } }
         }
     }
 

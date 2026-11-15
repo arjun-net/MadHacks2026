@@ -1,4 +1,5 @@
 import CoreLocation
+import Network
 import Observation
 import os
 import SwiftUI
@@ -51,6 +52,8 @@ final class SharingState {
     private(set) var nextUpdateAt: Date?
     /// Readings waiting to be delivered.
     private(set) var pendingCount = 0
+    /// "Always" lets sharing continue after the app is closed (iOS relaunches it in the background).
+    private(set) var hasAlwaysPermission = false
 
     let updateInterval = AppConfig.updateInterval
 
@@ -62,6 +65,8 @@ final class SharingState {
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     /// Previews and the debug `-screen denied` option pin the permission instead of asking the system.
     @ObservationIgnored private var isSimulated: Bool
+    @ObservationIgnored private var isDelivering = false
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
 
     private static let log = Logger(subsystem: "CampusPulse", category: "Sharing")
 
@@ -82,10 +87,12 @@ final class SharingState {
         self.isSimulated = permission != nil
         self.permission = permission ?? PermissionDisplay(provider.authorizationStatus)
         self.pendingCount = isSimulated ? 0 : queue.load().count
+        self.hasAlwaysPermission = !isSimulated && provider.authorizationStatus == .authorizedAlways
 
         provider.onAuthorizationChange = { [weak self] status in
             self?.authorizationDidChange(status)
         }
+        if !isSimulated { watchNetwork() }
         // Sharing is on by default: ask for permission on first launch, then start sending.
         if isEnabled {
             switch self.permission {
@@ -97,6 +104,26 @@ final class SharingState {
     }
 
     var isEnabled: Bool { preferences.sharingEnabled }
+
+    /// "Always", "While Using", "Denied" or "Not Requested".
+    var permissionLabel: String {
+        permission == .allowed && hasAlwaysPermission ? "Always" : permission.displayName
+    }
+
+    /// Whether asking for "Always" would show the system prompt. iOS only shows it once;
+    /// after that, the only way is the Settings app.
+    var canPromptForAlways: Bool {
+        permission == .allowed && !hasAlwaysPermission && !isSimulated
+            && !UserDefaults.standard.bool(forKey: Self.askedAlwaysKey)
+    }
+
+    func requestAlwaysPermission() {
+        guard canPromptForAlways else { return }
+        UserDefaults.standard.set(true, forKey: Self.askedAlwaysKey)
+        provider.requestAlwaysAuthorization()
+    }
+
+    private static let askedAlwaysKey = "location.askedAlways"
 
     var status: SharingStatus {
         if permission == .denied { return .permissionDenied }
@@ -143,6 +170,7 @@ final class SharingState {
     private func authorizationDidChange(_ status: CLAuthorizationStatus) {
         guard !isSimulated else { return }
         permission = PermissionDisplay(status)
+        hasAlwaysPermission = status == .authorizedAlways
         switch permission {
         case .allowed:
             if isEnabled { startReporting() }
@@ -210,23 +238,62 @@ final class SharingState {
             timestamp: slot,
             deviceID: DeviceIdentity.id
         )
-        let pending = queue.load() + [point]
+        await deliver(adding: point)
+    }
+
+    /// Sends anything queued from earlier failures. Called when the network comes back
+    /// and when the app returns to the foreground, so readings don't wait for the next slot.
+    func flushPending() async {
+        guard !isSimulated, pendingCount > 0 else { return }
+        await deliver(adding: nil)
+    }
+
+    /// Sends the queue plus `point` in one request; keeps them queued if the server can't take them.
+    private func deliver(adding point: LocationPoint?) async {
+        // A slot reading that arrives mid-flush is queued and goes out with the next delivery.
+        guard !isDelivering else {
+            if let point {
+                queue.save(queue.load() + [point])
+                pendingCount = queue.load().count
+            }
+            return
+        }
+        isDelivering = true
+        defer { isDelivering = false }
+
+        let pending = queue.load() + (point.map { [$0] } ?? [])
+        guard !pending.isEmpty else { return }
+
         let result = await api.send(pending)
+        // Readings queued while this request was in flight.
+        let arrivedMeanwhile = queue.load().filter { !pending.contains($0) }
 
         switch result {
         case .accepted:
-            Self.log.info("Sent \(pending.count) reading(s) for \(LocationAPI.timestampString(slot), privacy: .public)")
-            queue.save([])
-            pendingCount = 0
-            lastUpdateAt = slot
+            Self.log.info("Sent \(pending.count) reading(s)")
+            queue.save(arrivedMeanwhile)
+            if let latest = pending.map(\.timestamp).max() { lastUpdateAt = max(lastUpdateAt ?? latest, latest) }
         case .retryLater:
-            queue.save(pending)
-            pendingCount = min(pending.count, PendingLocationQueue.capacity)
+            queue.save(pending + arrivedMeanwhile)
         case .rejected:
             // Invalid payload: drop it rather than retrying forever.
-            queue.save([])
-            pendingCount = 0
+            queue.save(arrivedMeanwhile)
         }
+        pendingCount = queue.load().count
+    }
+
+    /// Flushes the queue as soon as a connection is available again.
+    private func watchNetwork() {
+        let monitor = NWPathMonitor()
+        var wasConnected = true
+        monitor.pathUpdateHandler = { [weak self] path in
+            let connected = path.status == .satisfied
+            defer { wasConnected = connected }
+            guard connected, !wasConnected else { return }
+            Task { @MainActor [weak self] in await self?.flushPending() }
+        }
+        monitor.start(queue: DispatchQueue(label: "CampusPulse.network"))
+        pathMonitor = monitor
     }
 
     /// Ray-casting point-in-polygon test against the campus outline.

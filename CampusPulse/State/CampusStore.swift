@@ -29,6 +29,9 @@ final class CampusStore {
     @ObservationIgnored private let api = HeatmapAPI()
     @ObservationIgnored private var loopTask: Task<Void, Never>?
     @ObservationIgnored private var historyTask: Task<Void, Never>?
+    @ObservationIgnored private var isInForeground = true
+    /// Called after each live refresh (used for busy/quiet alerts).
+    @ObservationIgnored var onLiveUpdate: ((CampusSnapshot) -> Void)?
     private static let log = Logger(subsystem: "CampusPulse", category: "CampusStore")
 
     init(campuses: [Campus], preferences: AppPreferences, initialSnapshot: CampusSnapshot? = nil) {
@@ -51,8 +54,23 @@ final class CampusStore {
         loopTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(for: .seconds(AppConfig.liveRefreshInterval))
+                let interval = self?.isInForeground == false ? AppConfig.updateInterval : AppConfig.liveRefreshInterval
+                try? await Task.sleep(for: .seconds(interval))
             }
+        }
+    }
+
+    /// Refreshes right away on returning to the app. In the background the loop stops,
+    /// unless alerts are on, in which case it checks every 2 minutes (the app only keeps
+    /// running in the background while location sharing is on).
+    func setForeground(_ foreground: Bool) {
+        guard !isPreview, foreground != isInForeground else { return }
+        isInForeground = foreground
+        loopTask?.cancel()
+        loopTask = nil
+        isRefreshing = false
+        if foreground || preferences.busyAreaAlerts || preferences.quietSpotAlerts {
+            start()
         }
     }
 
@@ -126,6 +144,7 @@ final class CampusStore {
             )
             snapshot = next
             state = next.isEmpty ? .empty : .loaded
+            onLiveUpdate?(next)
         } catch {
             Self.log.error("Live heatmap failed: \(error.localizedDescription, privacy: .public)")
             if snapshot == nil { state = .failed(Self.message(for: error)) }

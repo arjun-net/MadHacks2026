@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LocationSharingScreen: View {
     @Bindable var viewModel: LocationSharingViewModel
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         ScrollView {
@@ -9,6 +10,11 @@ struct LocationSharingScreen: View {
                 hero
 
                 toggleCard
+
+                if viewModel.needsAlwaysPermission {
+                    backgroundCard
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if viewModel.isPermissionDenied {
                     PermissionDeniedView()
@@ -92,6 +98,43 @@ struct LocationSharingScreen: View {
         .sensoryFeedback(.impact(weight: .light), trigger: viewModel.isSharingOn) { _, new in !new }
     }
 
+    // MARK: Background
+
+    private var backgroundCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "moon.stars.fill")
+                    .foregroundStyle(Theme.Colors.accent)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Keep sharing when the app is closed")
+                        .typeStyle(.headline)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                    Text("Right now sharing stops once you swipe the app away. Allowing location access **Always** lets it keep checking in every 2 minutes.")
+                        .typeStyle(.subheadline)
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button {
+                if viewModel.canPromptForAlways {
+                    viewModel.requestAlwaysPermission()
+                } else if let url = URL(string: UIApplication.openSettingsURLString) {
+                    openURL(url)
+                }
+            } label: {
+                Text(viewModel.canPromptForAlways ? "Allow Always" : "Open Settings")
+                    .typeStyle(.button)
+                    .foregroundStyle(Theme.Colors.onAccent)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+            }
+            .buttonStyle(RowButtonStyle())
+        }
+        .padding(16)
+        .card(cornerRadius: Theme.Radius.sm)
+    }
+
     // MARK: Status
 
     private var statusGrid: some View {
@@ -131,8 +174,10 @@ struct LocationSharingScreen: View {
                 }
             }
 
-            StatusTile(title: "Interval", symbol: "arrow.triangle.2.circlepath", tint: Theme.Colors.accent) {
-                Text("~2 minutes")
+            // Readings that couldn't be sent yet (offline or server down); they go out automatically.
+            StatusTile(title: "Waiting to send", symbol: "tray.full", tint: viewModel.pendingCount > 0 ? Theme.Colors.warning : Theme.Colors.accent) {
+                Text(viewModel.pendingCount == 0 ? "None" : "\(viewModel.pendingCount)")
+                    .monospacedDigit()
             }
         }
     }

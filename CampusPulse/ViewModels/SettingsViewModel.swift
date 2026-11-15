@@ -19,6 +19,7 @@ final class SettingsViewModel {
     var campuses: [Campus] { store.campuses }
     var selectedCampus: Campus { store.campus }
     var permission: PermissionDisplay { sharing.permission }
+    var permissionLabel: String { sharing.permissionLabel }
     var sharingStatusLabel: String { sharing.status == .active ? "On" : "Off" }
 
     var appVersion: String {
