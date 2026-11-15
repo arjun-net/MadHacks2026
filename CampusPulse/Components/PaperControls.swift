@@ -49,6 +49,7 @@ struct PaperSegmentedPicker<Value: Hashable>: View {
     let options: [Value]
     @Binding var selection: Value
     let label: (Value) -> String
+    var height: CGFloat = 44
 
     var body: some View {
         HStack(spacing: 0) {
@@ -60,7 +61,7 @@ struct PaperSegmentedPicker<Value: Hashable>: View {
                     Text(label(option))
                         .typeStyle(.button)
                         .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .frame(maxWidth: .infinity, minHeight: height)
                         .background(selected ? Theme.Colors.ink : Color.clear)
                         .contentShape(Rectangle())
                 }
@@ -75,7 +76,7 @@ struct PaperSegmentedPicker<Value: Hashable>: View {
         .background(Theme.Colors.paper)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
-        .frame(minHeight: 44)
+        .frame(minHeight: height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
         .sensoryFeedback(.selection, trigger: selection)

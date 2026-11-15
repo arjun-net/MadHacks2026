@@ -45,6 +45,8 @@ struct MapScreen: View {
                     if let focused = viewModel.selectedActivity {
                         AreaFocusCard(
                             activity: focused,
+                            isFavorite: viewModel.isFavorite(focused.id),
+                            onToggleFavorite: { viewModel.toggleFavorite(focused.id) },
                             onClose: { viewModel.select(areaID: nil) },
                             onOpenDetails: { onOpenAreaDetails(focused.id) }
                         )
@@ -59,6 +61,7 @@ struct MapScreen: View {
                         snapshot: viewModel.snapshot,
                         loadState: viewModel.loadState,
                         isExpanded: $viewModel.isPanelExpanded,
+                        favoriteAreaIDs: viewModel.favoriteAreaIDs,
                         onSelectArea: { viewModel.select(areaID: $0) }
                     )
                 }

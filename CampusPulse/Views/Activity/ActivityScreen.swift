@@ -84,6 +84,12 @@ struct ActivityScreen: View {
     private func content(_ snapshot: CampusSnapshot) -> some View {
         OverviewCard(snapshot: snapshot, participantsText: viewModel.participantsText, activeAreasText: viewModel.activeAreasText)
 
+        if !viewModel.favorites.isEmpty {
+            section(title: "Your places", trailing: "Saved") {
+                areaList(viewModel.favorites)
+            }
+        }
+
         FilterBar(
             filters: viewModel.availableFilters,
             selection: $viewModel.filter,
@@ -98,25 +104,29 @@ struct ActivityScreen: View {
         section(title: viewModel.filter == .all ? "All areas" : viewModel.filter.title) {
             sortMenu
         } content: {
-            VStack(spacing: 0) {
-                ForEach(viewModel.allAreas) { activity in
-                    NavigationLink(value: AreaRoute(areaID: activity.id)) {
-                        CompactAreaRow(activity: activity)
-                            .padding(.vertical, 10)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(RowButtonStyle())
-                    if activity.id != viewModel.allAreas.last?.id {
-                        Rectangle().fill(Theme.Colors.rule).frame(height: 1)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-            .card(cornerRadius: Theme.Radius.sm)
+            areaList(viewModel.allAreas)
         }
 
         privacyFooter
+    }
+
+    private func areaList(_ areas: [AreaActivity]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(areas) { activity in
+                NavigationLink(value: AreaRoute(areaID: activity.id)) {
+                    CompactAreaRow(activity: activity, isFavorite: viewModel.isFavorite(activity.id))
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(RowButtonStyle())
+                if activity.id != areas.last?.id {
+                    Rectangle().fill(Theme.Colors.rule).frame(height: 1)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .card(cornerRadius: Theme.Radius.sm)
     }
 
     @ViewBuilder
@@ -489,6 +499,7 @@ private struct QuietSpotCard: View {
 
 private struct CompactAreaRow: View {
     let activity: AreaActivity
+    var isFavorite = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -496,10 +507,20 @@ private struct CompactAreaRow: View {
                 .imageScale(.medium)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .frame(width: 24)
+                .overlay(alignment: .topTrailing) {
+                    // Saved places get a small star on the icon, so the name keeps its width.
+                    if isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(Theme.Colors.accent)
+                            .offset(x: 4, y: -4)
+                    }
+                }
             Text(activity.area.name)
                 .typeStyle(.rowTitle)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
             Spacer(minLength: 8)
             ActivityBar(intensity: activity.intensity, height: 4)
                 .frame(width: 64)
@@ -512,7 +533,7 @@ private struct CompactAreaRow: View {
                 .foregroundStyle(Theme.Colors.textTertiary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(activity.area.name), \(activity.level.title)")
+        .accessibilityLabel("\(activity.area.name)\(isFavorite ? ", saved" : ""), \(activity.level.title)")
     }
 }
 

@@ -15,6 +15,8 @@ final class AreaAnnotation: NSObject, MKAnnotation {
 
 /// Cartographic place label: a round ink marker with the category glyph sits on the building,
 /// with the name centered underneath in a paper halo. The selected place turns red and grows.
+/// A ring around the marker fills by busyness (one fifth per level), so you can read how busy
+/// a place is without the heat layer.
 final class AreaAnnotationView: MKAnnotationView {
     static let reuseIdentifier = "AreaAnnotationView"
 
@@ -22,7 +24,12 @@ final class AreaAnnotationView: MKAnnotationView {
     private static let selectedMarkerSize: CGFloat = 30
     private static let labelGap: CGFloat = 3
     private static let maxLabelWidth: CGFloat = 112
+    /// Space between the marker edge and the middle of the busyness ring.
+    private static let ringInset: CGFloat = 3.5
+    private static let ringWidth: CGFloat = 2.5
 
+    private let ringTrack = CAShapeLayer()
+    private let ring = CAShapeLayer()
     private let marker = UIView()
     private let icon = UIImageView()
     private let label = UILabel()
@@ -43,6 +50,13 @@ final class AreaAnnotationView: MKAnnotationView {
         canShowCallout = false
         collisionMode = .rectangle
         backgroundColor = .clear
+
+        for layer in [ringTrack, ring] {
+            layer.fillColor = nil
+            layer.lineWidth = Self.ringWidth
+            layer.lineCap = .round
+            self.layer.addSublayer(layer)
+        }
 
         marker.layer.borderWidth = 1.5
         marker.layer.shadowOffset = CGSize(width: 0, height: 1)
@@ -92,21 +106,38 @@ final class AreaAnnotationView: MKAnnotationView {
     /// Sizes the view around the marker and name, and anchors the marker's center on the building.
     private func layoutContent() {
         let size = isHighlightedArea ? Self.selectedMarkerSize : Self.markerSize
+        let margin = Self.ringInset + Self.ringWidth / 2
+        let outer = size + margin * 2
         let text = label.sizeThatFits(CGSize(width: Self.maxLabelWidth, height: .greatestFiniteMagnitude))
         let labelSize = CGSize(width: min(ceil(text.width), Self.maxLabelWidth), height: ceil(text.height))
-        let width = max(size, labelSize.width) + 4
-        let height = size + Self.labelGap + labelSize.height
+        let width = max(outer, labelSize.width) + 4
+        let height = outer + Self.labelGap + labelSize.height
+        let markerFrame = CGRect(x: (width - size) / 2, y: margin, width: size, height: size)
+
+        // Starts at 12 o'clock and runs clockwise.
+        let radius = size / 2 + Self.ringInset
+        let ringPath = UIBezierPath(
+            arcCenter: CGPoint(x: markerFrame.midX, y: markerFrame.midY),
+            radius: radius, startAngle: -.pi / 2, endAngle: .pi * 1.5, clockwise: true
+        ).cgPath
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        ringTrack.path = ringPath
+        ring.path = ringPath
+        CATransaction.commit()
+        ring.strokeEnd = level.map { CGFloat($0.rawValue + 1) / CGFloat(ActivityLevel.allCases.count) } ?? 0
+        ringTrack.isHidden = level == nil
 
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0) {
             self.frame.size = CGSize(width: width, height: height)
-            self.marker.frame = CGRect(x: (width - size) / 2, y: 0, width: size, height: size)
+            self.marker.frame = markerFrame
             self.marker.layer.cornerRadius = size / 2
             self.marker.layer.shadowPath = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: size, height: size)).cgPath
             self.icon.frame = self.marker.bounds
-            self.label.frame = CGRect(x: (width - labelSize.width) / 2, y: size + Self.labelGap, width: labelSize.width, height: labelSize.height)
+            self.label.frame = CGRect(x: (width - labelSize.width) / 2, y: outer + Self.labelGap, width: labelSize.width, height: labelSize.height)
         }
         // MapKit centers the view on the coordinate; shift so the marker's center sits there instead.
-        centerOffset = CGPoint(x: 0, y: (height - size) / 2)
+        centerOffset = CGPoint(x: 0, y: height / 2 - markerFrame.midY)
     }
 
     /// Resolves every color for the current appearance (layer colors don't adapt on their own).
@@ -124,6 +155,10 @@ final class AreaAnnotationView: MKAnnotationView {
         marker.layer.shadowColor = UIColor(Theme.Colors.softShadow).resolvedColor(with: traits).cgColor
         marker.layer.shadowOpacity = 1
         icon.tintColor = highlighted ? onAccent : paper
+
+        // Level colors chosen for contrast on paper; the track is a faint full circle behind.
+        ringTrack.strokeColor = paper.withAlphaComponent(0.85).cgColor
+        ring.strokeColor = UIColor(level?.textColor ?? Theme.Colors.textTertiary).resolvedColor(with: traits).cgColor
 
         let font = UIFont(name: highlighted ? FontName.sansBold : FontName.sansSemi, size: highlighted ? 12 : 11)
             ?? .systemFont(ofSize: 11, weight: .semibold)

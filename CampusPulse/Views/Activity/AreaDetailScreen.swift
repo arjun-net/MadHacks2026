@@ -22,7 +22,16 @@ struct AreaDetailScreen: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                let isFavorite = viewModel.isFavorite(areaID)
+                Button {
+                    withAnimation(Theme.Motion.snappy) { viewModel.toggleFavorite(areaID) }
+                } label: {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .accessibilityLabel(isFavorite ? "Remove from your places" : "Save to your places")
+                .sensoryFeedback(.selection, trigger: isFavorite)
                 Button { onShowOnMap(areaID) } label: {
                     Image(systemName: "map")
                 }

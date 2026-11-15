@@ -21,6 +21,8 @@ struct AreaActivityRow: View {
                         .typeStyle(.rowTitle)
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .lineLimit(1)
+                        // Shrinks a little before truncating, so "Memorial Library" fits beside the badge.
+                        .minimumScaleFactor(0.8)
                     Spacer(minLength: 4)
                     ActivityLevelBadge(level: activity.level)
                 }

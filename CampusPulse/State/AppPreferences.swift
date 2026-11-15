@@ -39,6 +39,20 @@ final class AppPreferences {
     var quietSpotAlerts: Bool { didSet { defaults.set(quietSpotAlerts, forKey: Keys.quietAlerts) } }
     var weeklyRecap: Bool { didSet { defaults.set(weeklyRecap, forKey: Keys.weeklyRecap) } }
     var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) } }
+    /// Places starred by the user, in the order they were added.
+    var favoriteAreaIDs: [String] { didSet { defaults.set(favoriteAreaIDs, forKey: Keys.favorites) } }
+    /// The first-launch introduction has been seen (location permission is asked from there).
+    var hasOnboarded: Bool { didSet { defaults.set(hasOnboarded, forKey: Keys.onboarded) } }
+
+    func isFavorite(_ areaID: String) -> Bool { favoriteAreaIDs.contains(areaID) }
+
+    func toggleFavorite(_ areaID: String) {
+        if let index = favoriteAreaIDs.firstIndex(of: areaID) {
+            favoriteAreaIDs.remove(at: index)
+        } else {
+            favoriteAreaIDs.append(areaID)
+        }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -51,6 +65,7 @@ final class AppPreferences {
             Keys.quietAlerts: false,
             Keys.weeklyRecap: false,
             Keys.appearance: Appearance.light.rawValue,
+            Keys.onboarded: false,
         ])
         selectedCampusID = defaults.string(forKey: Keys.campus) ?? CampusCatalog.madison.id
         sharingEnabled = defaults.bool(forKey: Keys.sharing)
@@ -60,6 +75,8 @@ final class AppPreferences {
         quietSpotAlerts = defaults.bool(forKey: Keys.quietAlerts)
         weeklyRecap = defaults.bool(forKey: Keys.weeklyRecap)
         appearance = Appearance(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .light
+        favoriteAreaIDs = defaults.stringArray(forKey: Keys.favorites) ?? []
+        hasOnboarded = defaults.bool(forKey: Keys.onboarded)
     }
 
     private enum Keys {
@@ -71,5 +88,7 @@ final class AppPreferences {
         static let quietAlerts = "notifications.quietSpots"
         static let weeklyRecap = "notifications.weeklyRecap"
         static let appearance = "display.appearance"
+        static let favorites = "areas.favorites"
+        static let onboarded = "onboarding.done"
     }
 }

@@ -6,9 +6,45 @@ struct ActivityPanel: View {
     let snapshot: CampusSnapshot?
     let loadState: LoadState
     @Binding var isExpanded: Bool
+    var favoriteAreaIDs: [String] = []
     var onSelectArea: (String) -> Void
 
     @GestureState private var dragOffset: CGFloat = 0
+    @State private var mode: ListMode = .busiest
+
+    /// What the expanded list ranks.
+    enum ListMode: String, CaseIterable, Hashable {
+        case busiest, quietest, saved
+
+        var title: String {
+            switch self {
+            case .busiest: "Busiest"
+            case .quietest: "Quietest"
+            case .saved: "Saved"
+            }
+        }
+    }
+
+    private var modes: [ListMode] {
+        favoriteAreaIDs.isEmpty ? [.busiest, .quietest] : ListMode.allCases
+    }
+
+    private func rows(for snapshot: CampusSnapshot) -> [AreaActivity] {
+        switch modes.contains(mode) ? mode : .busiest {
+        case .busiest:
+            return snapshot.busiest(Self.rowCount)
+        case .quietest:
+            // Places worth going to for a quiet hour, not an empty stadium or a dorm.
+            let useful: Set<AreaCategory> = [.library, .union, .academic, .dining, .outdoors]
+            return Array(snapshot.areasByActivity.reversed().filter { useful.contains($0.area.category) }.prefix(Self.rowCount))
+        case .saved:
+            let ids = Set(favoriteAreaIDs)
+            return Array(snapshot.areasByActivity.filter { ids.contains($0.id) }.prefix(Self.rowCount))
+        }
+    }
+
+    /// Four rows plus the picker keep the expanded panel clear of the masthead on small phones.
+    private static let rowCount = 4
 
     var body: some View {
         VStack(spacing: 0) {
@@ -136,11 +172,14 @@ struct ActivityPanel: View {
 
     private func expandedContent(_ snapshot: CampusSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Busiest right now", trailing: snapshot.trend.title, trailingSymbol: snapshot.trend.symbol)
+            SectionHeader(title: "Right now", trailing: snapshot.trend.title, trailingSymbol: snapshot.trend.symbol)
                 .padding(.top, 16)
 
+            // Compact chips: the panel has little vertical room over the map.
+            PaperSegmentedPicker(title: "Show", options: modes, selection: $mode, label: \.title, height: 34)
+
             VStack(spacing: 0) {
-                let rows = snapshot.busiest(5)
+                let rows = rows(for: snapshot)
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, activity in
                     Button {
                         onSelectArea(activity.id)
@@ -204,6 +243,8 @@ struct ActivityPanel: View {
 /// Floating detail card shown when a building label is tapped.
 struct AreaFocusCard: View {
     let activity: AreaActivity
+    var isFavorite = false
+    var onToggleFavorite: (() -> Void)?
     var onClose: () -> Void
     var onOpenDetails: (() -> Void)?
 
@@ -222,6 +263,20 @@ struct AreaFocusCard: View {
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
                 Spacer(minLength: 4)
+                if let onToggleFavorite {
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(isFavorite ? Theme.Colors.accent : Theme.Colors.ink)
+                            .contentTransition(.symbolEffect(.replace))
+                            .frame(width: 44, height: 44)
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(RowButtonStyle())
+                    .accessibilityLabel(isFavorite ? "Remove from your places" : "Save to your places")
+                    .sensoryFeedback(.selection, trigger: isFavorite)
+                }
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 13, weight: .bold))

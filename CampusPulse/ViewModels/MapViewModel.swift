@@ -32,6 +32,12 @@ final class MapViewModel {
         snapshot == nil && (loadState == .loading || loadState == .idle)
     }
 
+    var favoriteAreaIDs: [String] { store.preferences.favoriteAreaIDs }
+
+    func isFavorite(_ areaID: String) -> Bool { store.preferences.isFavorite(areaID) }
+
+    func toggleFavorite(_ areaID: String) { store.preferences.toggleFavorite(areaID) }
+
     func select(areaID: String?) {
         withAnimation(Theme.Motion.smooth) {
             selectedAreaID = areaID

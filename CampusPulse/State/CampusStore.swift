@@ -25,7 +25,7 @@ final class CampusStore {
     /// Previews run on bundled sample data instead of the network.
     let isPreview: Bool
 
-    @ObservationIgnored private let preferences: AppPreferences
+    @ObservationIgnored let preferences: AppPreferences
     @ObservationIgnored private let api = HeatmapAPI()
     @ObservationIgnored private var loopTask: Task<Void, Never>?
     @ObservationIgnored private var historyTask: Task<Void, Never>?

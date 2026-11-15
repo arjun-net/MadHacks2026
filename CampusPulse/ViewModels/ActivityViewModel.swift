@@ -149,6 +149,16 @@ final class ActivityViewModel {
         return "\(snapshot.activeAreaCount) of \(snapshot.areas.count)"
     }
 
+    /// Starred places on this campus, busiest first.
+    var favorites: [AreaActivity] {
+        let ids = Set(store.preferences.favoriteAreaIDs)
+        return (snapshot?.areasByActivity ?? []).filter { ids.contains($0.id) }
+    }
+
+    func isFavorite(_ areaID: String) -> Bool { store.preferences.isFavorite(areaID) }
+
+    func toggleFavorite(_ areaID: String) { store.preferences.toggleFavorite(areaID) }
+
     func activity(for areaID: String) -> AreaActivity? {
         snapshot?.activity(for: areaID)
     }
