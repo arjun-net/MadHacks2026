@@ -86,8 +86,9 @@ final class ActivityViewModel {
     }
 
     var campus: Campus { store.campus }
-    var snapshot: CampusSnapshot? { store.snapshot }
-    var loadState: LoadState { store.state }
+    /// The Activity tab shows trends from the server's stored day (see `CampusStore`).
+    var snapshot: CampusSnapshot? { store.historySnapshot }
+    var loadState: LoadState { store.historyState }
 
     private var selectedFilter: AreaFilter = .all
 
@@ -152,10 +153,13 @@ final class ActivityViewModel {
         snapshot?.activity(for: areaID)
     }
 
-    /// History and typical busy times for an area, anchored to the latest snapshot.
+    /// Usual busy times and past days for an area, from the server's stored day.
     func insights(for areaID: String) -> AreaInsights? {
         guard let snapshot, let activity = snapshot.activity(for: areaID) else { return nil }
-        return SampleActivityData.insights(for: activity, campus: campus, date: snapshot.generatedAt)
+        if let history = store.history, history.campusID == campus.id {
+            return history.insights(for: activity, now: snapshot.generatedAt)
+        }
+        return store.isPreview ? SampleActivityData.insights(for: activity, campus: campus, date: snapshot.generatedAt) : nil
     }
 
     func refresh() async {

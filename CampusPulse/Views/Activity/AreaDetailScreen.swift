@@ -142,7 +142,7 @@ private struct LiveCard: View {
                     color: ActivityLevel(intensity: insights.typicalNow).textColor
                 )
                 stat(
-                    label: "Last \(insights.generatedAt.formatted(.dateTime.weekday(.abbreviated)))",
+                    label: insights.pastDays.first.map { $0.date.formatted(.dateTime.month(.abbreviated).day()) } ?? "Last week",
                     value: insights.lastWeekNow.map { ActivityLevel(intensity: $0).title } ?? "—",
                     color: insights.lastWeekNow.map { ActivityLevel(intensity: $0).textColor } ?? Theme.Colors.textTertiary
                 )
@@ -453,7 +453,7 @@ private struct PastWeekSection: View {
     private var days: [DayHistory] { insights.pastDays }
 
     var body: some View {
-        DetailSection(title: "Past 7 days", trailing: "Daily peak") {
+        DetailSection(title: "Past days", trailing: "Daily peak") {
             VStack(spacing: 0) {
                 ForEach(days.reversed()) { day in
                     PastDayRow(day: day, isExpanded: selectedDay == day.date)

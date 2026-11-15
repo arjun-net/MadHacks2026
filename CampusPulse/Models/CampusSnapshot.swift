@@ -36,6 +36,8 @@ struct CampusSnapshot: Hashable, Sendable {
     /// Campus-wide intensity, oldest → newest.
     let history: [Double]
     let privacyThreshold: Int
+    /// For trends replayed from stored data: the moment in that data being shown. Nil when live.
+    var replayOf: Date? = nil
 
     var level: ActivityLevel { ActivityLevel(intensity: overallIntensity) }
     var trend: ActivityTrend { ActivityTrend(history: history) }
