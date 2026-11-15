@@ -13,7 +13,7 @@ struct LocationSharingScreen: View {
                 if viewModel.isPermissionDenied {
                     PermissionDeniedView()
                         .frame(maxWidth: .infinity)
-                        .card(cornerRadius: Theme.Radius.xl)
+                        .card(cornerRadius: Theme.Radius.sm)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
 
@@ -61,18 +61,16 @@ struct LocationSharingScreen: View {
     private var toggleCard: some View {
         HStack(spacing: 14) {
             Image(systemName: viewModel.isSharingOn ? "location.fill" : "location")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
+                .imageScale(.large)
+                .foregroundStyle(viewModel.isSharingOn ? Theme.Colors.onAccent : Theme.Colors.ink)
                 .frame(width: 42, height: 42)
-                .background(
-                    viewModel.isSharingOn ? AnyShapeStyle(Theme.Gradients.live) : AnyShapeStyle(Color.white.opacity(0.12)),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
+                .background(viewModel.isSharingOn ? Theme.Colors.accentFill : Theme.Colors.surface, in: Rectangle())
+                .overlay(Rectangle().strokeBorder(viewModel.isSharingOn ? Color.clear : Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
                 .contentTransition(.symbolEffect(.replace))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Share my location")
-                    .typeStyle(.headline)
+                    .typeStyle(.title3)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text("Anonymous · about every 2 min")
                     .typeStyle(.caption)
@@ -83,14 +81,10 @@ struct LocationSharingScreen: View {
 
             Toggle("Share my location", isOn: $viewModel.isSharingOn)
                 .labelsHidden()
-                .tint(Theme.Colors.live)
+                .tint(Theme.Colors.accentFill)
         }
         .padding(16)
-        .card(cornerRadius: Theme.Radius.lg)
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .strokeBorder(viewModel.isSharingOn ? Theme.Colors.live.opacity(0.35) : .clear, lineWidth: 1)
-        }
+        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
         .sensoryFeedback(.success, trigger: viewModel.isSharingOn) { _, new in new }
         .sensoryFeedback(.impact(weight: .light), trigger: viewModel.isSharingOn) { _, new in !new }
     }
@@ -117,7 +111,7 @@ struct LocationSharingScreen: View {
                 }
             }
 
-            StatusTile(title: "Next update", symbol: "timer", tint: Theme.Colors.accentSecondary) {
+            StatusTile(title: "Next update", symbol: "timer", tint: Theme.Colors.accent) {
                 if let next = viewModel.nextUpdateAt, viewModel.isActive {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         HStack(spacing: 8) {
@@ -134,7 +128,7 @@ struct LocationSharingScreen: View {
                 }
             }
 
-            StatusTile(title: "Interval", symbol: "arrow.triangle.2.circlepath", tint: Theme.Colors.live) {
+            StatusTile(title: "Interval", symbol: "arrow.triangle.2.circlepath", tint: Theme.Colors.accent) {
                 Text("~2 minutes")
             }
         }
@@ -144,7 +138,7 @@ struct LocationSharingScreen: View {
 
     private var howItWorks: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("How it works").sectionLabelStyle()
+            SectionHeader(title: "How it works")
 
             HowItWorksStep(number: 1, symbol: "iphone.radiowaves.left.and.right", title: "Your phone checks in",
                            detail: "About every 2 minutes, while sharing is on, the app sends a rounded location, never your exact position.")
@@ -154,23 +148,29 @@ struct LocationSharingScreen: View {
                            detail: "The map shows how busy each area is. Cells with fewer than \(AppConfig.privacyThreshold) students are left out.", isLast: true)
         }
         .padding(18)
-        .card(cornerRadius: Theme.Radius.lg)
+        .card(cornerRadius: Theme.Radius.sm)
     }
 
     private var privacyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Your privacy").sectionLabelStyle()
-                Spacer()
-                Image(systemName: "lock.shield.fill")
-                    .foregroundStyle(Theme.Gradients.live)
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(Theme.Colors.ink)
+                    .frame(height: Theme.Stroke.sectionRule)
+                HStack {
+                    Text("Your privacy").sectionLabelStyle()
+                    Spacer()
+                    Image(systemName: "lock.shield.fill")
+                        .foregroundStyle(Theme.Colors.positive)
+                }
+                .padding(.top, 8)
             }
             ForEach(PrivacyContent.principles.prefix(4)) { item in
-                PrivacyPoint(symbol: item.symbol, title: item.title, detail: item.detail, tint: Theme.Colors.live)
+                PrivacyPoint(symbol: item.symbol, title: item.title, detail: item.detail, tint: Theme.Colors.positive)
             }
         }
         .padding(18)
-        .card(cornerRadius: Theme.Radius.lg)
+        .card(cornerRadius: Theme.Radius.sm)
     }
 }
 
@@ -198,22 +198,17 @@ struct SharingBeacon: View {
             }
 
             Circle()
-                .fill(RadialGradient(colors: [tint.opacity(0.35), .clear], center: .center, startRadius: 10, endRadius: 85))
-                .frame(width: 170, height: 170)
+                .strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline)
+                .frame(width: 140, height: 140)
 
             Circle()
-                .fill(
-                    isActive
-                        ? AnyShapeStyle(Theme.Gradients.live)
-                        : AnyShapeStyle(LinearGradient(colors: [Color.white.opacity(0.2), Color.white.opacity(0.08)], startPoint: .top, endPoint: .bottom))
-                )
+                .fill(isActive ? Theme.Colors.accentFill : Theme.Colors.surfaceStrong)
                 .frame(width: 84, height: 84)
-                .overlay(Circle().strokeBorder(.white.opacity(0.25), lineWidth: 1))
-                .shadow(color: tint.opacity(isActive ? 0.7 : 0.2), radius: 24)
+                .overlay(Circle().strokeBorder(Theme.Colors.ink, lineWidth: 2))
 
             Image(systemName: isActive ? "location.fill" : "location.slash.fill")
-                .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.cpTitle)
+                .foregroundStyle(isActive ? Theme.Colors.onAccent : Theme.Colors.ink)
                 .contentTransition(.symbolEffect(.replace))
         }
         .animation(Theme.Motion.smooth, value: isActive)
@@ -231,19 +226,19 @@ private struct StatusTile<Value: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: symbol)
-                    .font(.system(size: 11, weight: .bold))
+                    .imageScale(.small)
                     .foregroundStyle(tint)
                 Text(title).sectionLabelStyle()
             }
             value()
-                .font(.system(size: 17, weight: .semibold))
+                .typeStyle(.metricSmall)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .card(cornerRadius: Theme.Radius.md)
+        .card(cornerRadius: Theme.Radius.sm)
         .accessibilityElement(children: .combine)
     }
 }
@@ -253,10 +248,10 @@ private struct CountdownRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.12), lineWidth: 2.5)
+            Circle().stroke(Theme.Colors.surfaceStrong, lineWidth: 2.5)
             Circle()
                 .trim(from: 0, to: min(1, max(0, progress)))
-                .stroke(Theme.Colors.accentSecondary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .stroke(Theme.Colors.accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
     }
@@ -273,14 +268,14 @@ private struct HowItWorksStep: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(spacing: 0) {
                 Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .imageScale(.medium)
+                    .foregroundStyle(Theme.Colors.onAccent)
                     .frame(width: 34, height: 34)
-                    .background(Theme.Gradients.accent.opacity(0.85), in: Circle())
+                    .background(Theme.Colors.accentFill, in: Rectangle())
                 if !isLast {
                     Rectangle()
-                        .fill(LinearGradient(colors: [Theme.Colors.accent.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom))
-                        .frame(width: 1.5)
+                        .fill(Theme.Colors.rule)
+                        .frame(width: 1)
                         .frame(maxHeight: .infinity)
                         .padding(.vertical, 4)
                 }
@@ -290,7 +285,7 @@ private struct HowItWorksStep: View {
                     .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text(detail)
-                    .font(.system(size: 14))
+                    .typeStyle(.subheadline)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

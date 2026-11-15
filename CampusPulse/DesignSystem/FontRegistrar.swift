@@ -23,4 +23,23 @@ enum FontRegistrar {
         }
         #endif
     }
+
+    /// Navigation titles in the press faces: Playfair for large titles, Franklin for inline ones.
+    static func styleNavigationBars() {
+        let ink = UIColor(Theme.Colors.ink)
+        let appearance = UINavigationBar.appearance()
+        if let large = UIFont(name: FontName.display, size: 34) {
+            appearance.largeTitleTextAttributes = [
+                .font: UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: large),
+                .foregroundColor: ink,
+                .kern: -0.4,
+            ]
+        }
+        if let inline = UIFont(name: FontName.sansBold, size: 16) {
+            appearance.titleTextAttributes = [
+                .font: UIFontMetrics(forTextStyle: .headline).scaledFont(for: inline),
+                .foregroundColor: ink,
+            ]
+        }
+    }
 }

@@ -55,13 +55,14 @@ struct RootView: View {
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") { isSharingSheetPresented = false }
-                                .fontWeight(.semibold)
+                                .font(.cpButton)
+                                .foregroundStyle(Theme.Colors.accent)
                         }
                     }
             }
             .presentationDragIndicator(.visible)
             .presentationBackground(Theme.Colors.background)
-            .presentationCornerRadius(32)
+            .presentationCornerRadius(Theme.Radius.xl)
         }
         .task {
             container.store.start()

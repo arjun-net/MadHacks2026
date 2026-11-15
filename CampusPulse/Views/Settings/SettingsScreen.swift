@@ -10,11 +10,13 @@ struct SettingsScreen: View {
         @Bindable var preferences = viewModel.preferences
 
         NavigationStack {
-            Form {
+            List {
                 Section {
+                } header: {
                     CampusBanner(campus: viewModel.selectedCampus)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
+                        .textCase(nil)
+                        .padding(.horizontal, -16)
+                        .padding(.bottom, 8)
                 }
 
                 Section {
@@ -24,8 +26,9 @@ struct SettingsScreen: View {
                         SettingsRow(symbol: "building.columns.fill", color: Theme.Colors.badgerRed, title: "University", value: viewModel.selectedCampus.shortName)
                     }
                 } header: {
-                    Text("Campus")
+                    Text("Campus").sectionLabelStyle()
                 }
+                .listRowBackground(Theme.Colors.paper)
 
                 Section {
                     NavigationLink {
@@ -58,10 +61,13 @@ struct SettingsScreen: View {
                         SettingsLabel(symbol: "moon.zzz.fill", color: Theme.Colors.graphite, title: "Pause Overnight")
                     }
                 } header: {
-                    Text("Location")
+                    Text("Location").sectionLabelStyle()
                 } footer: {
                     Text("While sharing is on, your rounded location is sent about every 2 minutes. Sharing pauses automatically off campus and between midnight and 6 AM if enabled.")
+                        .typeStyle(.caption)
+                        .foregroundStyle(Theme.Colors.textTertiary)
                 }
+                .listRowBackground(Theme.Colors.paper)
 
                 Section {
                     Picker("Appearance", selection: $preferences.appearance) {
@@ -70,12 +76,14 @@ struct SettingsScreen: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .listRowBackground(Theme.Colors.paper)
                 } header: {
-                    Text("Display")
+                    Text("Display").sectionLabelStyle()
                 } footer: {
                     Text("Day Edition is the default. Night Edition is easier on the eyes after dark.")
+                        .typeStyle(.caption)
+                        .foregroundStyle(Theme.Colors.textTertiary)
                 }
+                .listRowBackground(Theme.Colors.paper)
 
                 Section {
                     Toggle(isOn: $preferences.busyAreaAlerts) {
@@ -88,10 +96,13 @@ struct SettingsScreen: View {
                         SettingsLabel(symbol: "calendar", color: Theme.Colors.graphite, title: "Weekly Campus Recap")
                     }
                 } header: {
-                    Text("Notifications")
+                    Text("Notifications").sectionLabelStyle()
                 } footer: {
                     Text("Get a heads-up when your favorite places get busy or quiet down.")
+                        .typeStyle(.caption)
+                        .foregroundStyle(Theme.Colors.textTertiary)
                 }
+                .listRowBackground(Theme.Colors.paper)
 
                 Section {
                     NavigationLink {
@@ -103,7 +114,7 @@ struct SettingsScreen: View {
                         isConfirmingDelete = true
                     } label: {
                         HStack {
-                            SettingsLabel(symbol: "trash.fill", color: .red, title: "Delete My Shared Data")
+                            SettingsLabel(symbol: "trash.fill", color: Theme.Colors.danger, title: "Delete My Shared Data")
                             Spacer()
                             if viewModel.isDeletingData { ProgressView() }
                         }
@@ -111,25 +122,31 @@ struct SettingsScreen: View {
                     .tint(Theme.Colors.danger)
                     .disabled(viewModel.isDeletingData)
                 } header: {
-                    Text("Privacy")
+                    Text("Privacy").sectionLabelStyle()
                 }
+                .listRowBackground(Theme.Colors.paper)
 
                 Section {
                     NavigationLink {
                         AboutView(version: viewModel.appVersion)
                     } label: {
-                        SettingsLabel(symbol: "info.circle.fill", color: .gray, title: "About Campus Pulse")
+                        SettingsLabel(symbol: "info.circle.fill", color: Theme.Colors.graphite, title: "About Campus Pulse")
                     }
                     LabeledContent {
                         Text(viewModel.appVersion).monospacedDigit()
                     } label: {
-                        SettingsLabel(symbol: "number", color: Color(white: 0.35), title: "Version")
+                        SettingsLabel(symbol: "number", color: Theme.Colors.graphite, title: "Version")
                     }
                 } header: {
-                    Text("About")
+                    Text("About").sectionLabelStyle()
                 }
+                .listRowBackground(Theme.Colors.paper)
             }
+            .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
+            .listRowSeparatorTint(Theme.Colors.rule)
+            .font(.cpBody)
+            .tint(Theme.Colors.accentFill)
             .background(ScreenBackground())
             .navigationTitle("Settings")
             .safeAreaInset(edge: .bottom) { Color.clear.frame(height: Theme.tabBarClearance - 10) }
@@ -165,13 +182,11 @@ struct SettingsIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
+            .imageScale(.medium)
+            .foregroundStyle(color)
             .frame(width: 29, height: 29)
-            .background(
-                LinearGradient(colors: [color.opacity(0.95), color.opacity(0.75)], startPoint: .top, endPoint: .bottom),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
+            .background(Theme.Colors.surface, in: Rectangle())
+            .overlay(Rectangle().strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
     }
 }
 
@@ -211,14 +226,13 @@ private struct CampusBanner: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: "building.columns.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.white)
+                .imageScale(.large)
+                .foregroundStyle(Theme.Colors.onAccent)
                 .frame(width: 54, height: 54)
-                .background(Theme.Gradients.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Theme.Colors.accent.opacity(0.5), radius: 12)
+                .background(Theme.Colors.accentFill, in: Rectangle())
             VStack(alignment: .leading, spacing: 3) {
                 Text(campus.name)
-                    .typeStyle(.headline)
+                    .typeStyle(.title3)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .lineLimit(2)
                 HStack(spacing: 6) {
@@ -228,7 +242,7 @@ private struct CampusBanner: View {
                             .typeStyle(.micro)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Theme.Colors.warning.opacity(0.2), in: Capsule())
+                            .overlay(Rectangle().strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
                             .foregroundStyle(Theme.Colors.warning)
                     }
                 }
@@ -238,7 +252,9 @@ private struct CampusBanner: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .card(cornerRadius: Theme.Radius.lg)
+        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .padding(.trailing, Theme.Shadow.offset.width)
+        .padding(.bottom, Theme.Shadow.offset.height)
     }
 }
 

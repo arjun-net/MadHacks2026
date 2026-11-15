@@ -6,8 +6,8 @@ struct PrivacyInfoView: View {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 10) {
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(Theme.Gradients.live)
+                        .font(.cpLargeTitle)
+                        .foregroundStyle(Theme.Colors.positive)
                     Text("Built for crowds, not individuals")
                         .typeStyle(.title)
                         .foregroundStyle(Theme.Colors.textPrimary)
@@ -22,18 +22,18 @@ struct PrivacyInfoView: View {
                     }
                 }
                 .padding(18)
-                .card(cornerRadius: Theme.Radius.lg)
+                .card(cornerRadius: Theme.Radius.sm)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("What we store").sectionLabelStyle()
+                    SectionHeader(title: "What we store")
                     bullet("Rounded grid cell and timestamp for each check-in, kept only long enough to compute the live map.")
                     bullet("Your campus selection and app preferences, on this device.")
-                    Text("What we never store").sectionLabelStyle().padding(.top, 8)
+                    SectionHeader(title: "What we never store").padding(.top, 8)
                     bullet("Your exact coordinates, movement trails, or location history.")
                     bullet("Your name, contacts, or anything that links check-ins to you.")
                 }
                 .padding(18)
-                .card(cornerRadius: Theme.Radius.lg)
+                .card(cornerRadius: Theme.Radius.sm)
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, 12)
@@ -46,12 +46,12 @@ struct PrivacyInfoView: View {
 
     private func bullet(_ text: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Circle()
+            Rectangle()
                 .fill(Theme.Colors.accent)
                 .frame(width: 5, height: 5)
                 .offset(y: -2)
             Text(text)
-                .font(.system(size: 14))
+                .typeStyle(.subheadline)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -82,10 +82,10 @@ struct AboutView: View {
                 .padding(.top, 20)
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Reading the map").sectionLabelStyle()
+                    SectionHeader(title: "Reading the map")
                     ForEach(ActivityLevel.allCases, id: \.self) { level in
                         HStack(spacing: 12) {
-                            AreaIconTile(symbol: level.symbol, color: level.color, size: 32)
+                            AreaIconTile(symbol: level.symbol, color: level.textColor, size: 32)
                             Text(level.title)
                                 .typeStyle(.headline)
                                 .foregroundStyle(Theme.Colors.textPrimary)
@@ -97,7 +97,7 @@ struct AboutView: View {
                     }
                 }
                 .padding(18)
-                .card(cornerRadius: Theme.Radius.lg)
+                .card(cornerRadius: Theme.Radius.sm)
 
                 VStack(spacing: 4) {
                     Text("Made with ♥ at MadHacks 2026")
@@ -115,33 +115,25 @@ struct AboutView: View {
     }
 }
 
-/// App mark: concentric heat rings on a deep gradient tile.
+/// App mark: a pulse line on a red press block.
 struct AppGlyph: View {
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
             ZStack {
-                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(white: 0.10), Color(white: 0.02)], startPoint: .top, endPoint: .bottom))
-                Circle()
-                    .fill(RadialGradient(
-                        gradient: Gradient(colors: [HeatPalette.color(at: 1), HeatPalette.color(at: 0.65), HeatPalette.color(at: 0.3).opacity(0.6), .clear]),
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: size * 0.42
-                    ))
-                    .frame(width: size * 0.84, height: size * 0.84)
-                    .blur(radius: size * 0.04)
+                Rectangle()
+                    .fill(Theme.Colors.hardShadow)
+                    .offset(Theme.Shadow.offset)
+                Rectangle()
+                    .fill(Theme.Colors.accentFill)
+                    .overlay(Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
                 Image(systemName: "waveform.path.ecg")
-                    .font(.system(size: size * 0.32, weight: .bold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.4), radius: 4)
+                    .resizable()
+                    .scaledToFit()
+                    .fontWeight(.bold)
+                    .frame(width: size * 0.5)
+                    .foregroundStyle(Theme.Colors.onAccent)
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                    .strokeBorder(.white.opacity(0.15), lineWidth: 1)
-            )
-            .shadow(color: HeatPalette.color(at: 0.8).opacity(0.35), radius: 20)
         }
         .aspectRatio(1, contentMode: .fit)
     }

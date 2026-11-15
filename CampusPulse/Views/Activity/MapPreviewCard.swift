@@ -12,29 +12,27 @@ struct MapPreviewCard: View {
     private var basemap: Basemap? { Basemap.forCampus(campus) }
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        VStack(spacing: 0) {
             mapLayer
-            LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom)
+                .frame(height: 110)
+            Rectangle().fill(Theme.Colors.ink).frame(height: Theme.Stroke.hairline)
             HStack(spacing: 8) {
                 Image(systemName: "map.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .imageScale(.small)
                 Text("Show on map")
-                    .font(.system(size: 13.5, weight: .semibold))
                 Spacer()
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .bold))
+                    .imageScale(.small)
             }
-            .foregroundStyle(Theme.Colors.textPrimary)
+            .typeStyle(.button)
+            .foregroundStyle(Theme.Colors.accent)
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .frame(minHeight: 44)
+            .background(Theme.Colors.paper)
         }
-        .frame(height: 150)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                .strokeBorder(Theme.Gradients.glassStroke, lineWidth: 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+        .clipShape(Rectangle())
+        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .contentShape(Rectangle())
     }
 
     private var mapLayer: some View {
@@ -93,8 +91,8 @@ struct MapPreviewCard: View {
                     center: mid, startRadius: 0, endRadius: glowRadius
                 )
             )
-            context.fill(Path(ellipseIn: CGRect(x: mid.x - 7, y: mid.y - 7, width: 14, height: 14)), with: .color(.white))
-            context.fill(Path(ellipseIn: CGRect(x: mid.x - 4.5, y: mid.y - 4.5, width: 9, height: 9)), with: .color(activity.level.color))
+            context.fill(Path(ellipseIn: CGRect(x: mid.x - 7, y: mid.y - 7, width: 14, height: 14)), with: .color(Theme.Colors.ink))
+            context.fill(Path(ellipseIn: CGRect(x: mid.x - 4.5, y: mid.y - 4.5, width: 9, height: 9)), with: .color(Theme.Colors.paper))
         }
         .allowsHitTesting(false)
     }

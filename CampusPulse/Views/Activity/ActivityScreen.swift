@@ -64,9 +64,12 @@ struct ActivityScreen: View {
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Spacer()
                 UpdatedAgoText(date: viewModel.snapshot?.generatedAt)
-                    .font(.system(size: 12, weight: .medium))
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
+            Rectangle()
+                .fill(Theme.Colors.ink)
+                .frame(height: Theme.Stroke.sectionRule)
         }
         .padding(.top, 8)
     }
@@ -98,13 +101,13 @@ struct ActivityScreen: View {
                     }
                     .buttonStyle(RowButtonStyle())
                     if activity.id != viewModel.allAreas.last?.id {
-                        Divider().overlay(Color.white.opacity(0.04))
+                        Rectangle().fill(Theme.Colors.rule).frame(height: 1)
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
-            .card(cornerRadius: Theme.Radius.lg)
+            .card(cornerRadius: Theme.Radius.sm)
         }
 
         privacyFooter
@@ -122,13 +125,13 @@ struct ActivityScreen: View {
                     .buttonStyle(RowButtonStyle())
                     .accessibilityHint("Shows usual busy times and past activity")
                     if index < viewModel.busiest.count - 1 {
-                        Divider().overlay(Color.white.opacity(0.04))
+                        Rectangle().fill(Theme.Colors.rule).frame(height: 1)
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
-            .card(cornerRadius: Theme.Radius.lg)
+            .card(cornerRadius: Theme.Radius.sm)
         }
 
         section(title: "Quiet spots", trailing: "Good for focus") {
@@ -160,13 +163,15 @@ struct ActivityScreen: View {
             HStack(spacing: 4) {
                 Text("\(viewModel.allAreas.count) · \(viewModel.sort.shortTitle)")
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .imageScale(.small)
             }
-            .font(.system(size: 11.5, weight: .semibold))
-            .foregroundStyle(Theme.Colors.textSecondary)
-            .padding(.horizontal, 10)
+            .typeStyle(.micro)
+            .foregroundStyle(Theme.Colors.accent)
+            .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Color.white.opacity(0.07), in: Capsule())
+            .overlay(Rectangle().strokeBorder(Theme.Colors.accent, lineWidth: Theme.Stroke.hairline))
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
         }
         .accessibilityLabel("Sort areas, currently \(viewModel.sort.title)")
     }
@@ -174,7 +179,7 @@ struct ActivityScreen: View {
     private var loadingContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+                .fill(Theme.Colors.surfaceStrong)
                 .frame(height: 280)
                 .shimmering()
             ForEach(0..<4, id: \.self) { _ in
@@ -193,22 +198,22 @@ struct ActivityScreen: View {
     private var privacyFooter: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "lock.shield.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(Theme.Gradients.live)
+                .imageScale(.large)
+                .foregroundStyle(Theme.Colors.positive)
             Text("All figures are estimates from anonymous, aggregated data. Counts are rounded, and areas with fewer than \(AppConfig.privacyThreshold) students are never shown.")
-                .font(.system(size: 12.5))
+                .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
-        .card(cornerRadius: Theme.Radius.md)
+        .card(cornerRadius: Theme.Radius.sm)
     }
 
     private func section<Content: View>(title: String, trailing: String, @ViewBuilder content: () -> Content) -> some View {
         section(title: title) {
             Text(trailing)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Theme.Colors.textTertiary)
+                .typeStyle(.micro)
+                .foregroundStyle(Theme.Colors.accent)
         } content: {
             content()
         }
@@ -220,13 +225,18 @@ struct ActivityScreen: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title).sectionLabelStyle()
-                    .contentTransition(.opacity)
-                Spacer()
-                trailing()
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(Theme.Colors.ink)
+                    .frame(height: Theme.Stroke.sectionRule)
+                HStack {
+                    Text(title).sectionLabelStyle()
+                        .contentTransition(.opacity)
+                    Spacer()
+                    trailing()
+                }
+                .frame(minHeight: 32)
             }
-            .padding(.horizontal, 4)
             content()
         }
     }
@@ -250,24 +260,26 @@ private struct FilterBar: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: filter.symbol)
-                                .font(.system(size: 11.5, weight: .semibold))
+                                .imageScale(.small)
                             Text(filter.title)
-                                .font(.system(size: 13.5, weight: .semibold))
                             if filter != .all {
                                 Text("\(count(filter))")
-                                    .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                                    .opacity(0.55)
+                                    .monospacedDigit()
+                                    .opacity(0.7)
                             }
                         }
-                        .foregroundStyle(selected ? Theme.Colors.background : Theme.Colors.textSecondary)
-                        .padding(.horizontal, 13)
+                        .typeStyle(.button)
+                        .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
+                        .padding(.horizontal, 12)
                         .frame(height: 34)
                         .background {
-                            Capsule().fill(selected ? Theme.Colors.textPrimary : Color.white.opacity(0.07))
+                            Rectangle().fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
                         }
                         .overlay {
-                            Capsule().strokeBorder(Color.white.opacity(selected ? 0 : 0.08), lineWidth: 1)
+                            Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
                         }
+                        .padding(.vertical, 5)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(filter.title), \(count(filter)) places")
@@ -298,19 +310,19 @@ private struct OverviewCard: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 20) {
                 ZStack {
-                    ActivityGauge(intensity: snapshot.overallIntensity, lineWidth: 11)
-                    VStack(spacing: 2) {
+                    ActivityGauge(intensity: snapshot.overallIntensity, lineWidth: 8, style: .ring)
+                    VStack(spacing: 0) {
                         Image(systemName: snapshot.level.symbol)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(snapshot.level.color)
+                            .imageScale(.small)
+                            .foregroundStyle(snapshot.level.textColor)
                             .contentTransition(.symbolEffect(.replace))
-                        Text(snapshot.level.title)
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(Theme.Colors.textPrimary)
                         Text("\(Int((snapshot.overallIntensity * 100).rounded()))%")
-                            .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(Theme.Colors.textTertiary)
+                            .typeStyle(.metric)
+                            .foregroundStyle(Theme.Colors.accent)
                             .contentTransition(.numericText())
+                        Text(snapshot.level.title)
+                            .typeStyle(.badge)
+                            .foregroundStyle(Theme.Colors.textPrimary)
                     }
                 }
                 .frame(width: 124, height: 124)
@@ -322,29 +334,23 @@ private struct OverviewCard: View {
                         Image(systemName: snapshot.trend.symbol)
                         Text(snapshot.trend.title)
                     }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(snapshot.level.color)
-                    .padding(.horizontal, 10)
+                    .typeStyle(.badge)
+                    .foregroundStyle(snapshot.level.textColor)
+                    .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(snapshot.level.color.opacity(0.14), in: Capsule())
+                    .overlay(Rectangle().strokeBorder(snapshot.level.textColor, lineWidth: Theme.Stroke.hairline))
                 }
                 Spacer(minLength: 0)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Campus activity").sectionLabelStyle()
-                    Spacer()
-                    Text("Last 24 min")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.Colors.textTertiary)
-                }
+                SectionHeader(title: "Campus activity", trailing: "Last 24 min")
                 CampusTrendChart(history: snapshot.history, updatedAt: snapshot.generatedAt)
                     .frame(height: 96)
             }
         }
         .padding(18)
-        .card(cornerRadius: Theme.Radius.xl)
+        .paper(cornerRadius: Theme.Radius.sm)
     }
 
     private func metric(value: String, label: String, symbol: String) -> some View {
@@ -354,7 +360,7 @@ private struct OverviewCard: View {
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .contentTransition(.numericText())
             Label(label, systemImage: symbol)
-                .font(.system(size: 11.5, weight: .medium))
+                .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .labelStyle(.titleAndIcon)
         }
@@ -396,7 +402,7 @@ private struct CampusTrendChart: View {
             .interpolationMethod(.catmullRom)
             .foregroundStyle(
                 LinearGradient(
-                    colors: [HeatPalette.color(at: 0.8).opacity(0.45), HeatPalette.color(at: 0.2).opacity(0.02)],
+                    colors: [Theme.Colors.accent.opacity(0.12), Theme.Colors.accent.opacity(0)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -406,14 +412,8 @@ private struct CampusTrendChart: View {
                 y: .value("Activity", sample.value)
             )
             .interpolationMethod(.catmullRom)
-            .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [HeatPalette.color(at: 0.3), HeatPalette.color(at: 0.65), HeatPalette.color(at: 0.9)],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+            .foregroundStyle(Theme.Colors.accent)
         }
         .chartYScale(domain: yDomain)
         .chartXScale(domain: -samples.count * 2 + 2 ... 0)
@@ -428,7 +428,7 @@ private struct CampusTrendChart: View {
                     Spacer()
                     Text("Now")
                 }
-                .font(.system(size: 10, weight: .medium))
+                .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
                 .offset(y: 16)
             }
@@ -446,7 +446,7 @@ private struct QuietSpotCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                AreaIconTile(symbol: activity.area.symbol, color: activity.level.color, size: 36)
+                AreaIconTile(symbol: activity.area.symbol, color: activity.level.textColor, size: 36)
                 Spacer()
                 ActivityLevelBadge(level: activity.level)
             }
@@ -459,12 +459,12 @@ private struct QuietSpotCard: View {
                     .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
-            Sparkline(values: activity.history, color: activity.level.color, lineWidth: 1.5)
+            Sparkline(values: activity.history, color: activity.level.textColor, lineWidth: 1.5)
                 .frame(height: 24)
         }
         .padding(14)
         .frame(width: 168)
-        .card(cornerRadius: Theme.Radius.md)
+        .card(cornerRadius: Theme.Radius.sm)
         .accessibilityElement(children: .combine)
     }
 }
@@ -475,22 +475,22 @@ private struct CompactAreaRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: activity.area.symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(activity.level.color)
+                .imageScale(.medium)
+                .foregroundStyle(Theme.Colors.textSecondary)
                 .frame(width: 24)
             Text(activity.area.name)
-                .font(.system(size: 14, weight: .medium))
+                .typeStyle(.rowTitle)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 8)
             ActivityBar(intensity: activity.intensity, height: 4)
                 .frame(width: 64)
             Text(activity.level.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(activity.level.color)
-                .frame(width: 66, alignment: .trailing)
+                .typeStyle(.badge)
+                .foregroundStyle(activity.level.textColor)
+                .frame(width: 70, alignment: .trailing)
             Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
+                .imageScale(.small)
                 .foregroundStyle(Theme.Colors.textTertiary)
         }
         .accessibilityElement(children: .ignore)

@@ -6,6 +6,7 @@ struct CampusPulseApp: App {
 
     init() {
         FontRegistrar.registerAll()
+        FontRegistrar.styleNavigationBars()
     }
 
     var body: some Scene {

@@ -48,7 +48,7 @@ struct AreaDetailScreen: View {
                 PastWeekSection(insights: insights)
 
                 Text("History and usual times are estimates built from anonymous, aggregated activity.")
-                    .font(.system(size: 12))
+                    .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
                     .frame(maxWidth: .infinity)
                     .multilineTextAlignment(.center)
@@ -63,8 +63,17 @@ struct AreaDetailScreen: View {
     }
 
     private func header(_ activity: AreaActivity) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            headerTitle(activity)
+            Rectangle()
+                .fill(Theme.Colors.ink)
+                .frame(height: Theme.Stroke.sectionRule)
+        }
+    }
+
+    private func headerTitle(_ activity: AreaActivity) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            AreaIconTile(symbol: activity.area.symbol, color: activity.level.color, size: 52)
+            AreaIconTile(symbol: activity.area.symbol, color: activity.level.textColor, size: 52)
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.area.name)
                     .typeStyle(.title)
@@ -102,14 +111,14 @@ private struct LiveCard: View {
                     }
                     Text(activity.level.title)
                         .typeStyle(.metric)
-                        .foregroundStyle(activity.level.color)
+                        .foregroundStyle(activity.level.textColor)
                         .contentTransition(.numericText())
                     Text(activity.countLabel)
                         .typeStyle(.subheadline)
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
                 Spacer()
-                Sparkline(values: activity.history, color: activity.level.color, lineWidth: 2)
+                Sparkline(values: activity.history, color: activity.level.textColor, lineWidth: 2)
                     .frame(width: 92, height: 44)
                     .padding(.top, 8)
             }
@@ -118,24 +127,24 @@ private struct LiveCard: View {
                 Image(systemName: comparison.symbol)
                 Text(comparison.title)
             }
-            .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Theme.Colors.textPrimary)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.08), in: Capsule())
+            .typeStyle(.badge)
+            .foregroundStyle(Theme.Colors.ink)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .overlay(Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
 
-            Divider().overlay(Color.white.opacity(0.06))
+            Rectangle().fill(Theme.Colors.rule).frame(height: 1)
 
             HStack(alignment: .top, spacing: 0) {
                 stat(
                     label: "Usual now",
                     value: ActivityLevel(intensity: insights.typicalNow).title,
-                    color: ActivityLevel(intensity: insights.typicalNow).color
+                    color: ActivityLevel(intensity: insights.typicalNow).textColor
                 )
                 stat(
                     label: "Last \(insights.generatedAt.formatted(.dateTime.weekday(.abbreviated)))",
                     value: insights.lastWeekNow.map { ActivityLevel(intensity: $0).title } ?? "—",
-                    color: insights.lastWeekNow.map { ActivityLevel(intensity: $0).color } ?? Theme.Colors.textTertiary
+                    color: insights.lastWeekNow.map { ActivityLevel(intensity: $0).textColor } ?? Theme.Colors.textTertiary
                 )
                 stat(
                     label: "Usual peak",
@@ -147,26 +156,25 @@ private struct LiveCard: View {
             if let quiet = insights.quietestLaterToday {
                 HStack(spacing: 10) {
                     Image(systemName: "leaf.fill")
-                        .foregroundStyle(ActivityLevel.quiet.color)
+                        .foregroundStyle(Theme.Colors.positive)
                     Text("Quietest later today is usually around **\(Formatting.hour(quiet.hour))**.")
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
-                .font(.system(size: 13))
+                .typeStyle(.subheadline)
             }
         }
         .padding(18)
-        .card(cornerRadius: Theme.Radius.xl)
+        .paper(cornerRadius: Theme.Radius.sm)
         .accessibilityElement(children: .combine)
     }
 
     private func stat(label: String, value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label)
-                .font(.system(size: 11.5, weight: .medium))
+                .typeStyle(.micro)
                 .foregroundStyle(Theme.Colors.textTertiary)
             Text(value)
-                .font(.system(size: 16, weight: .semibold))
-                .tracking(-0.2)
+                .typeStyle(.title3)
                 .foregroundStyle(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -209,7 +217,7 @@ private struct PopularTimesSection: View {
                 dayPicker
 
                 Text(caption)
-                    .font(.system(size: 13.5, weight: .medium))
+                    .typeStyle(.subheadline)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .contentTransition(.opacity)
                     .animation(Theme.Motion.snappy, value: caption)
@@ -218,7 +226,7 @@ private struct PopularTimesSection: View {
                     .frame(height: 150)
             }
             .padding(16)
-            .card(cornerRadius: Theme.Radius.lg)
+            .card(cornerRadius: Theme.Radius.sm)
         }
     }
 
@@ -233,13 +241,16 @@ private struct PopularTimesSection: View {
                     }
                 } label: {
                     Text(Calendar.current.veryShortWeekdaySymbols[day - 1])
-                        .font(.system(size: 13, weight: selected ? .bold : .medium))
+                        .typeStyle(.button)
                         .frame(maxWidth: .infinity)
                         .frame(height: 32)
-                        .foregroundStyle(selected ? Theme.Colors.background : Theme.Colors.textSecondary)
+                        .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
                         .background {
-                            Capsule()
-                                .fill(selected ? Theme.Colors.textPrimary : Color.white.opacity(0.06))
+                            Rectangle()
+                                .fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
+                        }
+                        .overlay {
+                            Rectangle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
                         }
                         .overlay(alignment: .bottom) {
                             if day == insights.todayWeekday, !selected {
@@ -264,7 +275,7 @@ private struct PopularTimesSection: View {
                     yEnd: .value("Usual", value.intensity),
                     width: .fixed(8)
                 )
-                .cornerRadius(3)
+                .cornerRadius(1)
                 .foregroundStyle(barColor(for: value))
             }
 
@@ -279,15 +290,15 @@ private struct PopularTimesSection: View {
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .annotation(position: .top, spacing: 4) {
                     Text("Live")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .typeStyle(.badge)
+                        .foregroundStyle(Theme.Colors.accent)
                 }
             }
 
             if let selectedHour {
                 RuleMark(x: .value("Selected", selectedHour))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .foregroundStyle(Color.white.opacity(0.35))
+                    .foregroundStyle(Theme.Colors.ink.opacity(0.5))
             }
         }
         .chartXScale(domain: -0.5...23.5)
@@ -299,7 +310,7 @@ private struct PopularTimesSection: View {
                 AxisValueLabel {
                     if let hour = value.as(Double.self) {
                         Text(Formatting.hour(hour, compact: true))
-                            .font(.system(size: 10.5, weight: .medium))
+                            .typeStyle(.caption)
                             .foregroundStyle(Theme.Colors.textTertiary)
                     }
                 }
@@ -322,7 +333,7 @@ private struct PopularTimesSection: View {
     }
 
     private func barColor(for value: HourlyValue) -> Color {
-        let color = HeatPalette.color(at: value.level.paletteValue)
+        let color = Theme.Colors.accent
         if let selectedHour { return value.hour == selectedHour ? color : color.opacity(0.3) }
         if isToday {
             if value.hour == currentHour { return color }
@@ -347,7 +358,7 @@ private struct TodayVersusUsualSection: View {
         DetailSection(title: "Today so far", trailing: "vs. a usual \(insights.generatedAt.formatted(.dateTime.weekday(.wide)))") {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 16) {
-                    legend(color: Theme.Colors.textPrimary, dashed: false, label: "Today")
+                    legend(color: Theme.Colors.accent, dashed: false, label: "Today")
                     legend(color: Theme.Colors.textTertiary, dashed: true, label: "Usual")
                 }
                 Chart {
@@ -371,7 +382,7 @@ private struct TodayVersusUsualSection: View {
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [HeatPalette.color(at: 0.8).opacity(0.35), HeatPalette.color(at: 0.2).opacity(0.0)],
+                                colors: [Theme.Colors.accent.opacity(0.12), Theme.Colors.accent.opacity(0)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -382,16 +393,16 @@ private struct TodayVersusUsualSection: View {
                             series: .value("Series", "Today")
                         )
                         .interpolationMethod(.catmullRom)
-                        .lineStyle(StrokeStyle(lineWidth: 2.4, lineCap: .round))
-                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round))
+                        .foregroundStyle(Theme.Colors.accent)
                     }
                     if let now = insights.today.last {
                         PointMark(x: .value("Hour", now.hour), y: .value("Activity", now.intensity))
                             .symbolSize(70)
-                            .foregroundStyle(now.level.color)
+                            .foregroundStyle(Theme.Colors.accent)
                         RuleMark(x: .value("Now", now.hour))
                             .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 3]))
-                            .foregroundStyle(Color.white.opacity(0.2))
+                            .foregroundStyle(Theme.Colors.rule)
                     }
                 }
                 .chartXScale(domain: 0...24)
@@ -399,11 +410,11 @@ private struct TodayVersusUsualSection: View {
                 .chartYAxis(.hidden)
                 .chartXAxis {
                     AxisMarks(values: [0, 6, 12, 18, 24]) { value in
-                        AxisGridLine().foregroundStyle(Color.white.opacity(0.05))
+                        AxisGridLine().foregroundStyle(Theme.Colors.rule)
                         AxisValueLabel {
                             if let hour = value.as(Double.self) {
                                 Text(Formatting.hour(hour, compact: true))
-                                    .font(.system(size: 10.5, weight: .medium))
+                                    .typeStyle(.caption)
                                     .foregroundStyle(Theme.Colors.textTertiary)
                             }
                         }
@@ -413,7 +424,7 @@ private struct TodayVersusUsualSection: View {
                 .accessibilityLabel("Today's activity compared with a usual day")
             }
             .padding(16)
-            .card(cornerRadius: Theme.Radius.lg)
+            .card(cornerRadius: Theme.Radius.sm)
         }
     }
 
@@ -426,7 +437,7 @@ private struct TodayVersusUsualSection: View {
             .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dashed ? [3, 3] : []))
             .frame(width: 16, height: 2)
             Text(label)
-                .font(.system(size: 11.5, weight: .medium))
+                .typeStyle(.micro)
                 .foregroundStyle(Theme.Colors.textSecondary)
         }
     }
@@ -454,13 +465,13 @@ private struct PastWeekSection: View {
                         }
                         .accessibilityAddTraits(.isButton)
                     if day.date != days.first?.date {
-                        Divider().overlay(Color.white.opacity(0.04))
+                        Rectangle().fill(Theme.Colors.rule).frame(height: 1)
                     }
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
-            .card(cornerRadius: Theme.Radius.lg)
+            .card(cornerRadius: Theme.Radius.sm)
             .sensoryFeedback(.selection, trigger: selectedDay)
         }
     }
@@ -485,23 +496,23 @@ private struct PastDayRow: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(day.date.formatted(.dateTime.weekday(.wide)))
-                        .font(.system(size: 14.5, weight: .semibold))
+                        .typeStyle(.rowTitle)
                         .foregroundStyle(Theme.Colors.textPrimary)
                     Text(day.date.formatted(.dateTime.month(.abbreviated).day()) + (day.peak.map { " · \(Formatting.hour($0.hour))" } ?? ""))
-                        .font(.system(size: 11.5))
+                        .typeStyle(.caption)
                         .foregroundStyle(Theme.Colors.textTertiary)
                 }
                 .frame(width: 92, alignment: .leading)
 
-                ActivityBar(intensity: peakIntensity, height: 5)
+                ActivityBar(intensity: peakIntensity, height: 4)
 
                 Text(level.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(level.color)
-                    .frame(width: 66, alignment: .trailing)
+                    .typeStyle(.badge)
+                    .foregroundStyle(level.textColor)
+                    .frame(width: 70, alignment: .trailing)
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .semibold))
+                    .imageScale(.small)
                     .foregroundStyle(Theme.Colors.textTertiary)
                     .rotationEffect(.degrees(isExpanded ? 180 : 0))
             }
@@ -515,8 +526,8 @@ private struct PastDayRow: View {
                             yEnd: .value("Activity", value.intensity),
                             width: .fixed(6)
                         )
-                            .cornerRadius(2)
-                            .foregroundStyle(HeatPalette.color(at: value.level.paletteValue).opacity(0.85))
+                            .cornerRadius(1)
+                            .foregroundStyle(value.intensity == day.peak?.intensity ? Theme.Colors.accent : Theme.Colors.accent.opacity(0.45))
                     }
                     .chartXScale(domain: -0.5...23.5)
                     .chartYScale(domain: dayYDomain)
@@ -527,7 +538,7 @@ private struct PastDayRow: View {
                             AxisValueLabel {
                                 if let hour = value.as(Double.self) {
                                     Text(Formatting.hour(hour, compact: true))
-                                        .font(.system(size: 10, weight: .medium))
+                                        .typeStyle(.caption)
                                         .foregroundStyle(Theme.Colors.textTertiary)
                                 }
                             }
@@ -537,7 +548,7 @@ private struct PastDayRow: View {
 
                     if let peak = day.peak {
                         Text("Peaked around \(Formatting.hour(peak.hour)) · daytime average was \(ActivityLevel(intensity: day.daytimeAverage).title.lowercased())")
-                            .font(.system(size: 12))
+                            .typeStyle(.caption)
                             .foregroundStyle(Theme.Colors.textTertiary)
                     }
                 }
@@ -558,14 +569,7 @@ private struct DetailSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(title).sectionLabelStyle()
-                Spacer()
-                Text(trailing)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.Colors.textTertiary)
-            }
-            .padding(.horizontal, 4)
+            SectionHeader(title: title, trailing: trailing)
             content
         }
     }

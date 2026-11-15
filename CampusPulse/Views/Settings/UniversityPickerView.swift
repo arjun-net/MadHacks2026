@@ -28,24 +28,25 @@ struct UniversityPickerView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(campus.name)
+                                        .typeStyle(.headline)
                                         .foregroundStyle(Theme.Colors.textPrimary)
                                     if campus.isPilot {
                                         Text("PILOT")
                                             .typeStyle(.micro)
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
-                                            .background(Theme.Colors.warning.opacity(0.2), in: Capsule())
+                                            .overlay(Rectangle().strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
                                             .foregroundStyle(Theme.Colors.warning)
                                     }
                                 }
                                 Text(campus.location)
-                                    .font(.footnote)
+                                    .typeStyle(.caption)
                                     .foregroundStyle(Theme.Colors.textSecondary)
                             }
                             Spacer()
                             if campus.id == viewModel.selectedCampus.id {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 15, weight: .bold))
+                                    .fontWeight(.bold)
                                     .foregroundStyle(Theme.Colors.accent)
                             }
                         }
@@ -53,13 +54,18 @@ struct UniversityPickerView: View {
                 }
             } footer: {
                 Text("Don't see your school? Campus Pulse is rolling out to more universities soon.")
+                    .typeStyle(.caption)
+                    .foregroundStyle(Theme.Colors.textTertiary)
             }
+            .listRowBackground(Theme.Colors.paper)
+            .listRowSeparatorTint(Theme.Colors.rule)
         }
         .overlay {
             if results.isEmpty {
                 ContentUnavailableView.search(text: query)
             }
         }
+        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(ScreenBackground())
         .navigationTitle("University")
