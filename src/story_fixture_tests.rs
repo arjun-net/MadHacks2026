@@ -117,6 +117,7 @@ fn simulated_story_all_fallbacks_fit_mobile_cards() {
         assert_mobile_sentence(&response.story);
     }
     let mut no_data = demo_story(42, 20);
+    no_data.current.observations = None;
     no_data.current.reporting_devices = None;
     no_data.story = fallback_story(&no_data.building, &no_data.current,
         NaiveTime::from_hms_opt(14, 30, 0).unwrap(),
@@ -156,13 +157,14 @@ fn simulated_story_accepts_equivalent_ai_paraphrases_but_not_unverified_claims()
     for input in [
         "Simulation Hall is 200% busier than normal.",
         "\"Simulation Hall is 200% higher than average.\"",
-        "Simulation Hall has 200% more active devices than usual.",
+        "Simulation Hall is 200% more active than usual.",
     ] {
         let output = validate_ai_annotation(input, &s).expect(input);
         assert_mobile_sentence(&output);
         assert!(output.contains("200%"));
     }
     for invalid in [
+        "Simulation Hall has 200% more active devices than usual.",
         "Simulation Hall is 200% busier because of a lecture.",
         "Simulation Hall is 200% less busy than usual.",
         "Simulation Hall is 200% busier than yesterday.",
@@ -190,7 +192,8 @@ fn simulated_story_detects_saturday_spike_and_returns_fallback_text() {
     assert_eq!(story.date, "2026-11-14");
     assert_eq!(story.weekday, "Saturday");
     assert_eq!(story.time_local, "14:30");
-    assert_eq!(story.current.reporting_devices, Some(42));
+    assert_eq!(story.current.observations, Some(42));
+    assert_eq!(story.metric, "location_observations");
     assert_eq!(story.historical_same_weekday.len(), 8);
     assert_eq!(story.weekday_samples, 4); // 4 observed, not 8 requested
     assert_eq!(story.weekday_average, Some(14.0));
@@ -213,7 +216,7 @@ fn simulated_story_detects_saturday_spike_and_returns_fallback_text() {
 #[test]
 fn simulated_story_normal_saturday_does_not_claim_an_anomaly() {
     let story = demo_story(14, 14);
-    assert_eq!(story.current.reporting_devices, Some(14));
+    assert_eq!(story.current.observations, Some(14));
     assert_eq!(story.weekday_average, Some(14.0));
     assert_eq!(story.difference_vs_weekday_average_pct, Some(0.0));
     assert_eq!(story.difference_vs_other_days_pct, Some(0.0));
@@ -304,6 +307,9 @@ async fn fake_statement(
     } else {
         state.sql_calls.fetch_add(1, Ordering::SeqCst);
         assert!(statement.contains("`public`.`location_events`"));
+        assert!(statement.contains("COUNT(*) AS observations"));
+        assert!(!statement.contains("device_id"));
+        assert!(!statement.contains("ROW_NUMBER()"));
         let parameters = request["parameters"].as_array().unwrap();
         assert!(parameters.iter().any(|p| p["name"] == "building" && p["value"] == "Simulation Hall"));
         assert!(parameters.iter().any(|p| p["value"] == "2026-11-14"));
@@ -338,7 +344,7 @@ async fn call_story_endpoint(ai: Option<MockAi>) -> (Value, Arc<FakeWarehouse>, 
         catalog: "synthetic_catalog".into(),
         ai_endpoint: ai.map(|_| "synthetic-model".to_string()),
         timezone: chrono_tz::America::Chicago,
-        min_devices: 5,
+        min_observations: 5,
     }).unwrap());
     let api = Router::new().route(
         "/api/v1/buildings/{building}/story",
@@ -366,7 +372,8 @@ async fn simulated_story_api_uses_ai_query_for_constructed_date() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["date"], "2026-11-14");
     assert_eq!(body["time_local"], "14:30");
-    assert_eq!(body["current"]["reporting_devices"], 42);
+    assert_eq!(body["current"]["observations"], 42);
+    assert_eq!(body["metric"], "location_observations");
     assert_eq!(body["weekday_average"], 14.0);
     assert_eq!(body["difference_vs_weekday_average_pct"], 200.0);
     assert_eq!(body["story_source"], "databricks_ai_query");
@@ -380,7 +387,7 @@ async fn simulated_story_api_uses_ai_query_for_constructed_date() {
     assert!(prompts[0].contains("14:30"));
     assert!(prompts[0].contains("42"));
     assert!(prompts[0].contains("200%"));
-    assert!(prompts[0].contains("reporting-device activity"));
+    assert!(prompts[0].contains("reported location activity"));
     println!("\n=== CONSTRUCTED DATE, AI SUCCESS ===\n{}", serde_json::to_string_pretty(&body).unwrap());
 }
 
@@ -424,7 +431,8 @@ async fn simulated_story_api_falls_back_on_empty_ai_text() {
 async fn simulated_story_api_without_ai_endpoint_is_still_available() {
     let (body, mock, status) = call_story_endpoint(None).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["current"]["reporting_devices"], 42);
+    assert_eq!(body["current"]["observations"], 42);
+    assert_eq!(body["metric"], "location_observations");
     assert_eq!(body["story_source"], "databricks_sql");
     assert_eq!(mock.ai_calls.load(Ordering::SeqCst), 0);
     assert_eq!(mock.sql_calls.load(Ordering::SeqCst), 1);

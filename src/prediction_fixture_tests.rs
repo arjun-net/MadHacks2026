@@ -124,7 +124,9 @@ fn historical_prediction_builds_parameterized_databricks_sql() {
     assert!(!sql.contains(name));
     assert!(sql.contains("`campus_lakebase`.`public`.`location_events`"));
     assert!(sql.contains("percentile_approx"));
-    assert!(sql.contains("ROW_NUMBER()"));
+    assert!(sql.contains("COUNT(*) AS observations"));
+    assert!(!sql.contains("device_id"));
+    assert!(!sql.contains("ROW_NUMBER()"));
     assert!(sql.contains("is_outlier = 0"));
     // SqlParameter fields are intentionally private. Inspect its serialized
     // Statement Execution API representation instead of bypassing privacy.
@@ -143,6 +145,8 @@ fn historical_prediction_excludes_spike_and_reports_typical_activity() {
         parse_prediction(&fake_rows(&s, "spike")).unwrap(),
     );
     assert_eq!(prediction.target_date, "2026-11-21");
+    assert_eq!(prediction.prediction.expected_observations, Some(14.0));
+    assert_eq!(prediction.metric, "location_observations");
     assert_eq!(prediction.prediction.expected_reporting_devices, Some(14.0));
     assert_eq!(prediction.prediction.rounded_reporting_devices, Some(14));
     assert_eq!(prediction.samples_used, 4);
@@ -150,7 +154,7 @@ fn historical_prediction_excludes_spike_and_reports_typical_activity() {
     assert!(prediction.historical_samples[0].excluded_as_outlier);
     assert!(!prediction.historical_samples[0].used_for_prediction);
     assert_eq!(prediction.prediction.reliability, "moderate");
-    assert_eq!(prediction.summary, "__DEMO__ Forecast Hall typically has ~14 reporting devices.");
+    assert_eq!(prediction.summary, "__DEMO__ Forecast Hall typically has ~14 observations.");
     assert_mobile_prediction_summary(&prediction.summary);
 }
 
@@ -163,7 +167,7 @@ fn historical_prediction_uses_short_official_building_name() {
         parse_prediction(&fake_rows(&selection, "spike")).unwrap(),
     );
     assert_eq!(forecast.building, "Morgridge Hall (College of Computing & AI)");
-    assert_eq!(forecast.summary, "Morgridge Hall typically has ~14 reporting devices.");
+    assert_eq!(forecast.summary, "Morgridge Hall typically has ~14 observations.");
     assert_mobile_prediction_summary(&forecast.summary);
 }
 
@@ -196,7 +200,10 @@ struct MockWarehouse {
 
 async fn mock_statement(State(s): State<Arc<MockWarehouse>>, Json(request): Json<Value>) -> Json<Value> {
     assert_eq!(request["warehouse_id"], "synthetic-warehouse");
-    assert!(request["statement"].as_str().unwrap().contains("percentile_approx"));
+    let sql = request["statement"].as_str().unwrap();
+    assert!(sql.contains("percentile_approx"));
+    assert!(sql.contains("COUNT(*) AS observations"));
+    assert!(!sql.contains("device_id"));
     assert!(request["parameters"].as_array().unwrap().iter()
         .any(|p| p["name"] == "building" && p["value"] == "__DEMO__ Forecast Hall"));
     s.requests.lock().unwrap().push(request);
@@ -223,7 +230,7 @@ async fn call_mock_prediction(fixture: &'static str) -> (StatusCode, Value, Arc<
         catalog: "campus_lakebase".into(),
         ai_endpoint: None,
         timezone: chrono_tz::America::Chicago,
-        min_devices: 5,
+        min_observations: 5,
     }).unwrap());
     let api = Router::new().route(
         "/api/v1/buildings/{building}/prediction",
@@ -250,7 +257,8 @@ async fn historical_prediction_http_endpoint_uses_databricks_sql_mock() {
     let (status, body, warehouse) = call_mock_prediction("spike").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["target_date"], "2026-11-21");
-    assert_eq!(body["prediction"]["rounded_reporting_devices"], 14);
+    assert_eq!(body["prediction"]["rounded_observations"], 14);
+    assert_eq!(body["metric"], "location_observations");
     assert_eq!(body["outliers_excluded"], 1);
     assert_mobile_prediction_summary(body["summary"].as_str().unwrap());
     assert_eq!(body["source"], "databricks_sql");

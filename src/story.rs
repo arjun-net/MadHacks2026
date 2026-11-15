@@ -1,7 +1,7 @@
 //! Databricks-powered, privacy-thresholded building activity stories.
 //!
 //! Rust handles request validation and safe delivery; Databricks SQL calculates
-//! unique reporting-device activity and statistical comparisons. The optional
+//! per-building observation counts and statistical comparisons. The optional
 //! Databricks `ai_query` call turns those aggregates into prose.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -35,7 +35,10 @@ pub struct StoryQuery {
 pub struct DayActivity {
     pub date: String,
     pub weekday: String,
-    /// Null means no readings, not yet reached, or privacy suppression.
+    /// Count of location_events rows in this building/time window.
+    /// Null means no readings, future window, or a below-threshold sample.
+    pub observations: Option<i64>,
+    /// Legacy mobile client alias; equals `observations`, NOT unique devices.
     pub reporting_devices: Option<i64>,
     /// available, suppressed, no_data, or future
     pub status: String,
@@ -64,7 +67,7 @@ pub struct BuildingStory {
     pub methodology: &'static str,
 }
 
-const METHODOLOGY: &str = "Each day's value counts distinct, identified reporting devices with a location observation within the configured time window around the same campus-local clock time. Repeated observations per device are counted once; the nearest observation is used. These are reporting devices, not actual building occupancy. Missing/suppressed days are excluded from averages; future days are not treated as zero.";
+const METHODOLOGY: &str = "Each day counts rows in location_events for this building during a campus-local time window; device_id is neither required nor used. Every row counts, including repeated reports from the same device. This is an observation count, not distinct visitors or actual building occupancy. Below-threshold and missing days are excluded from averages; future days are not treated as zero. Counting rows as people is only reasonable if clients truly submit at most one observation per window.";
 
 pub(crate) struct Config {
     pub(crate) host: String,
@@ -73,7 +76,7 @@ pub(crate) struct Config {
     pub(crate) catalog: String,
     pub(crate) ai_endpoint: Option<String>,
     pub(crate) timezone: Tz,
-    pub(crate) min_devices: i64,
+    pub(crate) min_observations: i64,
 }
 
 impl Config {
@@ -108,10 +111,14 @@ impl Config {
         let timezone: Tz = env::var("CAMPUS_TIMEZONE")
             .unwrap_or_else(|_| "America/Chicago".into())
             .parse().map_err(|_| "CAMPUS_TIMEZONE must be an IANA timezone".to_string())?;
-        let min_devices = env::var("STORY_MIN_DEVICES").unwrap_or_else(|_| "5".into())
-            .parse::<i64>().map_err(|_| "STORY_MIN_DEVICES must be an integer".to_string())?;
-        if min_devices < 1 {
-            return Err("STORY_MIN_DEVICES must be at least 1".into());
+        // The old setting remains a fallback so existing deployments do not break.
+        // A minimum *row count* does not guarantee k-anonymity or k distinct people.
+        let min_observations = env::var("STORY_MIN_OBSERVATIONS")
+            .or_else(|_| env::var("STORY_MIN_DEVICES"))
+            .unwrap_or_else(|_| "5".into())
+            .parse::<i64>().map_err(|_| "STORY_MIN_OBSERVATIONS must be an integer".to_string())?;
+        if min_observations < 1 {
+            return Err("STORY_MIN_OBSERVATIONS must be at least 1".into());
         }
         Ok(Self {
             host,
@@ -120,7 +127,7 @@ impl Config {
             catalog,
             ai_endpoint,
             timezone,
-            min_devices,
+            min_observations,
         })
     }
 }
@@ -263,66 +270,54 @@ pub(crate) fn param(name: impl Into<String>, value: impl Into<String>, sql_type:
 
 /// Databricks computes both per-day counts AND averages (Rust never scans raw data).
 /// Named bindings protect the building value, windows, and threshold from injection.
-fn activity_sql(catalog: &str, selection: &Selection, building: &str, min_devices: i64) -> (String, Vec<SqlParameter>) {
+fn activity_sql(catalog: &str, selection: &Selection, building: &str, min_observations: i64) -> (String, Vec<SqlParameter>) {
     let mut params = vec![
         param("building", building, "STRING"),
-        param("min_devices", min_devices.to_string(), "BIGINT"),
+        param("min_observations", min_observations.to_string(), "BIGINT"),
     ];
     let mut lines = Vec::new();
     let seconds = selection.window_minutes * 60;
     for (i, s) in selection.samples.iter().enumerate() {
-        lines.push(format!("(CAST(:d{i} AS DATE), CAST(:t{i} AS BIGINT), CAST(:lo{i} AS BIGINT), CAST(:hi{i} AS BIGINT), {week}, {hist}, {target})",
+        lines.push(format!("(CAST(:d{i} AS DATE), CAST(:lo{i} AS BIGINT), CAST(:hi{i} AS BIGINT), {week}, {hist}, {target})",
             week = if s.is_week { 1 } else { 0 },
             hist = if s.is_history { 1 } else { 0 },
             target = if s.is_target { 1 } else { 0 }));
         params.push(param(format!("d{i}"), s.day.to_string(), "DATE"));
-        params.push(param(format!("t{i}"), s.target_epoch.to_string(), "BIGINT"));
         params.push(param(format!("lo{i}"), (s.target_epoch - seconds).to_string(), "BIGINT"));
         // Compare equivalent observed portions of each window: do not give historical
         // days extra future minutes that are not available for the current day.
         params.push(param(format!("hi{i}"), (s.target_epoch + selection.forward_seconds).to_string(), "BIGINT"));
     }
     let sql = format!(r#"
-WITH samples (sample_date, target_epoch, start_epoch, end_epoch, is_week, is_history, is_target) AS (
+WITH samples (sample_date, start_epoch, end_epoch, is_week, is_history, is_target) AS (
     VALUES {values}
 ),
-ranked AS (
-    SELECT s.sample_date, e.device_id,
-        ROW_NUMBER() OVER (
-            PARTITION BY s.sample_date, e.device_id
-            ORDER BY ABS(unix_timestamp(e.`time`) - s.target_epoch), e.`time` DESC
-        ) AS rn
+counts AS (
+    SELECT s.sample_date, COUNT(*) AS observations
     FROM samples s
     JOIN `{catalog}`.`public`.`location_events` e
       ON e.`time` >= timestamp_seconds(s.start_epoch)
      AND e.`time` <= timestamp_seconds(s.end_epoch)
     WHERE lower(trim(e.building)) = lower(trim(:building))
-      AND e.device_id IS NOT NULL
-      AND trim(e.device_id) <> ''
-      AND lower(trim(e.device_id)) <> 'unknown'
-),
-counts AS (
-    SELECT sample_date, COUNT(*) AS devices
-    FROM ranked WHERE rn = 1
-    GROUP BY sample_date
+    GROUP BY s.sample_date
 ),
 filtered AS (
     SELECT s.sample_date, s.is_week, s.is_history, s.is_target,
-      CASE WHEN c.devices >= :min_devices THEN c.devices ELSE CAST(NULL AS BIGINT) END AS devices,
-      CASE WHEN c.devices IS NULL THEN 'no_data'
-           WHEN c.devices < :min_devices THEN 'suppressed'
+      CASE WHEN c.observations >= :min_observations THEN c.observations ELSE CAST(NULL AS BIGINT) END AS observations,
+      CASE WHEN c.observations IS NULL THEN 'no_data'
+           WHEN c.observations < :min_observations THEN 'suppressed'
            ELSE 'available' END AS status
     FROM samples s LEFT JOIN counts c ON c.sample_date = s.sample_date
 ),
 summary AS (
     SELECT
-      AVG(CASE WHEN is_history = 1 THEN devices END) AS weekday_avg,
-      COUNT(CASE WHEN is_history = 1 THEN devices END) AS weekday_samples,
-      AVG(CASE WHEN is_week = 1 AND is_target = 0 THEN devices END) AS week_avg,
-      COUNT(CASE WHEN is_week = 1 AND is_target = 0 THEN devices END) AS week_samples
+      AVG(CASE WHEN is_history = 1 THEN observations END) AS weekday_avg,
+      COUNT(CASE WHEN is_history = 1 THEN observations END) AS weekday_samples,
+      AVG(CASE WHEN is_week = 1 AND is_target = 0 THEN observations END) AS week_avg,
+      COUNT(CASE WHEN is_week = 1 AND is_target = 0 THEN observations END) AS week_samples
     FROM filtered
 )
-SELECT CAST(f.sample_date AS STRING), f.devices, f.status,
+SELECT CAST(f.sample_date AS STRING), f.observations, f.status,
        f.is_week, f.is_history, f.is_target,
        summary.weekday_avg, summary.weekday_samples,
        summary.week_avg, summary.week_samples
@@ -484,6 +479,7 @@ fn parse_activity_rows(rows: &[Vec<Value>]) -> Result<AggregateResult, String> {
         days.insert(day, DayActivity {
             date: day.to_string(),
             weekday: weekday_name(day.weekday()).into(),
+            observations: count,
             reporting_devices: count,
             status: status.into(),
         });
@@ -506,10 +502,10 @@ fn delta(count: Option<i64>, avg: Option<f64>) -> Option<f64> {
 
 fn day_activity(day: NaiveDate, recorded: &BTreeMap<NaiveDate, DayActivity>, now: DateTime<Utc>, time: NaiveTime, tz: Tz) -> DayActivity {
     if local_target(day, time, tz).is_ok_and(|d| d > now) {
-        return DayActivity { date: day.to_string(), weekday: weekday_name(day.weekday()).into(), reporting_devices: None, status: "future".into() };
+        return DayActivity { date: day.to_string(), weekday: weekday_name(day.weekday()).into(), observations: None, reporting_devices: None, status: "future".into() };
     }
     recorded.get(&day).cloned().unwrap_or_else(|| DayActivity {
-        date: day.to_string(), weekday: weekday_name(day.weekday()).into(), reporting_devices: None, status: "no_data".into()
+        date: day.to_string(), weekday: weekday_name(day.weekday()).into(), observations: None, reporting_devices: None, status: "no_data".into()
     })
 }
 
@@ -535,7 +531,7 @@ fn fallback_story(
     other_days: usize,
 ) -> String {
     let name = mobile_building_name(building);
-    let Some(count) = selected.reporting_devices else {
+    let Some(count) = selected.observations else {
         return format!("{name} has no activity data for this time.");
     };
 
@@ -580,19 +576,19 @@ fn annotation_prompt(out: &BuildingStory) -> String {
     format!(
         "Write ONE short, factual activity status for a mobile card (at most {MAX_STORY_CHARS} characters).\n\
          Use this exact short building name: {name}\n\
-         VERIFIED INPUT: date {date}, local time {time}, {count} distinct reporting devices.\n\
+         VERIFIED INPUT: date {date}, local time {time}, {count} location observations.\n\
          VERIFIED COMPARISON: {comparison}.\n\
          Rephrase this verified sentence, if you can do so without changing its meaning:\n\
          {verified}\n\
          Use only the verified rounded percent (when provided), the correct direction,\n\
-         and the correct comparison group. The percent measures reporting-device activity,\n\
-         NOT measured occupancy. Do not mention other numbers, students, causes, forecasts,\n\
+         and the correct comparison group. The percent measures reported location activity,\n\
+         NOT unique people or occupancy. Do not mention other numbers, students, causes, forecasts,\n\
          events, crowds, or actual occupancy. Output only ONE sentence, no extra commentary\n\
          and no Markdown.",
         verified = out.story,
         date = out.date,
         time = out.time_local,
-        count = out.current.reporting_devices.map(|n| n.to_string()).unwrap_or_else(|| "unavailable".into()),
+        count = out.current.observations.map(|n| n.to_string()).unwrap_or_else(|| "unavailable".into()),
     )
 }
 
@@ -631,7 +627,7 @@ fn validate_ai_annotation(text: &str, data: &BuildingStory) -> Result<String, &'
     }
     let lower = remainder.to_ascii_lowercase();
     let forbidden = [
-        "because", "due to", "caused", "students", "people", "occupancy",
+        "because", "due to", "caused", "students", "people", "visitors", "users", "unique", "device", "occupancy",
         "attendance", "headcount", "significant", "event", "crowd",
         "will be", "predicted", "forecast", "probably", "likely",
         "not busier", "not less busy", "no longer",
@@ -706,6 +702,7 @@ fn validate_ai_annotation(text: &str, data: &BuildingStory) -> Result<String, &'
     Ok(output)
 }
 
+#[cfg(test)]
 fn accept_ai_annotation(text: &str, data: &BuildingStory) -> Option<String> {
     validate_ai_annotation(text, data).ok()
 }
@@ -713,7 +710,7 @@ fn accept_ai_annotation(text: &str, data: &BuildingStory) -> Option<String> {
 /// The endpoint keeps the stats computed by Databricks SQL even when the AI
 /// endpoint is unavailable, rate-limited, or produces an ungrounded result.
 async fn with_optional_ai(response: &mut BuildingStory, client: &DbClient) {
-    if client.config.ai_endpoint.is_none() || response.current.reporting_devices.is_none() {
+    if client.config.ai_endpoint.is_none() || response.current.observations.is_none() {
         return;
     }
     match client.annotate(annotation_prompt(response)).await {
@@ -751,9 +748,9 @@ fn construct_story(building: String, selection: &Selection, now: DateTime<Utc>, 
         time_local: selection.time.format("%H:%M").to_string(),
         timezone: selection.timezone.to_string(),
         window_minutes: selection.window_minutes,
-        metric: "distinct_reporting_devices",
-        difference_vs_weekday_average_pct: delta(current.reporting_devices, weekday_average),
-        difference_vs_other_days_pct: delta(current.reporting_devices, other_week_average),
+        metric: "location_observations",
+        difference_vs_weekday_average_pct: delta(current.observations, weekday_average),
+        difference_vs_other_days_pct: delta(current.observations, other_week_average),
         current,
         historical_same_weekday: history,
         this_week: week,
@@ -787,7 +784,7 @@ async fn story_with_client(
         &client.config.catalog,
         &selection,
         &building,
-        client.config.min_devices,
+        client.config.min_observations,
     );
     let rows = match client.send_sql(&sql, parameters).await {
         Ok(r) => r,
@@ -872,8 +869,10 @@ mod tests {
         let name = "O'Brien's Union'; DROP TABLE location_events; --";
         let (sql, params) = activity_sql("campus_lakebase", &s, name, 5);
         assert!(!sql.contains(name));
-        assert!(sql.contains("COUNT(*) AS devices"));
-        assert!(sql.contains("ROW_NUMBER()"));
+        assert!(sql.contains("COUNT(*) AS observations"));
+        assert!(!sql.contains("device_id"));
+        assert!(!sql.contains("ROW_NUMBER()"));
+        assert!(params.iter().any(|p| p.name == "min_observations" && p.value == "5"));
         assert!(params.iter().any(|p| p.name == "building" && p.value == name));
     }
     #[test]
@@ -885,7 +884,7 @@ mod tests {
         assert_eq!(result.days[&NaiveDate::from_ymd_opt(2026,11,14).unwrap()].reporting_devices, None);
         let s = select_dates(&StoryQuery::default(), chrono_tz::America::Chicago, now()).unwrap();
         let story = construct_story("Memorial Union".into(), &s, now(), result);
-        assert!(story.story.to_ascii_lowercase().contains("not enough"));
+        assert!(story.story.to_ascii_lowercase().contains("no activity data"));
         assert_eq!(story.difference_vs_weekday_average_pct, None);
     }
 
@@ -901,7 +900,7 @@ mod tests {
         assert!((story.difference_vs_weekday_average_pct.unwrap() - 60.0).abs() < 1e-8);
         assert_eq!(story.other_days_this_week_average, Some(30.0));
         assert!(story.difference_vs_other_days_pct.unwrap() > 33.0);
-        assert_eq!(story.current.reporting_devices, Some(40));
+        assert_eq!(story.current.observations, Some(40));
     }
     #[test]
     fn chooses_last_week_if_requested_weekday_time_is_in_future() {

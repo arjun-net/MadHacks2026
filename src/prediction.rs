@@ -2,7 +2,7 @@
 //!
 //! This is a *baseline estimate*, not a fitted ML model or a prediction of
 //! building occupancy. It excludes missing/suppressed days and extreme past
-//! values before averaging the remaining historical device counts.
+//! values before averaging the remaining historical row counts.
 
 use axum::extract::{Path, Query};
 use axum::http::StatusCode;
@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use crate::story::{mobile_building_name, param, Config, DbClient, SqlParameter};
 
 const METHOD: &str = "robust_same_weekday_mean";
-const METHODOLOGY: &str = "Databricks SQL counts distinct identified devices near the same campus-local time on completed previous matching weekdays. Repeated pings per device/day count once. Missing days and counts below STORY_MIN_DEVICES are omitted, not counted as zero. With at least four usable days, an IQR rule removes unusually high/low observations before calculating the historical mean and 25th-75th percentile range. This is a descriptive baseline, not an ML forecast, confidence interval, student headcount, or actual occupancy. Reliability is a sample-size/variability heuristic.";
+const METHODOLOGY: &str = "Databricks SQL counts location_events rows near the same campus-local time on completed previous matching weekdays; it does not use device_id. Every row counts even if a device sends repeated reports. Missing days and days below STORY_MIN_OBSERVATIONS are omitted, not counted as zero. With four or more usable days, an IQR rule excludes atypical historical days before estimating the mean and interquartile range. This is a descriptive baseline, not an ML forecast, confidence interval, unique visitor count, or actual occupancy; reliability is heuristic.";
 
 #[derive(Debug, Deserialize, Default)]
 pub struct PredictionQuery {
@@ -36,6 +36,8 @@ pub struct PredictionQuery {
 pub struct HistoricalObservation {
     pub date: String,
     pub weekday: String,
+    pub observations: Option<i64>,
+    /// Legacy alias; contains observation rows rather than distinct device count.
     pub reporting_devices: Option<i64>,
     /// available, suppressed, no_data
     pub status: String,
@@ -47,6 +49,9 @@ pub struct HistoricalObservation {
 pub struct PredictionEstimate {
     /// available, insufficient_history
     pub status: &'static str,
+    pub expected_observations: Option<f64>,
+    pub rounded_observations: Option<i64>,
+    /// Legacy aliases retained for existing SwiftUI clients.
     pub expected_reporting_devices: Option<f64>,
     pub rounded_reporting_devices: Option<i64>,
     /// Observed interquartile range, NOT a prediction interval.
@@ -186,87 +191,75 @@ fn select_history(query: &PredictionQuery, timezone: Tz, now: DateTime<Utc>) -> 
     Ok(Selection { day: target_day, time, timezone, window_minutes, historical })
 }
 
-/// The count/deduplication, outlier handling and final aggregates are all
+/// The row counting, outlier handling and final aggregates are all
 /// computed on the Databricks SQL warehouse, not in Rust or on the client.
-fn prediction_sql(catalog: &str, selection: &Selection, building: &str, min_devices: i64) -> (String, Vec<SqlParameter>) {
+fn prediction_sql(catalog: &str, selection: &Selection, building: &str, min_observations: i64) -> (String, Vec<SqlParameter>) {
     let mut params = vec![
         param("building", building, "STRING"),
-        param("min_devices", min_devices.to_string(), "BIGINT"),
+        param("min_observations", min_observations.to_string(), "BIGINT"),
     ];
     let mut sample_rows = Vec::with_capacity(selection.historical.len());
     let half_window_seconds = selection.window_minutes * 60;
     for (i, sample) in selection.historical.iter().enumerate() {
         sample_rows.push(format!(
-            "(CAST(:day{i} AS DATE), CAST(:start{i} AS BIGINT), CAST(:end{i} AS BIGINT), CAST(:center{i} AS BIGINT))"
+            "(CAST(:day{i} AS DATE), CAST(:start{i} AS BIGINT), CAST(:end{i} AS BIGINT))"
         ));
         params.push(param(format!("day{i}"), sample.day.to_string(), "DATE"));
         params.push(param(format!("start{i}"), (sample.target_epoch - half_window_seconds).to_string(), "BIGINT"));
         params.push(param(format!("end{i}"), (sample.target_epoch + half_window_seconds).to_string(), "BIGINT"));
-        params.push(param(format!("center{i}"), sample.target_epoch.to_string(), "BIGINT"));
     }
     // Identifiers must be interpolated; Config::from_env validates the catalog
     // identifier. All potentially untrusted values are bound as SQL parameters.
     let sql = format!(r#"
-WITH samples (sample_date, start_epoch, end_epoch, center_epoch) AS (
+WITH samples (sample_date, start_epoch, end_epoch) AS (
     VALUES {sample_rows}
 ),
-ranked AS (
-    SELECT s.sample_date, e.device_id,
-           ROW_NUMBER() OVER (
-             PARTITION BY s.sample_date, e.device_id
-             ORDER BY ABS(unix_timestamp(e.`time`) - s.center_epoch), e.`time` DESC
-           ) AS rn
+counts AS (
+    SELECT s.sample_date, COUNT(*) AS observations
     FROM samples s
     JOIN `{catalog}`.`public`.`location_events` e
       ON e.`time` >= timestamp_seconds(s.start_epoch)
      AND e.`time` <= timestamp_seconds(s.end_epoch)
     WHERE lower(trim(e.building)) = lower(trim(:building))
-      AND e.device_id IS NOT NULL
-      AND trim(e.device_id) <> ''
-      AND lower(trim(e.device_id)) <> 'unknown'
-),
-counts AS (
-    SELECT sample_date, COUNT(*) AS devices
-    FROM ranked WHERE rn = 1
-    GROUP BY sample_date
+    GROUP BY s.sample_date
 ),
 observations AS (
     SELECT s.sample_date,
-           CASE WHEN c.devices >= :min_devices THEN c.devices ELSE CAST(NULL AS BIGINT) END AS devices,
-           CASE WHEN c.devices IS NULL THEN 'no_data'
-                WHEN c.devices < :min_devices THEN 'suppressed'
+           CASE WHEN c.observations >= :min_observations THEN c.observations ELSE CAST(NULL AS BIGINT) END AS observations,
+           CASE WHEN c.observations IS NULL THEN 'no_data'
+                WHEN c.observations < :min_observations THEN 'suppressed'
                 ELSE 'available' END AS status
     FROM samples s LEFT JOIN counts c ON c.sample_date = s.sample_date
 ),
 quartiles AS (
-    SELECT COUNT(devices) AS n,
-           percentile_approx(devices, 0.25) AS q25,
-           percentile_approx(devices, 0.75) AS q75
+    SELECT COUNT(observations) AS n,
+           percentile_approx(observations, 0.25) AS q25,
+           percentile_approx(observations, 0.75) AS q75
     FROM observations
 ),
 tagged AS (
-    SELECT o.sample_date, o.devices, o.status,
-           CASE WHEN o.devices IS NOT NULL AND q.n >= 4
-                 AND (o.devices < q.q25 - 1.5 * (q.q75 - q.q25)
-                      OR o.devices > q.q75 + 1.5 * (q.q75 - q.q25))
+    SELECT o.sample_date, o.observations, o.status,
+           CASE WHEN o.observations IS NOT NULL AND q.n >= 4
+                 AND (o.observations < q.q25 - 1.5 * (q.q75 - q.q25)
+                      OR o.observations > q.q75 + 1.5 * (q.q75 - q.q25))
                 THEN 1 ELSE 0 END AS is_outlier
     FROM observations o CROSS JOIN quartiles q
 ),
 clean AS (
-    SELECT devices FROM tagged WHERE devices IS NOT NULL AND is_outlier = 0
+    SELECT observations FROM tagged WHERE observations IS NOT NULL AND is_outlier = 0
 ),
 summary AS (
-    SELECT AVG(devices) AS expected,
-           percentile_approx(devices, 0.25) AS typical_p25,
-           percentile_approx(devices, 0.75) AS typical_p75,
-           STDDEV_SAMP(devices) AS variation,
-           COUNT(devices) AS used_samples
+    SELECT AVG(observations) AS expected,
+           percentile_approx(observations, 0.25) AS typical_p25,
+           percentile_approx(observations, 0.75) AS typical_p75,
+           STDDEV_SAMP(observations) AS variation,
+           COUNT(observations) AS used_samples
     FROM clean
 ),
 excluded AS (
     SELECT COUNT(*) AS n FROM tagged WHERE is_outlier = 1
 )
-SELECT CAST(t.sample_date AS STRING), t.devices, t.status, t.is_outlier,
+SELECT CAST(t.sample_date AS STRING), t.observations, t.status, t.is_outlier,
        s.expected, s.typical_p25, s.typical_p75, s.variation,
        s.used_samples, x.n
 FROM tagged t CROSS JOIN summary s CROSS JOIN excluded x
@@ -310,12 +303,12 @@ fn parse_prediction(rows: &[Vec<Value>]) -> Result<Parsed, String> {
         if !matches!(status, "available" | "suppressed" | "no_data") {
             return Err("invalid sample status".into());
         }
-        let devices = as_integer(row, 1)?;
-        if (status == "available") != devices.is_some() || devices.is_some_and(|n| n < 0) {
+        let observation_count = as_integer(row, 1)?;
+        if (status == "available") != observation_count.is_some() || observation_count.is_some_and(|n| n < 0) {
             return Err("inconsistent sample status and count".into());
         }
         let outlier = as_integer(row, 3)?.ok_or("missing outlier flag")?;
-        if (outlier != 0 && outlier != 1) || (outlier == 1 && devices.is_none()) {
+        if (outlier != 0 && outlier != 1) || (outlier == 1 && observation_count.is_none()) {
             return Err("invalid outlier flag".into());
         }
         let values = (
@@ -332,10 +325,11 @@ fn parse_prediction(rows: &[Vec<Value>]) -> Result<Parsed, String> {
         observations.push(HistoricalObservation {
             date: date.to_string(),
             weekday: weekday_name(date.weekday()).to_string(),
-            reporting_devices: devices,
+            observations: observation_count,
+            reporting_devices: observation_count,
             status: status.to_owned(),
             excluded_as_outlier: outlier == 1,
-            used_for_prediction: devices.is_some() && outlier == 0,
+            used_for_prediction: observation_count.is_some() && outlier == 0,
         });
     }
     let (expected, p25, p75, stddev, samples_used, excluded) = summary.ok_or("empty Databricks result")?;
@@ -365,6 +359,8 @@ fn build_response(building: String, selection: &Selection, parsed: Parsed) -> Bu
         else { "low" };
     let prediction = PredictionEstimate {
         status: if enough { "available" } else { "insufficient_history" },
+        expected_observations: estimate,
+        rounded_observations: estimate.map(|n| n.round() as i64),
         expected_reporting_devices: estimate,
         rounded_reporting_devices: estimate.map(|n| n.round() as i64),
         typical_p25: parsed.p25.filter(|_| enough),
@@ -374,8 +370,8 @@ fn build_response(building: String, selection: &Selection, parsed: Parsed) -> Bu
     // The forecast is a typical count, NOT a percent-vs-current comparison;
     // do not claim that a location will be "busier than usual" without data.
     let name = mobile_building_name(&building);
-    let summary = if let Some(n) = prediction.rounded_reporting_devices {
-        format!("{name} typically has ~{n} reporting devices.")
+    let summary = if let Some(n) = prediction.rounded_observations {
+        format!("{name} typically has ~{n} observations.")
     } else {
         format!("{name} needs more historical data.")
     };
@@ -386,7 +382,7 @@ fn build_response(building: String, selection: &Selection, parsed: Parsed) -> Bu
         time_local: selection.time.format("%H:%M").to_string(),
         timezone: selection.timezone.to_string(),
         window_minutes: selection.window_minutes,
-        metric: "distinct_reporting_devices",
+        metric: "location_observations",
         method: METHOD,
         prediction,
         samples_inspected: parsed.observations.len(),
@@ -408,7 +404,7 @@ async fn prediction_with_client(building: String, query: PredictionQuery, now: D
         Ok(v) => v,
         Err(e) => return error(StatusCode::UNPROCESSABLE_ENTITY, e),
     };
-    let (sql, params) = prediction_sql(&client.config.catalog, &selection, &building, client.config.min_devices);
+    let (sql, params) = prediction_sql(&client.config.catalog, &selection, &building, client.config.min_observations);
     let rows = match client.send_sql(&sql, params).await {
         Ok(v) => v,
         Err(e) => {
