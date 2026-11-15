@@ -34,7 +34,7 @@ tags:
   - name: Ingest
     description: Phones send locations here
   - name: Buildings
-    description: Live building occupancy and stories
+    description: Live building counts, stories and baseline predictions
   - name: Heatmap
     description: Read stored points back
   - name: Ops
@@ -104,7 +104,7 @@ paths:
       operationId: getBuildingCounts
       summary: People per building right now
       description: |
-        Counts stored points from the **last 2 minutes**, grouped by building. Devices report on
+        Counts stored points from the **last 2 minutes** (up to now; future-dated points are ignored), grouped by building. Devices report on
         the even minute, so each point is treated as one person. Every building is listed, with
         `0` when empty. Points matching no building are not counted. Counts are recomputed on
         every request and lag by up to the 5 s write-buffer flush.
@@ -171,6 +171,69 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '503':
           description: Databricks storytelling not configured or client could not initialise
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /buildings/{building}/prediction:
+    get:
+      tags: [Buildings]
+      operationId: getBuildingPrediction
+      summary: Typical activity for a building at a future (or past) time
+      description: |
+        A **descriptive baseline**, not an ML forecast or occupancy count. Takes the distinct
+        reporting devices near the building at the same campus-local time on completed previous
+        matching weekdays and averages them. Days that are missing or privacy-suppressed (fewer
+        than `STORY_MIN_DEVICES` devices) are omitted, never counted as zero. With at least four
+        usable days an IQR rule drops unusually high or low days before computing the mean and
+        the 25th-75th percentile range. `typical_p25`/`typical_p75` are the observed spread, not
+        a confidence interval.
+
+        With no `date`/`weekday`, the target is the current campus-local day. `weekday` selects
+        the next such weekday. A past `date` is allowed for backtesting.
+
+        Requires the same Databricks settings as the story endpoint; otherwise 503.
+      parameters:
+        - name: building
+          in: path
+          required: true
+          description: Building slug as stored, e.g. `morgridge_hall`.
+          schema: { type: string, minLength: 1, maxLength: 256 }
+          example: morgridge_hall
+        - name: date
+          in: query
+          description: Target local calendar day `YYYY-MM-DD`. Must agree with `weekday` if both are given.
+          schema: { type: string, format: date }
+        - name: weekday
+          in: query
+          description: The next such weekday in the campus timezone (case-insensitive, full or 3-letter).
+          schema: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        - name: time
+          in: query
+          description: Campus-local 24-hour `HH:MM`. Defaults to the current campus-local time.
+          schema: { type: string, pattern: '^\d{2}:\d{2}$', example: "14:30" }
+        - name: weeks
+          in: query
+          description: Completed previous matching weekdays to inspect.
+          schema: { type: integer, minimum: 3, maximum: 12, default: 8 }
+        - name: window_minutes
+          in: query
+          description: Minutes either side of the requested clock time.
+          schema: { type: integer, minimum: 5, maximum: 60, default: 15 }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuildingPrediction' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '502':
+          description: Databricks query failed or returned an invalid result (details in server logs)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: Databricks prediction not configured or client unavailable
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -413,7 +476,7 @@ components:
           nullable: true
         story:
           type: string
-          description: Human-readable summary
+          description: One short sentence (at most 96 characters) for mobile display
         story_source:
           type: string
           enum: [databricks_sql, databricks_ai_query]
@@ -479,6 +542,54 @@ components:
         institute (3,382 pings) and the hall (1,012).
       pattern: '^[a-z0-9_]+$'
       example: morgridge_institute
+    HistoricalObservation:
+      type: object
+      required: [date, weekday, reporting_devices, status, excluded_as_outlier, used_for_prediction]
+      properties:
+        date:    { type: string, format: date }
+        weekday: { type: string, example: Saturday }
+        reporting_devices:
+          type: integer
+          nullable: true
+          description: Null when `status` is not `available`.
+        status:  { type: string, enum: [available, suppressed, no_data] }
+        excluded_as_outlier: { type: boolean, description: Dropped by the IQR rule }
+        used_for_prediction: { type: boolean }
+    PredictionEstimate:
+      type: object
+      required: [status, reliability]
+      properties:
+        status: { type: string, enum: [available, insufficient_history] }
+        expected_reporting_devices: { type: number, nullable: true, description: Mean of the used days }
+        rounded_reporting_devices:  { type: integer, nullable: true }
+        typical_p25: { type: number, nullable: true, description: Observed 25th percentile, not a prediction interval }
+        typical_p75: { type: number, nullable: true, description: Observed 75th percentile, not a prediction interval }
+        reliability:
+          type: string
+          enum: [low, moderate, high, insufficient]
+          description: Heuristic from sample size and variability.
+    BuildingPrediction:
+      type: object
+      required: [building, target_date, weekday, time_local, timezone, window_minutes, metric, method, prediction, samples_inspected, samples_used, outliers_excluded, historical_samples, summary, source, methodology]
+      properties:
+        building:       { type: string, example: morgridge_hall }
+        target_date:    { type: string, format: date }
+        weekday:        { type: string }
+        time_local:     { type: string, example: "14:30" }
+        timezone:       { type: string, example: America/Chicago }
+        window_minutes: { type: integer }
+        metric:         { type: string, example: distinct_reporting_devices }
+        method:         { type: string, example: robust_same_weekday_mean }
+        prediction:     { $ref: '#/components/schemas/PredictionEstimate' }
+        samples_inspected: { type: integer }
+        samples_used:      { type: integer }
+        outliers_excluded: { type: integer }
+        historical_samples:
+          type: array
+          items: { $ref: '#/components/schemas/HistoricalObservation' }
+        summary: { type: string, description: Short human-readable sentence }
+        source:  { type: string, example: databricks_sql }
+        methodology: { type: string }
     Health:
       type: object
       required: [status, store_ok]

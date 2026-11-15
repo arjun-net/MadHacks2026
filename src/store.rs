@@ -31,7 +31,7 @@ const QUERY_BROAD: &str = r#"
 
 const COUNT_BY_BUILDING: &str = r#"
     SELECT building, COUNT(*) FROM public.location_events
-    WHERE "time" >= $1 AND building IS NOT NULL
+    WHERE "time" >= $1 AND "time" <= $2 AND building IS NOT NULL
     GROUP BY building
 "#;
 
@@ -179,13 +179,13 @@ impl Store {
         }
     }
 
-    /// Points per building at or after `since`.
-    pub async fn building_counts(&self, since: DateTime<Utc>) -> Result<Vec<(String, i64)>, String> {
+    /// Points per building in `[since, until]`.
+    pub async fn building_counts(&self, since: DateTime<Utc>, until: DateTime<Utc>) -> Result<Vec<(String, i64)>, String> {
         match self {
             Store::Memory(mutex) => {
                 let memory = mutex.lock().unwrap();
                 let mut counts: std::collections::BTreeMap<String, i64> = Default::default();
-                for (_, _, _, building) in memory.raw.iter().filter(|r| r.0 >= since) {
+                for (_, _, _, building) in memory.raw.iter().filter(|r| r.0 >= since && r.0 <= until) {
                     if let Some(name) = building {
                         *counts.entry(name.clone()).or_default() += 1;
                     }
@@ -194,6 +194,7 @@ impl Store {
             }
             Store::Postgres(pool) => sqlx::query_as::<_, (String, i64)>(COUNT_BY_BUILDING)
                 .bind(since)
+                .bind(until)
                 .fetch_all(pool)
                 .await
                 .map_err(|e| e.to_string()),

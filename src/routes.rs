@@ -153,11 +153,12 @@ async fn heatmap_for(
 }
 
 /// People per building. Every device reports on the even minute, so each point in the
-/// last 2 minutes is one person.
+/// last 2 minutes is one person. Future-dated points are not counted.
 async fn building_counts(State(s): State<AppState>) -> Response {
     let window = 2;
-    let since = Utc::now() - chrono::Duration::minutes(window);
-    let rows = match s.store.building_counts(since).await {
+    let until = Utc::now();
+    let since = until - chrono::Duration::minutes(window);
+    let rows = match s.store.building_counts(since, until).await {
         Ok(r) => r,
         Err(e) => {
             tracing::error!("building counts query failed: {e}");

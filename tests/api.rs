@@ -118,6 +118,7 @@ async fn building_counts_last_two_minutes() {
         {"lat": 43.07390, "lng": -89.39874, "timestamp": ts(10)},
         {"lat": 43.07390, "lng": -89.39874, "timestamp": ts(600)}, // too old
         {"lat": 43.0, "lng": -89.0, "timestamp": ts(5)},           // off campus
+        {"lat": 43.07287, "lng": -89.40664, "timestamp": ts(-3600)}, // in the future
     ]});
     assert_eq!(send(&app, post("/api/v1/locations/batch", pts)).await.0, StatusCode::ACCEPTED);
     buffer.flush().await;
