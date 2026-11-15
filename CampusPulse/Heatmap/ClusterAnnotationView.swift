@@ -158,3 +158,27 @@ final class ClusterAnnotationView: MKAnnotationView {
         label.layer.rasterizationScale = max(traits.displayScale, 2)
     }
 }
+
+/// How far to zoom in when a group is opened, so its places show one by one.
+enum GroupZoom {
+    /// Room one marker with its name needs from its neighbors, in screen points.
+    private static let markerRoom = CGSize(width: 110, height: 54)
+
+    /// `points` are the places' positions on screen now. Returns how many times closer to zoom
+    /// (at least 1, at most `maxFactor`): enough that no two places overlap, but never so much
+    /// that any of them leaves `available`.
+    static func factor(points: [CGPoint], available: CGSize, maxFactor: CGFloat) -> CGFloat {
+        guard points.count > 1 else { return 1 }
+        var needed: CGFloat = 1
+        for i in points.indices {
+            for j in points.indices where j > i {
+                let apart = max(abs(points[i].x - points[j].x) / markerRoom.width, abs(points[i].y - points[j].y) / markerRoom.height)
+                needed = max(needed, apart > 0 ? 1 / apart : .infinity)
+            }
+        }
+        let xs = points.map(\.x), ys = points.map(\.y)
+        let spread = CGSize(width: xs.max()! - xs.min()! + markerRoom.width, height: ys.max()! - ys.min()! + markerRoom.height)
+        let fit = min(available.width / spread.width, available.height / spread.height)
+        return max(1, min(needed, fit, maxFactor))
+    }
+}

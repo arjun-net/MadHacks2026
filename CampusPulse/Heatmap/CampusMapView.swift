@@ -13,8 +13,6 @@ struct CampusMapView: UIViewRepresentable {
     /// Room for the masthead above and the legend and tab bar below.
     var contentInsets = UIEdgeInsets(top: 190, left: 14, bottom: 140, right: 14)
     var onSelectArea: (String?) -> Void = { _ in }
-    /// A group was tapped that's already as close as the map zooms: let the person pick from it.
-    var onPickFromGroup: ([String]) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -101,6 +99,12 @@ struct CampusMapView: UIViewRepresentable {
         private var canvas: MapCanvasView?
         private var prefetchJobs: [(area: MKMapRect, zooms: ClosedRange<Int>)] = []
         private var annotations: [String: AreaAnnotation] = [:]
+        /// Places of the group that was tapped open: shown one by one until the map zooms back out.
+        private var openedIDs: Set<String> = []
+        /// Camera distance the opened group was framed at; zooming well past it closes the group.
+        private var openedDistance: CLLocationDistance = 0
+        /// Opened places whose markers haven't appeared yet; they grow in when they do.
+        private var poppingIDs: Set<String> = []
         private var gridTask: Task<Void, Never>?
 
         init(parent: CampusMapView) {
@@ -114,6 +118,8 @@ struct CampusMapView: UIViewRepresentable {
             selectedAreaID = nil
             gridTask?.cancel()
             animator.reset()
+            openedIDs = []
+            poppingIDs = []
 
             mapView.removeOverlays(mapView.overlays)
             mapView.removeAnnotations(mapView.annotations.filter { $0 is AreaAnnotation })
@@ -179,7 +185,7 @@ struct CampusMapView: UIViewRepresentable {
         func refreshAnnotationStyles(in mapView: MKMapView) {
             for annotation in annotations.values {
                 guard let view = mapView.view(for: annotation) as? AreaAnnotationView else { continue }
-                view.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID)
+                view.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID, groupable: !openedIDs.contains(annotation.area.id))
             }
             for cluster in mapView.annotations.compactMap({ $0 as? MKClusterAnnotation }) {
                 (mapView.view(for: cluster) as? ClusterAnnotationView).map { configure($0, for: cluster) }
@@ -192,27 +198,46 @@ struct CampusMapView: UIViewRepresentable {
             view.configure(members: members.map(\.area)) { levels[$0] ?? nil }
         }
 
-        /// Zooms in until the group's places have room to split apart. When the map is already
-        /// as close as it goes, hands the places over to pick from instead.
+        /// Opens the group: every place in it shows on its own (no smaller groups), and the map
+        /// glides in just far enough for them to sit apart, keeping them all on screen.
         private func open(_ cluster: MKClusterAnnotation, in mapView: MKMapView) {
             let members = cluster.memberAnnotations.compactMap { $0 as? AreaAnnotation }
+            guard !members.isEmpty else { return }
+            closeOpenedGroup(in: mapView)
+
+            let insets = parent.contentInsets
+            let available = mapView.bounds.inset(by: insets).size
+            let currentDistance = mapView.camera.centerCoordinateDistance
             let minDistance = mapView.cameraZoomRange.minCenterCoordinateDistance
-            if mapView.camera.centerCoordinateDistance <= minDistance * 1.2 {
-                parent.onPickFromGroup(members.sorted { $0.area.popularity > $1.area.popularity }.map(\.area.id))
-                return
-            }
+            let points = members.map { mapView.convert($0.coordinate, toPointTo: mapView) }
+            let factor = GroupZoom.factor(points: points, available: available, maxFactor: max(1, currentDistance / minDistance))
+
+            openedIDs = Set(members.map(\.area.id))
+            poppingIDs = openedIDs
+            openedDistance = currentDistance / factor
+            // Re-adding them makes MapKit build fresh, ungrouped markers in place of the group.
+            mapView.removeAnnotations(members)
+            mapView.addAnnotations(members)
+
             var rect = MKMapRect.null
             for member in members {
                 rect = rect.union(MKMapRect(origin: MKMapPoint(member.coordinate), size: MKMapSize(width: 0, height: 0)))
             }
-            // Pad the spread so the markers and their names fit once they separate, and zoom
-            // in at least 2.5x so every tap makes clear progress.
             let visible = mapView.visibleMapRect
-            let side = max(rect.width, rect.height) * 2.2
-            let maxSide = max(visible.width, visible.height) / 2.5
-            let span = min(max(side, MKMapPointsPerMeterAtLatitude(cluster.coordinate.latitude) * 120), maxSide)
-            let target = MKMapRect(x: rect.midX - span / 2, y: rect.midY - span / 2, width: span, height: span)
-            mapView.setVisibleMapRect(target, edgePadding: parent.contentInsets, animated: true)
+            let pointsPerMapPoint = Double(mapView.bounds.width) / visible.width * factor
+            let size = MKMapSize(width: Double(available.width) / pointsPerMapPoint, height: Double(available.height) / pointsPerMapPoint)
+            let target = MKMapRect(origin: MKMapPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), size: size)
+            mapView.setVisibleMapRect(target, edgePadding: insets, animated: true)
+        }
+
+        /// Lets the opened group's places merge again.
+        private func closeOpenedGroup(in mapView: MKMapView) {
+            guard !openedIDs.isEmpty else { return }
+            let members = openedIDs.compactMap { annotations[$0] }
+            openedIDs = []
+            poppingIDs = []
+            mapView.removeAnnotations(members)
+            mapView.addAnnotations(members)
         }
 
         func recenter(_ mapView: MKMapView, animated: Bool) {
@@ -270,6 +295,9 @@ struct CampusMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
             canvas?.cameraDidStop()
+            if !openedIDs.isEmpty, mapView.camera.centerCoordinateDistance > openedDistance * 1.6 {
+                closeOpenedGroup(in: mapView)
+            }
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
@@ -286,7 +314,11 @@ struct CampusMapView: UIViewRepresentable {
                 withIdentifier: AreaAnnotationView.reuseIdentifier,
                 for: annotation
             ) as? AreaAnnotationView
-            view?.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID)
+            let id = annotation.area.id
+            view?.configure(area: annotation.area, level: annotation.level, highlighted: id == selectedAreaID, groupable: !openedIDs.contains(id))
+            if poppingIDs.remove(id) != nil {
+                view?.popIn(delay: Double(poppingIDs.count) * 0.025)
+            }
             return view
         }
 

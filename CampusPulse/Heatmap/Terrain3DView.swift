@@ -29,8 +29,6 @@ struct Campus3DMapView: UIViewRepresentable {
         return view
     }
 
-    var onPickFromGroup: ([String]) -> Void = { _ in }
-
     func updateUIView(_ view: Terrain3DView, context: Context) {
         update(view)
         if context.coordinator.recenterToken != recenterToken {
@@ -41,7 +39,6 @@ struct Campus3DMapView: UIViewRepresentable {
 
     private func update(_ view: Terrain3DView) {
         view.onSelectArea = onSelectArea
-        view.onPickFromGroup = onPickFromGroup
         if let snapshot, snapshot.campusID == campus.id { view.apply(snapshot) }
         view.setHeatVisible(isHeatmapVisible)
         view.setSelectedArea(selectedAreaID)
@@ -60,8 +57,6 @@ struct Campus3DMapView: UIViewRepresentable {
 final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognizerDelegate {
     let campus: Campus
     var onSelectArea: (String?) -> Void = { _ in }
-    /// A group was tapped that's already as close as the camera goes: let the person pick from it.
-    var onPickFromGroup: ([String]) -> Void = { _ in }
     var contentInsets = UIEdgeInsets(top: 190, left: 14, bottom: 140, right: 14) {
         didSet { setNeedsLayout() }
     }
@@ -99,6 +94,12 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private var clusterViews: [ClusterAnnotationView] = []
     /// Member IDs each group marker shows now (most popular first).
     private var clusterMembers: [[String]] = []
+    /// Places of the group that was tapped open: shown one by one until the camera pulls back.
+    private var openedIDs: Set<String> = []
+    /// Camera distance the opened group was framed at; zooming well past it closes the group.
+    private var openedDistance: Float = 0
+    /// Where each place's marker sits on screen, as of the last frame.
+    private var markerAnchors: [String: CGPoint] = [:]
     private var levels: [String: ActivityLevel] = [:]
     private let userDot = UserDotView()
 
@@ -379,9 +380,11 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         if animated { animateCamera(to: to) } else { camera = to; applyCamera() }
     }
 
+    /// Selected, then the opened group's places, then busiest: who wins when labels overlap.
     private func sortedMarkers() -> [CampusArea] {
         campus.areas.sorted {
             if ($0.id == selectedAreaID) != ($1.id == selectedAreaID) { return $0.id == selectedAreaID }
+            if openedIDs.contains($0.id) != openedIDs.contains($1.id) { return openedIDs.contains($0.id) }
             return $0.popularity > $1.popularity
         }
     }
@@ -408,19 +411,26 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         let members = clusterMembers[index].compactMap { campus.area(withID: $0) }
         guard !members.isEmpty else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        if camera.distance <= distanceRange.lowerBound * 1.2 {
-            onPickFromGroup(members.map(\.id))
-            return
+
+        // Open the group: its places show one by one, and the camera glides in just far
+        // enough for them to sit apart while all staying on screen.
+        let available = bounds.inset(by: contentInsets).size
+        let points = members.compactMap { markerAnchors[$0.id] }
+        let factor = GroupZoom.factor(points: points, available: available, maxFactor: CGFloat(max(1, camera.distance / distanceRange.lowerBound)))
+        openedIDs = Set(members.map(\.id))
+        markerOrder = sortedMarkers()
+        for (index, area) in members.enumerated() {
+            markers[area.id]?.popIn(delay: Double(index) * 0.025)
         }
-        // Center on the group and zoom in far enough for it to split: at least 2.5x closer.
-        let points = members.map { scenePoint(MKMapPoint($0.coordinate.clCoordinate)) }
-        let xs = points.map(\.x), zs = points.map(\.z)
-        let center = SIMD2((xs.min()! + xs.max()!) / 2, (zs.min()! + zs.max()!) / 2)
-        let spread = max(xs.max()! - xs.min()!, zs.max()! - zs.min()!)
+
+        let scenePoints = members.map { scenePoint(MKMapPoint($0.coordinate.clCoordinate)) }
+        let xs = scenePoints.map(\.x), zs = scenePoints.map(\.z)
         var to = camera
-        to.target = center
-        to.distance = max(distanceRange.lowerBound, min(camera.distance / 2.5, spread * 3.5))
-        animateCamera(to: to)
+        to.target = SIMD2((xs.min()! + xs.max()!) / 2, (zs.min()! + zs.max()!) / 2)
+        to.distance = max(distanceRange.lowerBound, camera.distance / Float(factor))
+        openedDistance = to.distance
+        animateCamera(to: to, duration: 0.6)
+        updateOverlay()
     }
 
     // MARK: Basemap textures
@@ -862,6 +872,10 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     /// marker, led by the busiest (or selected) place, instead of disappearing.
     private func updateOverlay() {
         guard bounds.width > 0 else { return }
+        if !openedIDs.isEmpty, cameraAnimation == nil, camera.distance > openedDistance * 1.6 {
+            openedIDs = []
+            markerOrder = sortedMarkers()
+        }
         let lift: Float = heatVisible ? 1 : 0
         let order = markerOrder
         let matrix = viewProjection
@@ -876,8 +890,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             var anchor: CGPoint
             var frame: CGRect
             var depth: Float
-            /// The selected place never joins a group, and nothing joins it.
-            var isSelected: Bool
+            /// The selected place and an opened group's places never join a group, and nothing joins them.
+            var isPinned: Bool
         }
         var groups: [Group] = []
         for area in order {
@@ -888,13 +902,14 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             view.center = snapped(CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y))
             guard bounds.insetBy(dx: -80, dy: -80).contains(view.center) else { view.isHidden = true; continue }
             let frame = view.frame.insetBy(dx: 6, dy: 3)
-            let selected = area.id == selectedAreaID
-            if !selected, let index = groups.firstIndex(where: { !$0.isSelected && $0.frame.intersects(frame) }) {
+            markerAnchors[area.id] = projected.point
+            let pinned = area.id == selectedAreaID || openedIDs.contains(area.id)
+            if !pinned, let index = groups.firstIndex(where: { !$0.isPinned && $0.frame.intersects(frame) }) {
                 groups[index].members.append(area)
-            } else if !selected, groups.contains(where: { $0.isSelected && $0.frame.intersects(frame) }) {
+            } else if !pinned, groups.contains(where: { $0.isPinned && $0.frame.intersects(frame) }) {
                 view.isHidden = true
             } else {
-                groups.append(Group(members: [area], anchor: projected.point, frame: frame, depth: projected.depth, isSelected: selected))
+                groups.append(Group(members: [area], anchor: projected.point, frame: frame, depth: projected.depth, isPinned: pinned))
             }
         }
 
@@ -903,7 +918,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             guard let lead = group.members.first, let leadView = markers[lead.id] else { continue }
             if group.members.count == 1 {
                 leadView.isHidden = false
-                leadView.layer.zPosition = (group.isSelected ? 20_000 : 10_000) - CGFloat(group.depth)
+                leadView.layer.zPosition = (lead.id == selectedAreaID ? 20_000 : group.isPinned ? 16_000 : 10_000) - CGFloat(group.depth)
                 continue
             }
             for member in group.members { markers[member.id]?.isHidden = true }
