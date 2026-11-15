@@ -83,7 +83,9 @@ const LIVE = (() => {
     return n;
   }
 
-  /* Flatten the heatmap response into ping rows for ingestRows(). */
+  /* Flatten the heatmap response into ping rows for ingestRows().
+   * device_id (added to the /heatmap contract) becomes agent_id so
+   * per-device path tracing works in live mode like it does for CSVs. */
   function heatmapToRows(j) {
     const rows = [];
     const data = j && j.data;
@@ -93,6 +95,7 @@ const LIVE = (() => {
         rows.push({
           lat: p.lat,
           lng: p.lng,
+          device_id: p.device_id,  // absent on old backends → "unknown" agent
           timestamp: ts,           // UTC ISO-8601 — parseTimestamp() handles it
           building: p.building,    // slug or null
         });

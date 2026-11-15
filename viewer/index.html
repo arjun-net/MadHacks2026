@@ -69,6 +69,13 @@
     <div id="agent-panel-body" class="panel-body"></div>
   </aside>
 
+  <!-- Building insights (story + prediction): click a building footprint -->
+  <aside id="insight-panel" class="glass agent-panel" hidden>
+    <button id="insight-close" class="panel-close" title="Close">×</button>
+    <div id="insight-title" class="panel-title">Building</div>
+    <div id="insight-body" class="panel-body"></div>
+  </aside>
+
   <!-- Timeline dock (bottom left) -->
   <section class="glass dock">
     <div class="dock-row">
@@ -97,5 +104,6 @@
   <script src="analytics.js"></script>
   <script src="agent.js"></script>
   <script src="live.js"></script>
+  <script src="insights.js"></script>
 </body>
 </html>

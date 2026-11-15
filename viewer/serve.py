@@ -37,6 +37,10 @@ except ImportError:
 _OPENER = urllib.request.build_opener(*([_SSL_CTX] if _SSL_CTX else []))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))  # viewer/
+# Building configs live at repo root; serve them at /configs/ so the
+# viewer can fetch footprints (building heat + insights click layer)
+# and display names without duplicating the files into viewer/.
+CONFIG_ROOT = os.path.dirname(ROOT)  # repo root
 
 # Default: CAMPUS_API_BASE from viewer/.env (the web dashboard's own
 # config, separate from the pinging service's pinging_api/.env), else
@@ -93,6 +97,22 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+
+    def translate_path(self, path):
+        # Serve /configs/* from the repo-root configs/ directory.
+        if path == "/configs" or path.startswith("/configs/"):
+            rel = path[len("/configs"):].lstrip("/")
+            safe = os.path.normpath(rel)
+            if safe.startswith("..") or os.path.isabs(safe):
+                safe = ""
+            return os.path.join(CONFIG_ROOT, "configs", safe)
+        return super().translate_path(path)
+
+    def end_headers(self):
+        # The viewer is in active development — never let the browser
+        # serve a stale page/script from cache after a reload.
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        super().end_headers()
 
     def do_GET(self):
         if self.path.startswith("/api/v1"):

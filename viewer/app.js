@@ -152,6 +152,38 @@ map.on("load", () => {
   // Building heat: interior agents live as pulses inside building
   // footprints instead of dots — lines = movement, fills = presence.
   map.addSource("building-heat", { type: "geojson", data: emptyFC() });
+
+  // Invisible click layer covering ALL building footprints — opens the
+  // story/prediction insights panel (insights.js). Filled shapes are
+  // drawn on top; this layer only catches clicks and hovers.
+  ensureBuildingShapes().then((shapes) => {
+    const feats = [...shapes.entries()].map(([id, s]) => ({
+      type: "Feature",
+      properties: { building_id: id },
+      geometry: { type: "Polygon", coordinates: [s.ring] },
+    }));
+    map.addSource("building-click", {
+      type: "geojson", data: { type: "FeatureCollection", features: feats },
+    });
+    map.addLayer({
+      id: "building-click",
+      type: "fill",
+      source: "building-click",
+      paint: { "fill-color": "#000", "fill-opacity": 0.001 },
+    }, "agent-dots");
+    map.on("click", "building-click", (e) => {
+      const f = e.features && e.features[0];
+      if (!f) return;
+      e.preventDefault();
+      // Don't open insights when the click actually landed on an agent
+      // dot — Mapbox fires every intersecting layer's click handler, and
+      // the dot's own handler (selectAgent) owns that gesture.
+      if (map.queryRenderedFeatures(e.point, { layers: ["agent-dots"] }).length) return;
+      if (window.INSIGHTS) window.INSIGHTS.show(f.properties.building_id);
+    });
+    map.on("mouseenter", "building-click", () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", "building-click", () => (map.getCanvas().style.cursor = ""));
+  });
   map.addLayer({
     id: "building-heat-fill",
     type: "fill",
@@ -312,10 +344,12 @@ function ingestRows(rows, opts = {}) {
     const step = hasTs ? timestampToStep(r.timestamp) : Number(r.step) || 0;
     if (step < 0) continue;
 
-    // Server rows (Campus Location API) carry a building slug + device_id
-    // and no state column: mapped buildings render as IN_BUILDING, points
-    // the server could not match render as TRANSIT dots — the same
-    // geometry the simulation CSV feeds in.
+    // Server rows (Campus Location API) carry a building slug and —
+    // since the /heatmap device_id addition — a device_id, but no state
+    // column: mapped buildings render as IN_BUILDING, points the server
+    // could not match render as TRANSIT dots — the same geometry the
+    // simulation CSV feeds in. Backends without device_id collapse all
+    // pings into the "unknown" agent (dots/heat still render).
     const building = normBuilding(r.building ?? r.building_id);
     const agentId = r.agent_id || r.device_id || "unknown";
     const state = r.state || (building ? "IN_BUILDING" : "TRANSIT");
@@ -335,12 +369,13 @@ function ingestRows(rows, opts = {}) {
       byAgent.set(agentId, trail);
     }
     // Downsample trails: position jitter inside a building would
-    // otherwise produce a 720-point fuzz-blob per agent. Inside a
-    // building (state != TRANSIT) keep only state/building changes;
-    // while TRANSITing keep every ping so the walked route survives.
+    // otherwise produce a fuzz-blob per agent. Keep every point while
+    // TRANSITing so the walked route survives; inside a building keep
+    // only state/building changes. (Server rows are IN_BUILDING or
+    // TRANSIT only, so real GPS jitter in live mode dedups here too.)
     const last = trail[trail.length - 1];
     if (!last || last.state !== state || last.building !== building ||
-        state === "TRANSIT" || state === "IN_BUILDING") {
+        state === "TRANSIT") {
       trail.push({ step, lng, lat, state, building });
     }
   }
@@ -373,6 +408,8 @@ function ingestRows(rows, opts = {}) {
 /* ── Agent selection: click a dot → trace its full path ── */
 function selectAgent(agentId, props, coords) {
   selectedAgent = agentId;
+  // Insights and agent detail share the same screen slot — never both.
+  if (window.INSIGHTS) window.INSIGHTS.hide();
   const trail = byAgent.get(agentId) || [];
   updateAgentPanel();
 
@@ -409,6 +446,7 @@ function clearSelection() {
   }
   const panel = document.getElementById("agent-panel");
   if (panel) panel.hidden = true;
+  if (window.INSIGHTS) window.INSIGHTS.hide();
 }
 
 /* ── Agent detail panel ── */
@@ -519,28 +557,36 @@ function smoothCoords(coords, iterations = 2) {
 const TRAIL_FADE_MIN = 30;   // trail age at full fade
 const TRAIL_SEG_MIN = 4;     // one trail segment spans this many steps (8 min)
 let buildingShapes = null;   // id → [polygon ring (lng/lat), area] loaded from configs
+let buildingShapesP = null;  // in-flight/complete memoized fetch (a promise)
 
-/* Load building footprints (perimeter_polygon) once for the heat layer */
-async function ensureBuildingShapes() {
-  if (buildingShapes) return buildingShapes;
-  buildingShapes = new Map();
-  try {
-    const r = await fetch("/configs/buildings.json");
-    const j = await r.json();
-    for (const b of j.buildings) {
-      if (!b.perimeter_polygon || b.perimeter_polygon.length < 3) continue;
-      const ring = b.perimeter_polygon.map(([lat, lng]) => [lng, lat]);
-      // shoelace area in deg² (all campus footprints similar scale)
-      let a = 0;
-      for (let i = 0; i < ring.length; i++) {
-        const [x1, y1] = ring[i];
-        const [x2, y2] = ring[(i + 1) % ring.length];
-        a += x1 * y2 - x2 * y1;
-      }
-      buildingShapes.set(b.id, { ring: ring.concat([ring[0]]), area: Math.abs(a / 2) });
-    }
-  } catch (_) { /* heat stays dot-free, trails still work */ }
-  return buildingShapes;
+/* Load building footprints (perimeter_polygon) once for the heat layer.
+ * Memoizes the PROMISE, not the map, so a concurrent caller during the
+ * fetch waits for the real shapes instead of seeing an empty map. */
+function ensureBuildingShapes() {
+  if (!buildingShapesP) {
+    buildingShapesP = (async () => {
+      const shapes = new Map();
+      try {
+        const r = await fetch("/configs/buildings.json");
+        const j = await r.json();
+        for (const b of j.buildings) {
+          if (!b.perimeter_polygon || b.perimeter_polygon.length < 3) continue;
+          const ring = b.perimeter_polygon.map(([lat, lng]) => [lng, lat]);
+          // shoelace area in deg² (all campus footprints similar scale)
+          let a = 0;
+          for (let i = 0; i < ring.length; i++) {
+            const [x1, y1] = ring[i];
+            const [x2, y2] = ring[(i + 1) % ring.length];
+            a += x1 * y2 - x2 * y1;
+          }
+          shapes.set(b.id, { ring: ring.concat([ring[0]]), area: Math.abs(a / 2) });
+        }
+      } catch (_) { /* heat stays dot-free, trails still work */ }
+      buildingShapes = shapes;
+      return shapes;
+    })();
+  }
+  return buildingShapesP;
 }
 
 function setStep(step) {
@@ -640,6 +686,15 @@ function cometTrails(step) {
       }
     }
     segs.push(seg);
+    // Merge singleton segments into their predecessor so sparse live
+    // pings (a 2-point trail that buckets into two singletons) still
+    // draw one connecting line instead of vanishing entirely.
+    for (let i = segs.length - 1; i > 0; i--) {
+      if (segs[i].length < 2) {
+        segs[i - 1].push(...segs[i]);
+        segs.splice(i, 1);
+      }
+    }
     for (const s of segs) {
       if (s.length < 2) continue;
       const age = step - s[s.length - 1].step; // steps behind the head
@@ -743,6 +798,7 @@ function pause() {
 document.getElementById("toggle-heat").addEventListener("click", toggleHeatmap);
 document.getElementById("toggle-paths").addEventListener("click", togglePaths);
 document.getElementById("agent-close").addEventListener("click", clearSelection);
+// insight-close is owned by insights.js (its hide()) — no wiring here.
 
 speedSelect.addEventListener("change", () => {
   speedMs = Number(speedSelect.value);

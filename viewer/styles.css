@@ -295,6 +295,10 @@ html, body {
   flex-shrink: 0;
 }
 
+/* ── Building insights panel (story + prediction) ──
+   Styles live in the later block near the chat styles (search
+   "Building insights panel" below). */
+
 /* ── Agent popup ── */
 .agent-popup .mapboxgl-popup-content {
   background: rgba(18, 22, 30, 0.92);
@@ -536,3 +540,87 @@ body.dragging::after {
 }
 .chat-send:hover { color: var(--accent); background: rgba(74, 222, 128, 0.08); }
 .chat-send:disabled { opacity: 0.35; cursor: default; }
+
+/* ── Building insights panel (story + prediction) ── */
+
+.panel-body { font-size: 12px; }
+
+.agent-panel .panel-body { max-height: 62vh; overflow-y: auto; }
+
+.ins-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin: 12px 0 6px;
+}
+
+.ins-section-title:first-child { margin-top: 0; }
+
+.ins-story { font-size: 13px; line-height: 1.45; margin-bottom: 8px; }
+
+.ins-diff.up { color: var(--accent-hot, #f87171); }
+.ins-diff.down { color: #60a5fa; }
+
+.ins-note {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.ins-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 4px;
+}
+
+.ins-loading {
+  color: var(--text-dim);
+  animation: ins-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ins-pulse { 50% { opacity: 0.35; } }
+
+.ins-retry {
+  margin-top: 6px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.ins-retry:hover { background: rgba(255, 255, 255, 0.12); }
+
+/* p25–p75 band + expected marker */
+.ins-range {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 8px 0 2px;
+  overflow: hidden;
+}
+
+.ins-range-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: rgba(74, 222, 128, 0.45);
+}
+
+.ins-range-mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--text);
+}
