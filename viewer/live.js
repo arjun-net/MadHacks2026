@@ -92,10 +92,27 @@ const LIVE = (() => {
     if (!data) return rows;
     for (const [ts, points] of Object.entries(data)) {
       for (const p of points || []) {
+        // Rows without a device_id can't be attributed to any device; the
+        // bulk sender currently sends ~250 of these per 2-min tick. Feeding
+        // them to ingestRows would collapse them into one fake "unknown"
+        // agent whose interleaved TRANSIT trail draws a garbage campus-wide
+        // line. Skip them — building heat and the density layer still
+        // render from the byStep buckets they DO feed (see heat_only rows).
+        const device = p.device_id;
+        if (device == null || device === "") {
+          rows.push({
+            lat: p.lat,
+            lng: p.lng,
+            heat_only: true,       // counted for heat, excluded from agents
+            timestamp: ts,
+            building: p.building,
+          });
+          continue;
+        }
         rows.push({
           lat: p.lat,
           lng: p.lng,
-          device_id: p.device_id,  // absent on old backends → "unknown" agent
+          device_id: device,       // present → per-device path tracing
           timestamp: ts,           // UTC ISO-8601 — parseTimestamp() handles it
           building: p.building,    // slug or null
         });
@@ -130,6 +147,12 @@ const LIVE = (() => {
         throw new Error(`heatmap ${detail}`);
       }
       const j = await r.json();
+      const nullPings = Object.values(j.data || {}).reduce(
+        (n, pts) => n + (pts || []).filter((p) => p.device_id == null || p.device_id === "").length, 0);
+      if (nullPings > 0) {
+        console.warn(`[live] ${nullPings} pings have no device_id — they feed building heat but not device paths. ` +
+          "The bulk sender must include device_id for per-device paths.");
+      }
       lastEnd = Date.parse(j.end);
       pollMs = POLL_MS; // success resets backoff
       if (j.count >= LIMIT) {

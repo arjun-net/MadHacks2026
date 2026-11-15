@@ -203,9 +203,13 @@ map.on("load", () => {
   map.on("mouseenter", "agent-dots", () => (map.getCanvas().style.cursor = "pointer"));
   map.on("mouseleave", "agent-dots", () => (map.getCanvas().style.cursor = ""));
   map.on("click", (e) => {
-    // Click on empty map clears the selection
-    const hits = map.queryRenderedFeatures(e.point, { layers: ["agent-dots"] });
-    if (!hits.length) clearSelection();
+    // Click on empty map clears the selection. Footprints are NOT empty:
+    // the building-click handler opened/covers the insights panel, and
+    // clearing here would un-hide it synchronously before show()'s async
+    // work resolves (the stale-token guard then aborts the open).
+    if (map.queryRenderedFeatures(e.point, { layers: ["agent-dots"] }).length) return;
+    if (map.queryRenderedFeatures(e.point, { layers: ["building-click"] }).length) return;
+    clearSelection();
   });
 
   applyLayerVisibility();
@@ -351,8 +355,13 @@ function ingestRows(rows, opts = {}) {
     // simulation CSV feeds in. Backends without device_id collapse all
     // pings into the "unknown" agent (dots/heat still render).
     const building = normBuilding(r.building ?? r.building_id);
-    const agentId = r.agent_id || r.device_id || "unknown";
-    const state = r.state || (building ? "IN_BUILDING" : "TRANSIT");
+    // heat_only rows (live feed pings with no device_id) can't be
+    // attributed to a device: they count toward heat/pings but must not
+    // join byAgent, or they'd all merge into one fake "unknown" agent
+    // whose interleaved trail renders as a garbage campus-wide line.
+    const heatOnly = !!r.heat_only;
+    const agentId = heatOnly ? null : r.agent_id || r.device_id || "unknown";
+    const state = r.state || (heatOnly ? "HEAT_ONLY" : building ? "IN_BUILDING" : "TRANSIT");
 
     const f = {
       type: "Feature",
@@ -363,20 +372,22 @@ function ingestRows(rows, opts = {}) {
     if (!byStep.has(step)) byStep.set(step, []);
     byStep.get(step).push(f);
 
-    let trail = byAgent.get(agentId);
-    if (!trail) {
-      trail = [];
-      byAgent.set(agentId, trail);
-    }
-    // Downsample trails: position jitter inside a building would
-    // otherwise produce a fuzz-blob per agent. Keep every point while
-    // TRANSITing so the walked route survives; inside a building keep
-    // only state/building changes. (Server rows are IN_BUILDING or
-    // TRANSIT only, so real GPS jitter in live mode dedups here too.)
-    const last = trail[trail.length - 1];
-    if (!last || last.state !== state || last.building !== building ||
-        state === "TRANSIT") {
-      trail.push({ step, lng, lat, state, building });
+    if (agentId) {
+      let trail = byAgent.get(agentId);
+      if (!trail) {
+        trail = [];
+        byAgent.set(agentId, trail);
+      }
+      // Downsample trails: position jitter inside a building would
+      // otherwise produce a fuzz-blob per agent. Keep every point while
+      // TRANSITing so the walked route survives; inside a building keep
+      // only state/building changes. (Server rows are IN_BUILDING or
+      // TRANSIT only, so real GPS jitter in live mode dedups here too.)
+      const last = trail[trail.length - 1];
+      if (!last || last.state !== state || last.building !== building ||
+          state === "TRANSIT") {
+        trail.push({ step, lng, lat, state, building });
+      }
     }
   }
 
@@ -605,7 +616,8 @@ function setStep(step) {
     map.getSource("agents").setData({
       type: "FeatureCollection",
       features: feats
-        .filter((f) => f.properties.state === "TRANSIT" || f.properties.state === "IN_BUILDING")
+        .filter((f) => f.properties.agent_id &&
+          (f.properties.state === "TRANSIT" || f.properties.state === "IN_BUILDING"))
         .map(cloneDotFeature),
     });
   }
@@ -637,6 +649,8 @@ function updateBuildingHeat(feats) {
   }
   const occ = new Map(); // building_id → count
   for (const f of feats) {
+    // TRANSIT and SLEEP are outdoors; everything else (IN_BUILDING and
+    // HEAT_ONLY unattributed pings) counts as building occupancy.
     if (f.properties.state === "TRANSIT" || f.properties.state === "SLEEP") continue;
     const b = f.properties.building_id;
     if (b && buildingShapes.has(b)) occ.set(b, (occ.get(b) || 0) + 1);

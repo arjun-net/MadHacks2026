@@ -149,7 +149,7 @@ class Store:
         broad: bool = False,
     ) -> dict[str, Any]:
         sql = (
-            "SELECT ts, lat, lng, building FROM points "
+            "SELECT ts, lat, lng, device_id, building FROM points "
             "WHERE ts_epoch >= ? AND ts_epoch < ?"
         )
         params: list[Any] = [start.timestamp(), end.timestamp()]
@@ -171,9 +171,10 @@ class Store:
             rows = cur.fetchall()
         data: dict[str, list[dict[str, Any]]] = {}
         count = 0
-        for ts, lat, lng, building in rows:
+        for ts, lat, lng, device_id, building in rows:
             data.setdefault(ts, []).append(
-                {"lat": lat, "lng": lng, "building": building}
+                {"lat": lat, "lng": lng, "device_id": device_id,
+                 "building": building}
             )
             count += 1
         return {
