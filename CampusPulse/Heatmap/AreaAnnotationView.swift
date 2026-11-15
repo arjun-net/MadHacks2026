@@ -13,16 +13,19 @@ final class AreaAnnotation: NSObject, MKAnnotation {
     var coordinate: CLLocationCoordinate2D { area.coordinate.clCoordinate }
 }
 
-/// Square newsprint tag for a campus building: level dot, category glyph and short name in
-/// tracked caps. Selected tags invert (ink fill, paper text) and get a hard offset shadow.
+/// Cartographic place label: a round ink marker with the category glyph sits on the building,
+/// with the name centered underneath in a paper halo. The selected place turns red and grows.
 final class AreaAnnotationView: MKAnnotationView {
     static let reuseIdentifier = "AreaAnnotationView"
 
-    private let plate = UIView()
-    private let dot = UIView()
+    private static let markerSize: CGFloat = 22
+    private static let selectedMarkerSize: CGFloat = 30
+    private static let labelGap: CGFloat = 3
+    private static let maxLabelWidth: CGFloat = 112
+
+    private let marker = UIView()
     private let icon = UIImageView()
     private let label = UILabel()
-    private let stack = UIStackView()
 
     private var area: CampusArea?
     private var level: ActivityLevel?
@@ -41,30 +44,25 @@ final class AreaAnnotationView: MKAnnotationView {
         collisionMode = .rectangle
         backgroundColor = .clear
 
-        plate.layer.cornerRadius = Theme.Radius.sm
-        plate.layer.cornerCurve = .continuous
-        plate.layer.borderWidth = Theme.Stroke.hairline
-        plate.layer.shadowRadius = 0
-        plate.layer.shadowOffset = CGSize(width: 3, height: 3)
-        addSubview(plate)
+        marker.layer.borderWidth = 1.5
+        marker.layer.shadowOffset = CGSize(width: 0, height: 1)
+        marker.layer.shadowRadius = 2
+        addSubview(marker)
 
-        dot.layer.cornerRadius = 3.5
-        dot.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            dot.widthAnchor.constraint(equalToConstant: 7),
-            dot.heightAnchor.constraint(equalToConstant: 7),
-        ])
+        icon.contentMode = .center
+        marker.addSubview(icon)
 
-        icon.contentMode = .scaleAspectFit
-        icon.setContentHuggingPriority(.required, for: .horizontal)
+        label.numberOfLines = 2
+        label.textAlignment = .center
+        label.lineBreakMode = .byTruncatingTail
+        // Soft paper halo keeps the name legible over streets and heat.
+        label.layer.shadowOffset = .zero
+        label.layer.shadowRadius = 1.6
+        label.layer.shadowOpacity = 1
+        addSubview(label)
 
-        stack.axis = .horizontal
-        stack.alignment = .center
-        stack.spacing = 5
-        stack.addArrangedSubview(dot)
-        stack.addArrangedSubview(icon)
-        stack.addArrangedSubview(label)
-        plate.addSubview(stack)
+        isAccessibilityElement = true
+        accessibilityTraits = .button
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: AreaAnnotationView, _: UITraitCollection) in
             view.applyColors()
@@ -78,7 +76,7 @@ final class AreaAnnotationView: MKAnnotationView {
 
         icon.image = UIImage(
             systemName: area.symbol,
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 9, weight: .bold)
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: highlighted ? 13 : 10, weight: .semibold)
         )
         applyColors()
 
@@ -86,14 +84,29 @@ final class AreaAnnotationView: MKAnnotationView {
             ? .required
             : MKFeatureDisplayPriority(rawValue: 600 + Float(area.popularity) * 350)
         zPriority = highlighted ? .max : MKAnnotationViewZPriority(rawValue: Float(area.popularity) * 100)
+        accessibilityLabel = [area.name, level?.title].compactMap { $0 }.joined(separator: ", ")
 
-        let fitting = stack.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
-        frame.size = CGSize(width: ceil(fitting.width) + 18, height: 26)
-        setNeedsLayout()
+        layoutContent()
+    }
 
-        UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0) {
-            self.transform = highlighted ? CGAffineTransform(scaleX: 1.08, y: 1.08) : .identity
+    /// Sizes the view around the marker and name, and anchors the marker's center on the building.
+    private func layoutContent() {
+        let size = isHighlightedArea ? Self.selectedMarkerSize : Self.markerSize
+        let text = label.sizeThatFits(CGSize(width: Self.maxLabelWidth, height: .greatestFiniteMagnitude))
+        let labelSize = CGSize(width: min(ceil(text.width), Self.maxLabelWidth), height: ceil(text.height))
+        let width = max(size, labelSize.width) + 4
+        let height = size + Self.labelGap + labelSize.height
+
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.75, initialSpringVelocity: 0) {
+            self.frame.size = CGSize(width: width, height: height)
+            self.marker.frame = CGRect(x: (width - size) / 2, y: 0, width: size, height: size)
+            self.marker.layer.cornerRadius = size / 2
+            self.marker.layer.shadowPath = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: size, height: size)).cgPath
+            self.icon.frame = self.marker.bounds
+            self.label.frame = CGRect(x: (width - labelSize.width) / 2, y: size + Self.labelGap, width: labelSize.width, height: labelSize.height)
         }
+        // MapKit centers the view on the coordinate; shift so the marker's center sits there instead.
+        centerOffset = CGPoint(x: 0, y: (height - size) / 2)
     }
 
     /// Resolves every color for the current appearance (layer colors don't adapt on their own).
@@ -102,37 +115,27 @@ final class AreaAnnotationView: MKAnnotationView {
         let traits = traitCollection
         let ink = UIColor(Theme.Colors.ink).resolvedColor(with: traits)
         let paper = UIColor(Theme.Colors.paper).resolvedColor(with: traits)
-        let secondary = UIColor(Theme.Colors.textSecondary).resolvedColor(with: traits)
+        let accentFill = UIColor(Theme.Colors.accentFill).resolvedColor(with: traits)
+        let onAccent = UIColor(Theme.Colors.onAccent).resolvedColor(with: traits)
         let highlighted = isHighlightedArea
 
-        label.attributedText = NSAttributedString(string: area.shortName.uppercased(), attributes: [
-            .font: UIFont(name: FontName.sansHeavy, size: 10) ?? .systemFont(ofSize: 10, weight: .heavy),
-            .foregroundColor: highlighted ? paper : ink,
-            .kern: 1.2,
+        marker.backgroundColor = highlighted ? accentFill : ink
+        marker.layer.borderColor = paper.cgColor
+        marker.layer.shadowColor = UIColor(Theme.Colors.softShadow).resolvedColor(with: traits).cgColor
+        marker.layer.shadowOpacity = 1
+        icon.tintColor = highlighted ? onAccent : paper
+
+        let font = UIFont(name: highlighted ? FontName.sansBold : FontName.sansSemi, size: highlighted ? 12 : 11)
+            ?? .systemFont(ofSize: 11, weight: .semibold)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        paragraph.lineHeightMultiple = 0.92
+        label.attributedText = NSAttributedString(string: area.shortName, attributes: [
+            .font: UIFontMetrics(forTextStyle: .caption1).scaledFont(for: font, maximumPointSize: 15),
+            .foregroundColor: ink,
+            .paragraphStyle: paragraph,
         ])
-        icon.tintColor = highlighted ? paper.withAlphaComponent(0.8) : secondary
-        dot.backgroundColor = level.map { UIColor($0.color).resolvedColor(with: traits) } ?? secondary.withAlphaComponent(0.5)
-        dot.layer.borderWidth = 0.5
-        dot.layer.borderColor = ink.withAlphaComponent(0.35).cgColor
-
-        // Unselected labels let the map and heat show through; the selected one stays solid.
-        plate.backgroundColor = highlighted ? ink : paper.withAlphaComponent(0.4)
-        plate.layer.borderColor = highlighted ? ink.cgColor : ink.withAlphaComponent(0.2).cgColor
-        plate.layer.shadowColor = UIColor(Theme.Colors.hardShadow).resolvedColor(with: traits).cgColor
-        plate.layer.shadowOpacity = highlighted ? 1 : 0
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        plate.frame = bounds
-        plate.layer.shadowPath = UIBezierPath(roundedRect: plate.bounds, cornerRadius: Theme.Radius.sm).cgPath
-        let fitting = stack.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
-        stack.frame = CGRect(
-            x: (bounds.width - fitting.width) / 2,
-            y: (bounds.height - fitting.height) / 2,
-            width: fitting.width,
-            height: fitting.height
-        )
+        label.layer.shadowColor = paper.cgColor
     }
 
     override func prepareForReuse() {
