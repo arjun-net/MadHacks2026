@@ -17,7 +17,7 @@ enum FontRegistrar {
             }
         }
         #if DEBUG
-        for family in ["Big Shoulders Display", "Atkinson Hyperlegible"] {
+        for family in ["Big Shoulders Display", "Atkinson Hyperlegible", "Playfair Display"] {
             log.debug("\(family): \(UIFont.fontNames(forFamilyName: family))")
         }
         #endif

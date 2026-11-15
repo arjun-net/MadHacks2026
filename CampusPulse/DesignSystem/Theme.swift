@@ -164,6 +164,7 @@ enum Theme {
 // - Atkinson Hyperlegible, drawn by the Braille Institute for telling letters apart at a glance,
 //   for everything you read: text, rows, labels, buttons.
 // Labels are sentence case and untracked; headings do the shouting, in size, not capitals.
+// The one exception: the campus name atop the map stays in Playfair Display, like a nameplate.
 
 enum FontName {
     static let display = "BigShouldersDisplay-Black"
@@ -172,12 +173,14 @@ enum FontName {
     static let text = "AtkinsonHyperlegible-Regular"
     static let textBold = "AtkinsonHyperlegible-Bold"
     static let textItalic = "AtkinsonHyperlegible-Italic"
+    /// Only for the campus name at the top of the map.
+    static let mastheadSerif = "PlayfairDisplay-Black"
 }
 
 extension Font {
     // Display (Big Shoulders Display): a 1.25 step scale, 20 → 42.
-    /// The campus name on the map is the one big heading in the text face: bold, large, tight.
-    static let cpMasthead = Font.custom(FontName.textBold, size: 34, relativeTo: .largeTitle)
+    /// The campus name on the map is the one serif in the app: Playfair Display Black.
+    static let cpMasthead = Font.custom(FontName.mastheadSerif, size: 32, relativeTo: .largeTitle)
     static let cpLargeTitle = Font.custom(FontName.display, size: 40, relativeTo: .largeTitle)
     static let cpTitle = Font.custom(FontName.displayHeavy, size: 31, relativeTo: .title)
     static let cpTitle3 = Font.custom(FontName.displayHeavy, size: 24, relativeTo: .title3)
@@ -228,7 +231,7 @@ enum TypeStyle {
     /// The condensed display face opens up a touch as it gets big; text stays as drawn.
     var tracking: CGFloat {
         switch self {
-        case .masthead: -0.8
+        case .masthead: -0.4
         case .largeTitle: 0.4
         case .metric: 0.3
         case .title, .title3, .section, .rank, .metricSmall: 0.2
