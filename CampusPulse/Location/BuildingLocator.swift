@@ -12,6 +12,8 @@ import simd
 /// An approximation: a name means "on or near that building's footprint", not "indoors there".
 struct BuildingLocator: Sendable {
     struct Building: Sendable {
+        /// The `id` from the buildings file (also the campus area id).
+        let id: String
         let name: String
         /// Outline in local meters (x east, y north of `origin`).
         let points: [SIMD2<Double>]
@@ -47,6 +49,7 @@ struct BuildingLocator: Sendable {
 
     private struct File: Decodable {
         struct Entry: Decodable {
+            let id: String
             let name: String
             let perimeter_polygon: [[Double]]
         }
@@ -89,7 +92,7 @@ struct BuildingLocator: Sendable {
             guard area >= 1 else { continue }
             let minCorner = points.dropFirst().reduce(points[0]) { simd_min($0, $1) }
             let maxCorner = points.dropFirst().reduce(points[0]) { simd_max($0, $1) }
-            buildings.append(Building(name: entry.name, points: points, area: area, minCorner: minCorner, maxCorner: maxCorner))
+            buildings.append(Building(id: entry.id, name: entry.name, points: points, area: area, minCorner: minCorner, maxCorner: maxCorner))
         }
         guard !buildings.isEmpty else { return nil }
         self.buildings = buildings
@@ -97,6 +100,15 @@ struct BuildingLocator: Sendable {
 
     /// The building at `coordinate`, or nil when it isn't in or near one.
     func building(at coordinate: Coordinate) -> String? {
+        match(at: coordinate)?.name
+    }
+
+    /// The id of the building at `coordinate` (see `building(at:)`).
+    func buildingID(at coordinate: Coordinate) -> String? {
+        match(at: coordinate)?.id
+    }
+
+    private func match(at coordinate: Coordinate) -> Building? {
         guard coordinate.latitude.isFinite, coordinate.longitude.isFinite else { return nil }
         let p = SIMD2((coordinate.longitude - origin.longitude) * metersPerDegree.x,
                       (coordinate.latitude - origin.latitude) * metersPerDegree.y)
@@ -115,7 +127,7 @@ struct BuildingLocator: Sendable {
                 }
             }
         }
-        return inside?.name ?? nearest?.building.name
+        return inside ?? nearest?.building
     }
 
     /// Even-odd ray casting.

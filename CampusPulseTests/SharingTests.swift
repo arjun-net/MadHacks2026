@@ -20,7 +20,7 @@ struct SharingTests {
     @MainActor
     @Test func campusOutlineContainsBuildingsButNotTheLake() {
         let campus = CampusCatalog.madison
-        let library = campus.area(withID: "college-library")!.coordinate
+        let library = campus.area(withID: "college_library")!.coordinate
         #expect(SharingState.contains(campus.boundary, library))
         #expect(!SharingState.contains(campus.boundary, Coordinate(43.10, -89.42)))
     }

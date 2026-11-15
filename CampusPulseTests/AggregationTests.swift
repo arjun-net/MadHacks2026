@@ -6,11 +6,27 @@ import Testing
 /// the privacy cutoff, rounding, and levels.
 struct AggregationTests {
     let campus = CampusCatalog.madison
-    var library: CampusArea { campus.area(withID: "college-library")! }
+    var library: CampusArea { campus.area(withID: "college_library")! }
 
     @Test func readingOnABuildingCountsForIt() {
         let point = library.coordinate.offset(eastMeters: 5, northMeters: -5)
-        #expect(ActivityAggregator.area(containing: point, in: campus) == "college-library")
+        #expect(ActivityAggregator.area(containing: point, in: campus) == "college_library")
+    }
+
+    /// The map and Activity list show exactly the buildings the pings are tagged with.
+    @Test func areasAreTheTrackedBuildings() throws {
+        let locator = try #require(BuildingLocator.forCampus(campus.id))
+        #expect(campus.areas.count == 20)
+        #expect(campus.areas.map(\.id).sorted() == locator.buildings.map(\.id).sorted())
+        for building in locator.buildings {
+            #expect(campus.area(withID: building.id)?.name == building.name)
+        }
+    }
+
+    @Test func readingInMorgridgeHallCountsForIt() {
+        // A real ping from inside, and one ~10 m outside the north wall.
+        #expect(ActivityAggregator.area(containing: Coordinate(43.073141, -89.407074), in: campus) == "morgridge_hall")
+        #expect(ActivityAggregator.area(containing: Coordinate(43.07328, -89.40690), in: campus) == "morgridge_hall")
     }
 
     @Test func readingFarFromEveryBuildingCountsForNone() {
@@ -21,7 +37,7 @@ struct AggregationTests {
     @Test func cellsBelowThePrivacyThresholdAreDropped() {
         let threshold = AppConfig.privacyThreshold
         let crowd = Array(repeating: library.coordinate, count: threshold)
-        let tooFew = Array(repeating: campus.area(withID: "van-hise")!.coordinate, count: threshold - 1)
+        let tooFew = Array(repeating: campus.area(withID: "morgridge_hall")!.coordinate, count: threshold - 1)
 
         let cells = ActivityAggregator.cells(from: crowd + tooFew, around: campus.center)
 
@@ -45,7 +61,7 @@ struct AggregationTests {
         )
 
         #expect(snapshot.participantCount == 40)
-        #expect(snapshot.activity(for: "college-library")?.estimatedCount == 45)
+        #expect(snapshot.activity(for: "college_library")?.estimatedCount == 45)
         #expect(snapshot.history.count == ActivityAggregator.historyLength)
         // Under 30 people campus-wide is treated as not enough to show.
         #expect(snapshot.isEmpty == false)

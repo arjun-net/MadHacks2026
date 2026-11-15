@@ -52,8 +52,13 @@ enum ActivityAggregator {
         }
     }
 
-    /// The nearest tracked area whose footprint (with a small margin) contains the point.
+    /// The tracked area a reading counts for. Where the campus has building outlines, it's the
+    /// building the reading is in or near, by the same rule as the pings sent to the server;
+    /// elsewhere, the nearest area whose rough footprint (with a small margin) contains it.
     static func area(containing point: Coordinate, in campus: Campus) -> String? {
+        if let locator = BuildingLocator.forCampus(campus.id) {
+            return locator.buildingID(at: point).flatMap { campus.area(withID: $0)?.id }
+        }
         var best: (id: String, distance: Double)?
         for area in campus.areas {
             let distance = area.coordinate.distance(to: point)
