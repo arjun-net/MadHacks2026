@@ -66,18 +66,18 @@ pub struct BuildingStory {
 
 const METHODOLOGY: &str = "Each day's value counts distinct, identified reporting devices with a location observation within the configured time window around the same campus-local clock time. Repeated observations per device are counted once; the nearest observation is used. These are reporting devices, not actual building occupancy. Missing/suppressed days are excluded from averages; future days are not treated as zero.";
 
-struct Config {
-    host: String,
-    token: String,
-    warehouse_id: String,
-    catalog: String,
-    ai_endpoint: Option<String>,
-    timezone: Tz,
-    min_devices: i64,
+pub(crate) struct Config {
+    pub(crate) host: String,
+    pub(crate) token: String,
+    pub(crate) warehouse_id: String,
+    pub(crate) catalog: String,
+    pub(crate) ai_endpoint: Option<String>,
+    pub(crate) timezone: Tz,
+    pub(crate) min_devices: i64,
 }
 
 impl Config {
-    fn from_env() -> Result<Self, String> {
+    pub(crate) fn from_env() -> Result<Self, String> {
         let required = |key: &str| -> Result<String, String> {
             env::var(key).ok().map(|v| v.trim().to_string()).filter(|v| !v.is_empty())
                 .ok_or_else(|| format!("{key} must be configured"))
@@ -110,8 +110,8 @@ impl Config {
             .parse().map_err(|_| "CAMPUS_TIMEZONE must be an IANA timezone".to_string())?;
         let min_devices = env::var("STORY_MIN_DEVICES").unwrap_or_else(|_| "5".into())
             .parse::<i64>().map_err(|_| "STORY_MIN_DEVICES must be an integer".to_string())?;
-        if min_devices < 2 {
-            return Err("STORY_MIN_DEVICES must be at least 2".into());
+        if min_devices < 1 {
+            return Err("STORY_MIN_DEVICES must be at least 1".into());
         }
         Ok(Self {
             host,
@@ -250,14 +250,14 @@ fn select_dates(query: &StoryQuery, tz: Tz, now: DateTime<Utc>) -> Result<Select
 }
 
 #[derive(Serialize)]
-struct SqlParameter {
+pub(crate) struct SqlParameter {
     name: String,
     value: String,
     #[serde(rename = "type")]
     sql_type: &'static str,
 }
 
-fn param(name: impl Into<String>, value: impl Into<String>, sql_type: &'static str) -> SqlParameter {
+pub(crate) fn param(name: impl Into<String>, value: impl Into<String>, sql_type: &'static str) -> SqlParameter {
     SqlParameter { name: name.into(), value: value.into(), sql_type }
 }
 
@@ -332,20 +332,20 @@ ORDER BY f.sample_date
     (sql, params)
 }
 
-struct DbClient {
+pub(crate) struct DbClient {
     client: reqwest::Client,
-    config: Config,
+    pub(crate) config: Config,
 }
 
 impl DbClient {
-    fn new(config: Config) -> Result<Self, String> {
+    pub(crate) fn new(config: Config) -> Result<Self, String> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(55))
             .build().map_err(|e| e.to_string())?;
         Ok(Self { client, config })
     }
 
-    async fn send_sql(&self, statement: &str, parameters: Vec<SqlParameter>) -> Result<Vec<Vec<Value>>, String> {
+    pub(crate) async fn send_sql(&self, statement: &str, parameters: Vec<SqlParameter>) -> Result<Vec<Vec<Value>>, String> {
         let body = json!({
             "statement": statement,
             "warehouse_id": self.config.warehouse_id,
@@ -513,55 +513,226 @@ fn day_activity(day: NaiveDate, recorded: &BTreeMap<NaiveDate, DayActivity>, now
     })
 }
 
-fn fallback_story(building: &str, selected: &DayActivity, time: NaiveTime, weekday_avg: Option<f64>, prior_weeks: usize, week_avg: Option<f64>, other_days: usize) -> String {
-    let clock = time.format("%H:%M");
-    let Some(count) = selected.reporting_devices else {
-        return format!("There is not enough reportable location data to compare {building} on {} near {clock}. No occupancy conclusion can be drawn.", selected.weekday);
-    };
-    // These are descriptive, rule-based flags, not a statistical significance test.
-    // Require at least three previous matching weekdays before calling a large
-    // difference a potential spike or dip.
-    let headline = match weekday_avg
-        .filter(|_| prior_weeks >= 3)
-        .and_then(|avg| delta(Some(count), Some(avg)))
-    {
-        Some(pct) if pct >= 75.0 => "Potential activity spike: ",
-        Some(pct) if pct <= -50.0 => "Potential activity dip: ",
-        _ => "",
-    };
-    let mut text = format!("{headline}{building} had {count} distinct reporting devices near {clock} on {}.", selected.weekday);
-    if let Some(avg) = weekday_avg.filter(|_| prior_weeks >= 2) {
-        let pct = delta(Some(count), Some(avg)).unwrap_or(0.0);
-        if pct.abs() < 0.5 {
-            text.push_str(&format!(" Activity was approximately equal to the {prior_weeks}-week {} average ({avg:.1}).", selected.weekday));
-        } else {
-            text.push_str(&format!(" Compared with {prior_weeks} earlier {}s at the same time (average {avg:.1}), that is {:.0}% {}.",
-                selected.weekday, pct.abs(), if pct > 0.0 { "higher" } else { "lower" }));
-        }
-    } else {
-        text.push_str(" There are not yet enough prior matching weekdays for a reliable baseline.");
-    }
-    if let Some(avg) = week_avg.filter(|_| other_days >= 1) {
-        let pct = delta(Some(count), Some(avg)).unwrap_or(0.0);
-        if pct.abs() < 0.5 {
-            text.push_str(&format!(" Activity was approximately equal to the mean for {other_days} other measured day(s) this week."));
-        } else {
-            text.push_str(&format!(" Relative to {other_days} other measured day(s) this week at that time, activity was {:.0}% {}.",
-                pct.abs(), if pct > 0.0 { "higher" } else { "lower" }));
-        }
-    }
-    text.push_str(" Counts describe participating devices, not total occupancy.");
-    text
+// Use a recognizable building name in compact mobile text; the full official
+// name remains in the structured `building` field. Parenthetical qualifiers
+// can make a one-line mobile status unreasonably long.
+pub(crate) fn mobile_building_name(building: &str) -> String {
+    let short = building.split_once(" (").map_or(building, |(name, _)| name).trim();
+    let mut chars = short.chars();
+    let prefix: String = chars.by_ref().take(36).collect();
+    if chars.next().is_some() { format!("{}…", prefix.trim_end()) } else { prefix }
 }
 
+const MAX_STORY_CHARS: usize = 96;
+
+fn fallback_story(
+    building: &str,
+    selected: &DayActivity,
+    _time: NaiveTime,
+    weekday_avg: Option<f64>,
+    prior_weeks: usize,
+    week_avg: Option<f64>,
+    other_days: usize,
+) -> String {
+    let name = mobile_building_name(building);
+    let Some(count) = selected.reporting_devices else {
+        return format!("{name} has no activity data for this time.");
+    };
+
+    if let Some(pct) = weekday_avg.filter(|_| prior_weeks >= 2)
+        .and_then(|avg| delta(Some(count), Some(avg))) {
+        if pct.abs() < 10.0 {
+            return format!("{name} is about as busy as usual.");
+        }
+        if pct > 0.0 {
+            return format!("{name} is {:.0}% busier than usual.", pct);
+        }
+        return format!("{name} is {:.0}% less busy than usual.", pct.abs());
+    }
+
+    // Only use a "this week" comparison when the same-weekday baseline is
+    // unavailable. Do not misleadingly describe it as the usual weekday level.
+    if let Some(pct) = week_avg.filter(|_| other_days >= 1)
+        .and_then(|avg| delta(Some(count), Some(avg))) {
+        if pct.abs() < 10.0 {
+            return format!("{name} is near this week's activity level.");
+        }
+        if pct > 0.0 {
+            return format!("{name} is {:.0}% busier than other days this week.", pct);
+        }
+        return format!("{name} is {:.0}% less busy than other days this week.", pct.abs());
+    }
+
+    format!("{name} has no historical comparison yet.")
+}
+
+/// AI may rewrite the short story, but may not invent counts, causes, or a
+/// change in the direction/magnitude of the verified comparison.
 fn annotation_prompt(out: &BuildingStory) -> String {
-    format!("Write one or two concise, engaging sentences about building activity. Use ONLY these measured facts; do not imply causes, specific events, total occupancy, or student population. Refer to distinct reporting devices, not people. If data is insufficient, say so. Building: {}. Local day: {} {} at {} {}. Devices: {}. Mean over {} previous matching weekdays: {}. Difference: {}%. Mean over {} other measured days this week: {}. Difference: {}%. Preserve the exact comparisons, and never claim that a missing day has zero activity.",
-        out.building, out.weekday, out.date, out.time_local, out.timezone,
-        out.current.reporting_devices.map(|n| n.to_string()).unwrap_or_else(|| "insufficient data".into()),
-        out.weekday_samples, out.weekday_average.map(|n| format!("{n:.1}")).unwrap_or_else(|| "not available".into()),
-        out.difference_vs_weekday_average_pct.map(|n| format!("{n:.1}")).unwrap_or_else(|| "not available".into()),
-        out.other_days_this_week_samples, out.other_days_this_week_average.map(|n| format!("{n:.1}")).unwrap_or_else(|| "not available".into()),
-        out.difference_vs_other_days_pct.map(|n| format!("{n:.1}")).unwrap_or_else(|| "not available".into()))
+    let name = mobile_building_name(&out.building);
+    let comparison = if out.weekday_samples >= 2 {
+        out.difference_vs_weekday_average_pct
+            .map(|pct| format!("{pct:.0}% relative to earlier matching weekdays"))
+    } else if out.other_days_this_week_samples >= 1 {
+        out.difference_vs_other_days_pct
+            .map(|pct| format!("{pct:.0}% relative to other measured days this week"))
+    } else { None }.unwrap_or_else(|| "insufficient historical data".to_owned());
+    format!(
+        "Write ONE short, factual activity status for a mobile card (at most {MAX_STORY_CHARS} characters).\n\
+         Use this exact short building name: {name}\n\
+         VERIFIED INPUT: date {date}, local time {time}, {count} distinct reporting devices.\n\
+         VERIFIED COMPARISON: {comparison}.\n\
+         Rephrase this verified sentence, if you can do so without changing its meaning:\n\
+         {verified}\n\
+         Use only the verified rounded percent (when provided), the correct direction,\n\
+         and the correct comparison group. The percent measures reporting-device activity,\n\
+         NOT measured occupancy. Do not mention other numbers, students, causes, forecasts,\n\
+         events, crowds, or actual occupancy. Output only ONE sentence, no extra commentary\n\
+         and no Markdown.",
+        verified = out.story,
+        date = out.date,
+        time = out.time_local,
+        count = out.current.reporting_devices.map(|n| n.to_string()).unwrap_or_else(|| "unavailable".into()),
+    )
+}
+
+/// Checks *meaning* and trusted numbers instead of one exact phrasing.
+/// The result is canonically prefixed with our own building name, never an
+/// unverified name supplied by the model.
+fn validate_ai_annotation(text: &str, data: &BuildingStory) -> Result<String, &'static str> {
+    // Language models sometimes wrap their only sentence in quotes or line breaks.
+    let cleaned = text.trim().trim_matches(|c: char| matches!(c, '"' | '\'' | '“' | '”')).trim();
+    if cleaned.is_empty() { return Err("empty response"); }
+    if cleaned.contains('\n') || cleaned.contains('\r') {
+        return Err("multi-line response");
+    }
+    if cleaned.contains('<') || cleaned.contains('{') || cleaned.contains('}')
+        || cleaned.contains('*') || cleaned.contains('`')
+    { return Err("markup or structured output"); }
+    if !cleaned.ends_with('.') || cleaned[..cleaned.len() - 1].chars().any(|c| matches!(c, '.' | '!' | '?')) {
+        return Err("not a single complete sentence");
+    }
+
+    let name = mobile_building_name(&data.building);
+    // Some models remove the synthetic '__DEMO__' tag while retaining the name.
+    // Permit that alias only for demo buildings; canonicalize the output below.
+    let alias = name.strip_prefix("__DEMO__ ");
+    let matched_prefix = [Some(name.as_str()), alias].into_iter().flatten()
+        .find(|candidate| cleaned.get(..candidate.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(candidate)));
+    let Some(prefix) = matched_prefix else { return Err("missing or changed building name"); };
+    if !cleaned[prefix.len()..].starts_with(' ') {
+        return Err("building name not followed by a space");
+    }
+    let remainder = cleaned[prefix.len()..].trim();
+    if !["is ", "has ", "shows ", "reports ", "sees ", "experiences "]
+        .iter().any(|word| remainder.to_ascii_lowercase().starts_with(word)) {
+        return Err("building name not followed by an activity statement");
+    }
+    let lower = remainder.to_ascii_lowercase();
+    let forbidden = [
+        "because", "due to", "caused", "students", "people", "occupancy",
+        "attendance", "headcount", "significant", "event", "crowd",
+        "will be", "predicted", "forecast", "probably", "likely",
+        "not busier", "not less busy", "no longer",
+    ];
+    if forbidden.iter().any(|word| lower.contains(word)) {
+        return Err("unsupported causal, occupancy, or forecast claim");
+    }
+
+    let comparison = if data.weekday_samples >= 2 {
+        data.difference_vs_weekday_average_pct.map(|pct| (pct, true))
+    } else if data.other_days_this_week_samples >= 1 {
+        data.difference_vs_other_days_pct.map(|pct| (pct, false))
+    } else { None };
+    let more = ["busier", "more active", "higher", "greater", "increased", "above"]
+        .iter().any(|word| lower.contains(word));
+    let less = ["less busy", "less active", "lower", "fewer", "decreased", "below"]
+        .iter().any(|word| lower.contains(word));
+
+    match comparison {
+        Some((pct, same_weekday)) if pct.abs() >= 10.0 => {
+            let expected_number = format!("{:.0}", pct.abs());
+            let expected_percent = format!("{expected_number}%");
+            // Require exactly the verified percent; reject additional quantities
+            // even if the model has invented a plausible second statistic.
+            let numbers: Vec<&str> = remainder.split(|ch: char| !ch.is_ascii_digit())
+                .filter(|part| !part.is_empty()).collect();
+            if numbers.len() != 1 || numbers[0] != expected_number.as_str()
+                || !lower.contains(expected_percent.as_str())
+                || remainder.matches('%').count() != 1
+            { return Err("number does not match verified percentage"); }
+            if (pct > 0.0 && (!more || less)) || (pct < 0.0 && (!less || more)) {
+                return Err("direction does not match verified activity change");
+            }
+            if same_weekday {
+                if !["usual", "normal", "typical", "average"]
+                    .iter().any(|word| lower.contains(word)) {
+                    return Err("missing matching-weekday comparison");
+                }
+            } else if !lower.contains("this week") || !lower.contains("other days") {
+                return Err("missing other-days-this-week comparison");
+            }
+        }
+        Some((_, same_weekday)) => {
+            if remainder.contains('%') || remainder.chars().any(|c| c.is_ascii_digit())
+                || more || less { return Err("invented change for stable activity"); }
+            if same_weekday {
+                if !["usual", "normal", "typical", "average"]
+                    .iter().any(|word| lower.contains(word)) {
+                    return Err("missing usual-level comparison");
+                }
+            } else if !lower.contains("this week") {
+                return Err("missing this-week comparison");
+            }
+            if !["busy", "activity", "level", "active"]
+                .iter().any(|word| lower.contains(word)) {
+                return Err("not an activity statement");
+            }
+        }
+        None => {
+            if remainder.contains('%') || remainder.chars().any(|c| c.is_ascii_digit())
+                || more || less { return Err("invented comparison without history"); }
+            if !["history", "historical", "comparison", "data"]
+                .iter().any(|word| lower.contains(word)) {
+                return Err("did not acknowledge missing history");
+            }
+        }
+    }
+    let output = format!("{name} {remainder}");
+    if output.chars().count() > MAX_STORY_CHARS {
+        return Err("too long for mobile card");
+    }
+    Ok(output)
+}
+
+fn accept_ai_annotation(text: &str, data: &BuildingStory) -> Option<String> {
+    validate_ai_annotation(text, data).ok()
+}
+
+/// The endpoint keeps the stats computed by Databricks SQL even when the AI
+/// endpoint is unavailable, rate-limited, or produces an ungrounded result.
+async fn with_optional_ai(response: &mut BuildingStory, client: &DbClient) {
+    if client.config.ai_endpoint.is_none() || response.current.reporting_devices.is_none() {
+        return;
+    }
+    match client.annotate(annotation_prompt(response)).await {
+        Ok(Some(text)) => match validate_ai_annotation(&text, response) {
+            Ok(checked) => {
+                response.story = checked;
+                response.story_source = "databricks_ai_query";
+            }
+            Err(reason) => {
+                tracing::warn!(reason, "Databricks AI story rejected; using deterministic text");
+                // Debug mode only: inspection of short AI text can reveal why
+                // the model failed to follow the prompt. Never log SQL tokens.
+                tracing::debug!(model_reply = %text.chars().take(160).collect::<String>(),
+                    "Rejected Databricks AI story (first 160 chars)");
+            }
+        },
+        Ok(None) => tracing::warn!("Databricks AI returned an empty story; using deterministic text"),
+        Err(e) => tracing::warn!("Databricks AI unavailable: {e}; using deterministic text"),
+    }
 }
 
 fn construct_story(building: String, selection: &Selection, now: DateTime<Utc>, result: AggregateResult) -> BuildingStory {
@@ -600,7 +771,46 @@ fn error(status: StatusCode, message: impl Into<String>) -> Response {
     (status, Json(json!({"detail": message.into()}))).into_response()
 }
 
-/// GET /api/v1/buildings/{building}/story?weekday=saturday&time=14:30
+/// The same implementation is used by the production route and offline tests.
+/// `now` is explicit so tests can construct a stable calendar date and clock.
+async fn story_with_client(
+    building: String,
+    query: StoryQuery,
+    now: DateTime<Utc>,
+    client: &DbClient,
+) -> Response {
+    let selection = match select_dates(&query, client.config.timezone, now) {
+        Ok(s) => s,
+        Err(e) => return error(StatusCode::UNPROCESSABLE_ENTITY, e),
+    };
+    let (sql, parameters) = activity_sql(
+        &client.config.catalog,
+        &selection,
+        &building,
+        client.config.min_devices,
+    );
+    let rows = match client.send_sql(&sql, parameters).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("Databricks activity query failed: {e}");
+            return error(StatusCode::BAD_GATEWAY, "Databricks activity query failed; check server logs");
+        }
+    };
+    let result = match parse_activity_rows(&rows) {
+        Ok(r) if !r.days.is_empty() => r,
+        Ok(_) => return error(StatusCode::BAD_GATEWAY, "Databricks returned no activity rows"),
+        Err(e) => {
+            tracing::error!("Databricks response parsing failed: {e}");
+            return error(StatusCode::BAD_GATEWAY, "Databricks returned an invalid activity result");
+        }
+    };
+    let mut response = construct_story(building, &selection, now, result);
+    with_optional_ai(&mut response, client).await;
+    Json(response).into_response()
+}
+
+/// GET /api/v1/buildings/{building}/story?date=2026-11-14&time=14:30
+/// Returns Databricks SQL statistics and optional Databricks AI narration.
 pub async fn story_handler(Path(building): Path<String>, Query(query): Query<StoryQuery>) -> Response {
     let building = building.trim().to_string();
     if building.is_empty() || building.chars().count() > 256 {
@@ -613,43 +823,19 @@ pub async fn story_handler(Path(building): Path<String>, Query(query): Query<Sto
     }
     let cfg = match Config::from_env() {
         Ok(c) => c,
-        Err(e) => { tracing::error!("Databricks story configuration: {e}");
-            return error(StatusCode::SERVICE_UNAVAILABLE, "Databricks storytelling is not configured"); }
+        Err(e) => {
+            tracing::error!("Databricks story configuration: {e}");
+            return error(StatusCode::SERVICE_UNAVAILABLE, "Databricks storytelling is not configured");
+        }
     };
-    let now = Utc::now();
-    let selection = match select_dates(&query, cfg.timezone, now) {
-        Ok(s) => s,
-        Err(e) => return error(StatusCode::UNPROCESSABLE_ENTITY, e),
-    };
-    let (sql, parameters) = activity_sql(&cfg.catalog, &selection, &building, cfg.min_devices);
     let client = match DbClient::new(cfg) {
         Ok(c) => c,
-        Err(e) => { tracing::error!("HTTP client setup: {e}");
-            return error(StatusCode::SERVICE_UNAVAILABLE, "Databricks client initialization failed"); }
-    };
-    let rows = match client.send_sql(&sql, parameters).await {
-        Ok(r) => r,
-        Err(e) => { tracing::error!("Databricks activity query failed: {e}");
-            return error(StatusCode::BAD_GATEWAY, "Databricks activity query failed; check server logs"); }
-    };
-    let result = match parse_activity_rows(&rows) {
-        Ok(r) if !r.days.is_empty() => r,
-        Ok(_) => return error(StatusCode::BAD_GATEWAY, "Databricks returned no activity rows"),
-        Err(e) => { tracing::error!("Databricks response parsing failed: {e}");
-            return error(StatusCode::BAD_GATEWAY, "Databricks returned an invalid activity result"); }
-    };
-    let mut response = construct_story(building, &selection, now, result);
-    if client.config.ai_endpoint.is_some() && response.current.reporting_devices.is_some() {
-        match client.annotate(annotation_prompt(&response)).await {
-            Ok(Some(ai_text)) => {
-                response.story = ai_text;
-                response.story_source = "databricks_ai_query";
-            }
-            Ok(None) => tracing::warn!("Databricks returned an empty AI annotation; using statistical story"),
-            Err(e) => tracing::warn!("Databricks AI annotation unavailable: {e}; using statistical story"),
+        Err(e) => {
+            tracing::error!("Databricks HTTP client setup failed: {e}");
+            return error(StatusCode::SERVICE_UNAVAILABLE, "Databricks client initialization failed");
         }
-    }
-    Json(response).into_response()
+    };
+    story_with_client(building, query, Utc::now(), &client).await
 }
 
 #[cfg(test)]
@@ -699,7 +885,7 @@ mod tests {
         assert_eq!(result.days[&NaiveDate::from_ymd_opt(2026,11,14).unwrap()].reporting_devices, None);
         let s = select_dates(&StoryQuery::default(), chrono_tz::America::Chicago, now()).unwrap();
         let story = construct_story("Memorial Union".into(), &s, now(), result);
-        assert!(story.story.contains("not enough"));
+        assert!(story.story.to_ascii_lowercase().contains("not enough"));
         assert_eq!(story.difference_vs_weekday_average_pct, None);
     }
 

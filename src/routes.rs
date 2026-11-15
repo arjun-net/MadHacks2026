@@ -18,7 +18,6 @@ use crate::store::{Dataset, Store};
 pub struct AppState {
     pub store: Arc<Store>,
     pub buffer: Arc<WriteBuffer>,
-    /// Loaded once at startup; every ping is matched to a building in constant time.
     pub buildings: Arc<BuildingIndex>,
 }
 
@@ -34,7 +33,8 @@ pub fn router(state: AppState) -> Router {
         .route("/heatmap", get(heatmap))
         .route("/heatmap/broad", get(heatmap_broad))
         .route("/health", get(health))
-        .route("/buildings/{building}/story", get(crate::story::story_handler));
+        .route("/buildings/{building}/story", get(crate::story::story_handler))
+        .route("/buildings/{building}/prediction", get(crate::prediction::prediction_handler));
     Router::new().nest("/api/v1", v1).with_state(state)
 }
 
