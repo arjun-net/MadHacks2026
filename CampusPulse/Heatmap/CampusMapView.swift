@@ -216,9 +216,6 @@ struct CampusMapView: UIViewRepresentable {
             openedIDs = Set(members.map(\.area.id))
             poppingIDs = openedIDs
             openedDistance = currentDistance / factor
-            // Re-adding them makes MapKit build fresh, ungrouped markers in place of the group.
-            mapView.removeAnnotations(members)
-            mapView.addAnnotations(members)
 
             var rect = MKMapRect.null
             for member in members {
@@ -231,6 +228,15 @@ struct CampusMapView: UIViewRepresentable {
             // The whole screen's worth of map once the group sits in the open middle.
             let fitted = mapView.mapRectThatFits(target, edgePadding: insets)
             glide(mapView, to: MKMapPoint(x: fitted.midX, y: fitted.midY), distance: currentDistance * fitted.width / visible.width)
+
+            // Swap the group for its places right after the glide's first frame, so building
+            // the markers doesn't hold up the start. Re-adding them makes MapKit build fresh,
+            // ungrouped markers.
+            DispatchQueue.main.async { [weak mapView] in
+                guard let mapView else { return }
+                mapView.removeAnnotations(members)
+                mapView.addAnnotations(members)
+            }
         }
 
         // MARK: Camera glide
@@ -238,10 +244,15 @@ struct CampusMapView: UIViewRepresentable {
         private var glideLink: CADisplayLink?
         private var glideState: (from: MKMapPoint, to: MKMapPoint, fromDistance: Double, toDistance: Double, start: CFTimeInterval)?
         private weak var glideMap: MKMapView?
-        private static let glideDuration: CFTimeInterval = 0.85
+        private static let glideDuration: CFTimeInterval = 0.7
+        private let haptics: UIImpactFeedbackGenerator = {
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.prepare()
+            return generator
+        }()
 
-        /// A slow, eased flight to a new center and zoom, drawn by us every frame; MapKit's own
-        /// animation is short and lurches at the start. Zoom changes evenly in scale, so the
+        /// An eased flight to a new center and zoom, drawn by us every frame: it moves off on
+        /// the tap and settles softly. MapKit's own animation is short and lurches at the start. Zoom changes evenly in scale, so the
         /// map never seems to speed up as it gets closer.
         private func glide(_ mapView: MKMapView, to center: MKMapPoint, distance: CLLocationDistance) {
             let range = mapView.cameraZoomRange
@@ -249,6 +260,7 @@ struct CampusMapView: UIViewRepresentable {
             let from = mapView.visibleMapRect
             glideState = (MKMapPoint(x: from.midX, y: from.midY), center, mapView.camera.centerCoordinateDistance, toDistance, CACurrentMediaTime())
             glideMap = mapView
+            glideStep(nil)
             if glideLink == nil {
                 let link = CADisplayLink(target: self, selector: #selector(glideStep(_:)))
                 link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
@@ -257,10 +269,11 @@ struct CampusMapView: UIViewRepresentable {
             }
         }
 
-        @objc private func glideStep(_ link: CADisplayLink) {
+        /// One frame of the glide. Also run once straight away, so the map moves on the tap itself.
+        @objc private func glideStep(_ link: CADisplayLink?) {
             guard let state = glideState, let mapView = glideMap, !isTouching(mapView) else { return stopGlide() }
             let t = min(1, (CACurrentMediaTime() - state.start) / Self.glideDuration)
-            let e = smootherStep(t)
+            let e = easeOutQuart(t)
             // Distance moves evenly on a log scale; the center follows how far the zoom has
             // come, so the group stays steady under the finger's spot rather than sliding.
             let distance = state.fromDistance * pow(state.toDistance / state.fromDistance, e)
@@ -370,6 +383,11 @@ struct CampusMapView: UIViewRepresentable {
                     for: cluster
                 ) as? ClusterAnnotationView
                 view.map { configure($0, for: cluster) }
+                view?.onTap = { [weak self, weak mapView, weak view] in
+                    guard let self, let mapView, let cluster = view?.annotation as? MKClusterAnnotation else { return }
+                    self.haptics.impactOccurred()
+                    self.open(cluster, in: mapView)
+                }
                 return view
             }
             guard let annotation = annotation as? AreaAnnotation else { return nil }
@@ -387,9 +405,8 @@ struct CampusMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
             if let cluster = view.annotation as? MKClusterAnnotation {
+                // Opening is handled by the marker's own tap (it answers faster).
                 mapView.deselectAnnotation(cluster, animated: false)
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                open(cluster, in: mapView)
                 return
             }
             guard let annotation = view.annotation as? AreaAnnotation else {

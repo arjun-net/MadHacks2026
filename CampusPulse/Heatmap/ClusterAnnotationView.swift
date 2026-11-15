@@ -25,6 +25,9 @@ final class ClusterAnnotationView: MKAnnotationView {
 
     /// Most popular first.
     private(set) var members: [CampusArea] = []
+    /// Runs the moment a finger lifts off the marker. MapKit's own selection waits to rule out
+    /// a double tap first, which made opening a group feel slow.
+    var onTap: (() -> Void)?
     private var level: ActivityLevel?
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
@@ -69,6 +72,8 @@ final class ClusterAnnotationView: MKAnnotationView {
         label.layer.shouldRasterize = true
         addSubview(label)
 
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityHint = "Zooms in to show these places"
@@ -76,6 +81,15 @@ final class ClusterAnnotationView: MKAnnotationView {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: ClusterAnnotationView, _: UITraitCollection) in
             view.applyColors()
         }
+    }
+
+    @objc private func tapped() {
+        onTap?()
+    }
+
+    override func accessibilityActivate() -> Bool {
+        onTap?()
+        return onTap != nil
     }
 
     /// `levels` looks up each member's current busyness.
@@ -185,8 +199,8 @@ enum GroupZoom {
     }
 }
 
-/// Ease in and out with a soft start and landing (smootherstep).
-func smootherStep(_ t: Double) -> Double {
+/// Moves off straight away and settles gently (ease-out quart), so a tap answers at once.
+func easeOutQuart(_ t: Double) -> Double {
     let t = min(1, max(0, t))
-    return t * t * t * (t * (t * 6 - 15) + 10)
+    return 1 - pow(1 - t, 4)
 }

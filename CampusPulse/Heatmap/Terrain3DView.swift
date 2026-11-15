@@ -147,7 +147,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private let pitch: Float = 54 * .pi / 180
     private let distanceRange: ClosedRange<Float> = 300...6500
     private var velocity = SIMD2<Float>.zero
-    private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval, easeInOut: Bool)?
+    private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval, softLanding: Bool)?
     private var displayLink: CADisplayLink?
     private var lastTick: CFTimeInterval = 0
     private var lastPanLocation: CGPoint?
@@ -405,12 +405,17 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         onSelectArea(id)
     }
 
-    @objc private func clusterTapped(_ gesture: UITapGestureRecognizer) {
-        guard let view = gesture.view as? ClusterAnnotationView,
-              let index = clusterViews.firstIndex(of: view), index < clusterMembers.count else { return }
+    private let haptics: UIImpactFeedbackGenerator = {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        return generator
+    }()
+
+    private func openGroup(_ view: ClusterAnnotationView) {
+        guard let index = clusterViews.firstIndex(of: view), index < clusterMembers.count else { return }
         let members = clusterMembers[index].compactMap { campus.area(withID: $0) }
         guard !members.isEmpty else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        haptics.impactOccurred()
 
         // Open the group: its places show one by one, and the camera glides in just far
         // enough for them to sit apart while all staying on screen.
@@ -429,7 +434,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         to.target = SIMD2((xs.min()! + xs.max()!) / 2, (zs.min()! + zs.max()!) / 2)
         to.distance = max(distanceRange.lowerBound, camera.distance / Float(factor))
         openedDistance = to.distance
-        animateCamera(to: to, duration: 0.85, easeInOut: true)
+        animateCamera(to: to, duration: 0.7, softLanding: true)
         updateOverlay()
     }
 
@@ -805,14 +810,14 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         }
     }
 
-    /// `easeInOut` starts gently too (opening a group); otherwise it starts fast and settles.
-    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4, easeInOut: Bool = false) {
+    /// `softLanding` settles more gently (opening a group); both start moving at once.
+    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4, softLanding: Bool = false) {
         velocity = .zero
         var to = clamped(state)
         // Turn the short way round.
         let turn = remainder(to.heading - camera.heading, 2 * .pi)
         to.heading = camera.heading + turn
-        cameraAnimation = (camera, to, CACurrentMediaTime(), duration, easeInOut)
+        cameraAnimation = (camera, to, CACurrentMediaTime(), duration, softLanding)
         startTicking()
     }
 
@@ -838,7 +843,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
         if let animation = cameraAnimation {
             let t = min(1, (now - animation.start) / animation.duration)
-            let e = Float(animation.easeInOut ? smootherStep(t) : 1 - pow(1 - t, 3))
+            let e = Float(animation.softLanding ? easeOutQuart(t) : 1 - pow(1 - t, 3))
             camera.distance = animation.from.distance * pow(animation.to.distance / animation.from.distance, e)
             // The target follows how far the zoom has come, so the group holds steady on screen
             // instead of sliding while the camera closes in.
@@ -958,7 +963,10 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         while clusterViews.count <= index {
             let view = ClusterAnnotationView(annotation: nil, reuseIdentifier: nil)
             view.isUserInteractionEnabled = true
-            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(clusterTapped(_:))))
+            view.onTap = { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.openGroup(view)
+            }
             overlay.insertSubview(view, belowSubview: userDot)
             clusterViews.append(view)
             clusterMembers.append([])
