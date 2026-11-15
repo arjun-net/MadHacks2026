@@ -53,6 +53,10 @@ struct RootView: View {
                 .zIndex(2)
         }
         .ignoresSafeArea(.keyboard)
+        // A building picked on the map is likely to be opened next: start on its history.
+        .onChange(of: mapViewModel.selectedAreaID) { _, areaID in
+            if let areaID { activityViewModel.prefetch(areaID: areaID) }
+        }
         .sheet(isPresented: $isSharingSheetPresented) {
             LocationSharingScreen(viewModel: sharingViewModel, onDone: { isSharingSheetPresented = false })
                 .safeAreaPadding(.top, 12) // clear of the drag indicator

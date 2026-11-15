@@ -40,6 +40,7 @@ struct CampusMapView: UIViewRepresentable {
         mapView.showsUserLocation = true
         mapView.tintColor = .systemBlue
         mapView.register(AreaAnnotationView.self, forAnnotationViewWithReuseIdentifier: AreaAnnotationView.reuseIdentifier)
+        mapView.register(ClusterAnnotationView.self, forAnnotationViewWithReuseIdentifier: ClusterAnnotationView.reuseIdentifier)
 
         context.coordinator.configure(mapView, for: campus)
         context.coordinator.animator.setStyle(mapView.traitCollection.userInterfaceStyle)
@@ -98,6 +99,16 @@ struct CampusMapView: UIViewRepresentable {
         private var canvas: MapCanvasView?
         private var prefetchJobs: [(area: MKMapRect, zooms: ClosedRange<Int>)] = []
         private var annotations: [String: AreaAnnotation] = [:]
+        /// Places of the group that was tapped open: shown one by one until the map zooms back out.
+        private var openedIDs: Set<String> = []
+        /// Camera distance the opened group was framed at; zooming well past it closes the group.
+        private var openedDistance: CLLocationDistance = 0
+        /// Places just merged back; the group marker they land in grows in.
+        private var regroupingIDs: Set<String> = []
+        /// Zooming out this far past an opened group's framing merges it again.
+        private static let regroupZoomOut = 1.15
+        /// Opened places whose markers haven't appeared yet; they grow in when they do.
+        private var poppingIDs: Set<String> = []
         private var gridTask: Task<Void, Never>?
 
         init(parent: CampusMapView) {
@@ -111,6 +122,9 @@ struct CampusMapView: UIViewRepresentable {
             selectedAreaID = nil
             gridTask?.cancel()
             animator.reset()
+            openedIDs = []
+            poppingIDs = []
+            stopGlide()
 
             mapView.removeOverlays(mapView.overlays)
             mapView.removeAnnotations(mapView.annotations.filter { $0 is AreaAnnotation })
@@ -145,7 +159,7 @@ struct CampusMapView: UIViewRepresentable {
                 (focusArea, 18...18),
             ]
             mapView.setCameraZoomRange(
-                MKMapView.CameraZoomRange(minCenterCoordinateDistance: 250, maxCenterCoordinateDistance: 20_000),
+                MKMapView.CameraZoomRange(minCenterCoordinateDistance: 150, maxCenterCoordinateDistance: 20_000),
                 animated: false
             )
             mapView.region = campus.region
@@ -173,18 +187,177 @@ struct CampusMapView: UIViewRepresentable {
             }
         }
 
+        /// The selected place and an opened group's places stay out of group markers.
+        private func isGroupable(_ id: String) -> Bool {
+            id != selectedAreaID && !openedIDs.contains(id)
+        }
+
         func refreshAnnotationStyles(in mapView: MKMapView) {
+            // A marker whose grouping must change is re-added rather than changed in place,
+            // which crashes MapKit (see `AreaAnnotationView.setGroupable`).
+            let clustered = Set(mapView.annotations.lazy.compactMap { $0 as? MKClusterAnnotation }
+                .flatMap(\.memberAnnotations).compactMap { ($0 as? AreaAnnotation)?.area.id })
+            var readd: [AreaAnnotation] = []
             for annotation in annotations.values {
-                guard let view = mapView.view(for: annotation) as? AreaAnnotationView else { continue }
-                view.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID)
+                let id = annotation.area.id
+                let wanted = isGroupable(id) ? ClusterAnnotationView.clusteringIdentifier : nil
+                if let view = mapView.view(for: annotation) as? AreaAnnotationView, !clustered.contains(id) {
+                    if view.clusteringIdentifier != wanted {
+                        readd.append(annotation)
+                    } else {
+                        view.configure(area: annotation.area, level: annotation.level, highlighted: id == selectedAreaID)
+                    }
+                } else if wanted == nil, clustered.contains(id) {
+                    // Selected while inside a group: bring it out on its own.
+                    readd.append(annotation)
+                }
+            }
+            if !readd.isEmpty {
+                mapView.removeAnnotations(readd)
+                mapView.addAnnotations(readd)
+            }
+            for cluster in mapView.annotations.compactMap({ $0 as? MKClusterAnnotation }) {
+                (mapView.view(for: cluster) as? ClusterAnnotationView).map { configure($0, for: cluster) }
             }
         }
 
+        private func configure(_ view: ClusterAnnotationView, for cluster: MKClusterAnnotation) {
+            let members = cluster.memberAnnotations.compactMap { $0 as? AreaAnnotation }
+            let levels = Dictionary(uniqueKeysWithValues: members.map { ($0.area.id, $0.level) })
+            view.configure(members: members.map(\.area)) { levels[$0] ?? nil }
+        }
+
+        /// Opens the group: every place in it shows on its own (no smaller groups), and the map
+        /// glides in just far enough for them to sit apart, keeping them all on screen.
+        private func open(_ cluster: MKClusterAnnotation, in mapView: MKMapView) {
+            let members = cluster.memberAnnotations.compactMap { $0 as? AreaAnnotation }
+            guard !members.isEmpty else { return }
+            closeOpenedGroup(in: mapView)
+
+            let insets = parent.contentInsets
+            let available = mapView.bounds.inset(by: insets).size
+            let currentDistance = mapView.camera.centerCoordinateDistance
+            let minDistance = mapView.cameraZoomRange.minCenterCoordinateDistance
+            let points = members.map { mapView.convert($0.coordinate, toPointTo: mapView) }
+            let factor = GroupZoom.factor(points: points, available: available, maxFactor: max(1, currentDistance / minDistance))
+
+            openedIDs = Set(members.map(\.area.id))
+            poppingIDs = openedIDs
+            openedDistance = currentDistance / factor
+
+            var rect = MKMapRect.null
+            for member in members {
+                rect = rect.union(MKMapRect(origin: MKMapPoint(member.coordinate), size: MKMapSize(width: 0, height: 0)))
+            }
+            let visible = mapView.visibleMapRect
+            let pointsPerMapPoint = Double(mapView.bounds.width) / visible.width * factor
+            let size = MKMapSize(width: Double(available.width) / pointsPerMapPoint, height: Double(available.height) / pointsPerMapPoint)
+            let target = MKMapRect(origin: MKMapPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), size: size)
+            // The whole screen's worth of map once the group sits in the open middle.
+            let fitted = mapView.mapRectThatFits(target, edgePadding: insets)
+            glide(mapView, to: MKMapPoint(x: fitted.midX, y: fitted.midY), distance: currentDistance * fitted.width / visible.width)
+
+            // Swap the group for its places right after the glide's first frame, so building
+            // the markers doesn't hold up the start. Re-adding them makes MapKit build fresh,
+            // ungrouped markers.
+            DispatchQueue.main.async { [weak mapView] in
+                guard let mapView else { return }
+                mapView.removeAnnotations(members)
+                mapView.addAnnotations(members)
+            }
+        }
+
+        // MARK: Camera glide
+
+        private var glideLink: CADisplayLink?
+        private var glideState: (from: MKMapPoint, to: MKMapPoint, fromDistance: Double, toDistance: Double, start: CFTimeInterval)?
+        private weak var glideMap: MKMapView?
+        private static let glideDuration: CFTimeInterval = 0.7
+        private let haptics: UIImpactFeedbackGenerator = {
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.prepare()
+            return generator
+        }()
+
+        /// An eased flight to a new center and zoom, drawn by us every frame: it moves off on
+        /// the tap and settles softly. MapKit's own animation is short and lurches at the start. Zoom changes evenly in scale, so the
+        /// map never seems to speed up as it gets closer.
+        private func glide(_ mapView: MKMapView, to center: MKMapPoint, distance: CLLocationDistance) {
+            let range = mapView.cameraZoomRange
+            let toDistance = min(range?.maxCenterCoordinateDistance ?? .greatestFiniteMagnitude, max(range?.minCenterCoordinateDistance ?? 0, distance))
+            let from = mapView.visibleMapRect
+            glideState = (MKMapPoint(x: from.midX, y: from.midY), center, mapView.camera.centerCoordinateDistance, toDistance, CACurrentMediaTime())
+            glideMap = mapView
+            glideStep(nil)
+            if glideLink == nil {
+                let link = CADisplayLink(target: self, selector: #selector(glideStep(_:)))
+                link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+                link.add(to: .main, forMode: .common)
+                glideLink = link
+            }
+        }
+
+        /// One frame of the glide. Also run once straight away, so the map moves on the tap itself.
+        @objc private func glideStep(_ link: CADisplayLink?) {
+            guard let state = glideState, let mapView = glideMap, !isTouching(mapView) else { return stopGlide() }
+            let t = min(1, (CACurrentMediaTime() - state.start) / Self.glideDuration)
+            let e = easeOutQuart(t)
+            // Distance moves evenly on a log scale; the center follows how far the zoom has
+            // come, so the group stays steady under the finger's spot rather than sliding.
+            let distance = state.fromDistance * pow(state.toDistance / state.fromDistance, e)
+            let zoomProgress = state.fromDistance == state.toDistance
+                ? e
+                : (1 / distance - 1 / state.fromDistance) / (1 / state.toDistance - 1 / state.fromDistance)
+            let center = MKMapPoint(
+                x: state.from.x + (state.to.x - state.from.x) * zoomProgress,
+                y: state.from.y + (state.to.y - state.from.y) * zoomProgress
+            )
+            mapView.camera = MKMapCamera(lookingAtCenter: center.coordinate, fromDistance: distance, pitch: 0, heading: 0)
+            canvas?.sync()
+            if t >= 1 {
+                stopGlide()
+                canvas?.cameraDidStop()
+                // Where the glide really landed (MapKit may have clamped it) is the baseline
+                // for zooming back out.
+                if !openedIDs.isEmpty { openedDistance = mapView.camera.centerCoordinateDistance }
+            }
+        }
+
+        private func stopGlide() {
+            guard glideLink != nil || glideState != nil else { return }
+            glideLink?.invalidate()
+            glideLink = nil
+            glideState = nil
+        }
+
+        /// A finger on the map takes over from the glide.
+        private func isTouching(_ mapView: MKMapView) -> Bool {
+            // MapKit keeps its pan and pinch on the map itself or its scroll container.
+            ([mapView] + mapView.subviews).contains { view in
+                view.gestureRecognizers?.contains { $0.state == .began || $0.state == .changed } == true
+            }
+        }
+
+        /// Lets the opened group's places merge again.
+        private func closeOpenedGroup(in mapView: MKMapView) {
+            guard !openedIDs.isEmpty else { return }
+            let members = openedIDs.compactMap { annotations[$0] }
+            regroupingIDs = openedIDs
+            openedIDs = []
+            poppingIDs = []
+            mapView.removeAnnotations(members)
+            mapView.addAnnotations(members)
+            // Places that didn't land in a group (still far apart) mustn't pop a later one.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.regroupingIDs = [] }
+        }
+
         func recenter(_ mapView: MKMapView, animated: Bool) {
+            stopGlide()
             mapView.setVisibleMapRect(parent.campus.focusRect, edgePadding: parent.contentInsets, animated: animated)
         }
 
         func focus(on area: CampusArea, in mapView: MKMapView) {
+            stopGlide()
             let center = MKMapPoint(area.coordinate.clCoordinate)
             let span = MKMapPointsPerMeterAtLatitude(area.coordinate.latitude) * 420
             let rect = MKMapRect(x: center.x - span / 2, y: center.y - span / 2, width: span, height: span)
@@ -226,28 +399,71 @@ struct CampusMapView: UIViewRepresentable {
         // MARK: MKMapViewDelegate
 
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            // Mid-glide every frame reports a change; the glide keeps the canvas in step itself.
+            guard glideState == nil else { return }
             canvas?.cameraWillMove()
         }
 
         func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
             canvas?.sync()
+            // Checked while the fingers are still pinching, so places merge as you zoom out.
+            closeOpenedGroupIfZoomedOut(mapView)
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            guard glideState == nil else { return }
             canvas?.cameraDidStop()
+            // Not mid-glide: the glide starts far out, on its way in to the group.
+            closeOpenedGroupIfZoomedOut(mapView)
+        }
+
+        /// Merges the opened group again once the map is zoomed out past where it opened.
+        /// Not mid-glide: the glide starts far out, on its way in to the group.
+        private func closeOpenedGroupIfZoomedOut(_ mapView: MKMapView) {
+            guard !openedIDs.isEmpty, glideState == nil,
+                  mapView.camera.centerCoordinateDistance > openedDistance * Self.regroupZoomOut else { return }
+            closeOpenedGroup(in: mapView)
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let cluster = annotation as? MKClusterAnnotation {
+                let view = mapView.dequeueReusableAnnotationView(
+                    withIdentifier: ClusterAnnotationView.reuseIdentifier,
+                    for: cluster
+                ) as? ClusterAnnotationView
+                view.map { configure($0, for: cluster) }
+                let memberIDs = cluster.memberAnnotations.compactMap { ($0 as? AreaAnnotation)?.area.id }
+                if !regroupingIDs.isEmpty, memberIDs.contains(where: regroupingIDs.contains) {
+                    regroupingIDs.subtract(memberIDs)
+                    view?.popIn()
+                }
+                view?.onTap = { [weak self, weak mapView, weak view] in
+                    guard let self, let mapView, let cluster = view?.annotation as? MKClusterAnnotation else { return }
+                    self.haptics.impactOccurred()
+                    self.open(cluster, in: mapView)
+                }
+                return view
+            }
             guard let annotation = annotation as? AreaAnnotation else { return nil }
             let view = mapView.dequeueReusableAnnotationView(
                 withIdentifier: AreaAnnotationView.reuseIdentifier,
                 for: annotation
             ) as? AreaAnnotationView
-            view?.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID)
+            let id = annotation.area.id
+            view?.setGroupable(isGroupable(id))
+            view?.configure(area: annotation.area, level: annotation.level, highlighted: id == selectedAreaID)
+            if poppingIDs.remove(id) != nil {
+                view?.popIn(delay: Double(poppingIDs.count) * 0.025)
+            }
             return view
         }
 
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            if let cluster = view.annotation as? MKClusterAnnotation {
+                // Opening is handled by the marker's own tap (it answers faster).
+                mapView.deselectAnnotation(cluster, animated: false)
+                return
+            }
             guard let annotation = view.annotation as? AreaAnnotation else {
                 // The blue dot: no "My Location" bubble.
                 if let annotation = view.annotation { mapView.deselectAnnotation(annotation, animated: false) }

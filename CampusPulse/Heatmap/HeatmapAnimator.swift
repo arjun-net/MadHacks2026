@@ -1,43 +1,32 @@
 import QuartzCore
 import UIKit
 
-/// Drives smooth transitions between heat grids (cross-fading density as data updates)
-/// and fades the whole layer in and out when it's toggled.
+/// Shows heat grids on the canvas's heat layer: cross-fades to each new grid as data updates,
+/// and fades the layer in and out when it's toggled.
+///
+/// The image is colored on a background thread and the fades run on the GPU (Core Animation),
+/// so an update never costs the main thread more than swapping one image. Blending grids and
+/// coloring them on the main thread every frame used to stall zooming and taps for over a
+/// second on each update.
 @MainActor
 final class HeatmapAnimator: NSObject {
     /// The canvas's heat layer; the image stretches over the campus heat bounds.
     private weak var layer: CALayer?
-    private var displayLink: CADisplayLink?
 
-    private var fromGrid: HeatmapGrid?
-    private var toGrid: HeatmapGrid?
     private(set) var currentGrid: HeatmapGrid?
-    private var transitionStart: CFTimeInterval = 0
     private let transitionDuration: CFTimeInterval = 1.2
+    private let visibilityDuration: CFTimeInterval = 0.25
 
-    private var currentAlpha: CGFloat = 1
-    private var targetAlpha: CGFloat = 1
+    private var isVisible = true
     /// Which heat ramp to color with; follows the map's appearance.
     private var style: UIUserInterfaceStyle = .light
+    /// Bumped per image request, so a slow, older image never replaces a newer one.
+    private var generation = 0
 
     func attach(_ layer: CALayer) {
         self.layer = layer
-        show(currentGrid?.makeImage(style: style))
-        setOpacity(currentAlpha)
-    }
-
-    private func show(_ image: CGImage?) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer?.contents = image
-        CATransaction.commit()
-    }
-
-    private func setOpacity(_ alpha: CGFloat) {
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer?.opacity = Float(alpha)
-        CATransaction.commit()
+        layer.opacity = isVisible ? 1 : 0
+        if let currentGrid { render(currentGrid, fade: false) }
     }
 
     /// Re-colors the current heat field when the appearance changes.
@@ -45,74 +34,58 @@ final class HeatmapAnimator: NSObject {
         let resolved: UIUserInterfaceStyle = newStyle == .dark ? .dark : .light
         guard resolved != style else { return }
         style = resolved
-        show(currentGrid?.makeImage(style: style))
+        if let currentGrid { render(currentGrid, fade: false) }
     }
 
     func reset() {
-        stop()
-        fromGrid = nil
-        toGrid = nil
+        generation += 1
         currentGrid = nil
+        layer?.removeAllAnimations()
+        layer?.contents = nil
     }
 
     func transition(to grid: HeatmapGrid) {
-        if let currentGrid, currentGrid.width == grid.width, currentGrid.height == grid.height {
-            fromGrid = currentGrid
-        } else {
-            fromGrid = .empty(width: grid.width, height: grid.height)
-        }
-        toGrid = grid
-        transitionStart = CACurrentMediaTime()
-        startIfNeeded()
+        currentGrid = grid
+        render(grid, fade: true)
     }
 
     func setVisible(_ visible: Bool) {
-        let target: CGFloat = visible ? 1 : 0
-        guard target != targetAlpha else { return }
-        targetAlpha = target
-        startIfNeeded()
+        guard visible != isVisible, let layer else {
+            isVisible = visible
+            return
+        }
+        isVisible = visible
+        let from = layer.presentation()?.opacity ?? layer.opacity
+        let to: Float = visible ? 1 : 0
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = from
+        fade.toValue = to
+        fade.duration = visibilityDuration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.opacity = to
+        layer.add(fade, forKey: "visibility")
     }
 
-    private func startIfNeeded() {
-        guard displayLink == nil else { return }
-        let link = CADisplayLink(target: self, selector: #selector(step(_:)))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 60, preferred: 30)
-        link.add(to: .main, forMode: .common)
-        displayLink = link
-    }
-
-    private func stop() {
-        displayLink?.invalidate()
-        displayLink = nil
-    }
-
-    @objc private func step(_ link: CADisplayLink) {
-        var needsMoreFrames = false
-
-        if let from = fromGrid, let to = toGrid {
-            let progress = min(1, (CACurrentMediaTime() - transitionStart) / transitionDuration)
-            let eased = progress < 0.5
-                ? 4 * progress * progress * progress
-                : 1 - pow(-2 * progress + 2, 3) / 2
-            let grid = from.blended(with: to, fraction: Float(eased))
-            currentGrid = grid
-            // Cheaper frames mid-transition; full detail once it settles.
-            show(grid.makeImage(scale: progress >= 1 ? 2 : 1, style: style))
-            if progress >= 1 {
-                fromGrid = nil
-                toGrid = nil
+    /// Colors `grid` off the main thread, then shows it (cross-fading from the old image).
+    private func render(_ grid: HeatmapGrid, fade: Bool) {
+        generation += 1
+        let requested = generation
+        let style = style
+        Task { [weak self] in
+            let image = await Task.detached(priority: .userInitiated) { grid.makeImage(scale: 2, style: style) }.value
+            guard let self, requested == self.generation, let layer = self.layer else { return }
+            CATransaction.begin()
+            if fade, layer.contents != nil {
+                let crossfade = CATransition()
+                crossfade.type = .fade
+                crossfade.duration = self.transitionDuration
+                crossfade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                layer.add(crossfade, forKey: "contents")
             } else {
-                needsMoreFrames = true
+                CATransaction.setDisableActions(true)
             }
+            layer.contents = image
+            CATransaction.commit()
         }
-
-        if currentAlpha != targetAlpha {
-            let delta = targetAlpha - currentAlpha
-            currentAlpha = abs(delta) < 0.02 ? targetAlpha : currentAlpha + delta * 0.2
-            setOpacity(currentAlpha)
-            needsMoreFrames = needsMoreFrames || currentAlpha != targetAlpha
-        }
-
-        if !needsMoreFrames { stop() }
     }
 }

@@ -18,13 +18,15 @@ struct LiveCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         PulsingDot(color: Theme.Colors.live, size: 6)
-                        Text("Right now").sectionLabelStyle()
+                        Text("Right now")
+                            .typeStyle(.caption)
+                            .foregroundStyle(Theme.Colors.textTertiary)
                     }
                     Text(activity.level.title)
                         .typeStyle(.metric)
                         .foregroundStyle(activity.level.textColor)
                         .contentTransition(.numericText())
-                    Text(activity.countLabel)
+                    Text("\(activity.countLabel) · \(comparison.title.prefix(1).lowercased() + comparison.title.dropFirst())")
                         .typeStyle(.subheadline)
                         .foregroundStyle(Theme.Colors.textSecondary)
                 }
@@ -33,16 +35,6 @@ struct LiveCard: View {
                     .frame(width: 92, height: 44)
                     .padding(.top, 8)
             }
-
-            HStack(spacing: 6) {
-                Image(systemName: comparison.symbol)
-                Text(comparison.title)
-            }
-            .typeStyle(.badge)
-            .foregroundStyle(Theme.Colors.ink)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
 
             Rectangle().fill(Theme.Colors.rule).frame(height: 1)
 
@@ -65,17 +57,13 @@ struct LiveCard: View {
             }
 
             if let quiet = insights.quietestLaterToday {
-                HStack(spacing: 10) {
-                    Image(systemName: "leaf.fill")
-                        .foregroundStyle(Theme.Colors.positive)
-                    Text("Quietest later today is usually around **\(Formatting.hour(quiet.hour))**.")
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                }
-                .typeStyle(.subheadline)
+                Text("Quietest later today is usually around \(Formatting.hour(quiet.hour)).")
+                    .typeStyle(.subheadline)
+                    .foregroundStyle(Theme.Colors.textSecondary)
             }
         }
         .padding(18)
-        .paper(cornerRadius: Theme.Radius.sm)
+        .card(cornerRadius: Theme.Radius.sm)
         .accessibilityElement(children: .combine)
     }
 

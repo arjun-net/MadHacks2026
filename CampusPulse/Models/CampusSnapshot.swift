@@ -32,7 +32,7 @@ struct CampusSnapshot: Hashable, Sendable {
     let participantCount: Int
     let overallIntensity: Double
     let cells: [DensityCell]
-    let areas: [AreaActivity]
+    var areas: [AreaActivity]
     /// Campus-wide intensity, oldest → newest.
     let history: [Double]
     let privacyThreshold: Int
@@ -43,8 +43,11 @@ struct CampusSnapshot: Hashable, Sendable {
     /// Not enough aggregate data to render a meaningful (and private) heatmap.
     var isEmpty: Bool { cells.isEmpty || participantCount < 30 }
 
+    /// Busiest first; equally busy places (say, all packed) by headcount.
     var areasByActivity: [AreaActivity] {
-        areas.sorted { $0.intensity > $1.intensity }
+        areas.sorted {
+            $0.intensity != $1.intensity ? $0.intensity > $1.intensity : ($0.estimatedCount ?? 0) > ($1.estimatedCount ?? 0)
+        }
     }
 
     func busiest(_ count: Int) -> [AreaActivity] {

@@ -47,41 +47,27 @@ struct LocationSharingScreen: View {
     // MARK: Hero
 
     private var hero: some View {
-        VStack(spacing: 14) {
-            SharingBeacon(isActive: viewModel.isActive, tint: viewModel.tint)
-                .frame(height: 190)
-
-            VStack(spacing: 6) {
-                Text(viewModel.statusTitle)
-                    .typeStyle(.title)
-                    .foregroundStyle(Theme.Colors.textPrimary)
-                    .contentTransition(.opacity)
-                Text(viewModel.statusSubtitle)
-                    .typeStyle(.body)
-                    .foregroundStyle(Theme.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text(viewModel.statusTitle)
+                .typeStyle(.title)
+                .foregroundStyle(Theme.Colors.textPrimary)
+                .contentTransition(.opacity)
+            Text(viewModel.statusSubtitle)
+                .typeStyle(.body)
+                .foregroundStyle(Theme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 12)
     }
 
     // MARK: Toggle
 
     private var toggleCard: some View {
         HStack(spacing: 14) {
-            Image(systemName: viewModel.isSharingOn ? "location.fill" : "location")
-                .imageScale(.large)
-                .foregroundStyle(viewModel.isSharingOn ? Theme.Colors.onAccent : Theme.Colors.ink)
-                .frame(width: 42, height: 42)
-                .background(viewModel.isSharingOn ? Theme.Colors.accentFill : Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(viewModel.isSharingOn ? Color.clear : Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
-                .contentTransition(.symbolEffect(.replace))
-
             VStack(alignment: .leading, spacing: 2) {
                 Text("Share my location")
-                    .typeStyle(.title3)
+                    .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text("Anonymous · about every 2 min")
                     .typeStyle(.caption)
@@ -97,7 +83,7 @@ struct LocationSharingScreen: View {
                 .accessibilityLabel("Share my location")
         }
         .padding(16)
-        .paper(cornerRadius: Theme.Radius.sm, elevated: true)
+        .card(cornerRadius: Theme.Radius.sm)
         .sensoryFeedback(.success, trigger: viewModel.isSharingOn) { _, new in new }
         .sensoryFeedback(.impact(weight: .light), trigger: viewModel.isSharingOn) { _, new in !new }
     }
@@ -142,7 +128,7 @@ struct LocationSharingScreen: View {
     // MARK: Status
 
     private var statusGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+        VStack(spacing: 0) {
             StatusTile(title: "Status", symbol: "dot.radiowaves.left.and.right", tint: viewModel.tint) {
                 HStack(spacing: 8) {
                     PulsingDot(color: viewModel.tint, size: 8, isAnimating: viewModel.isActive)
@@ -150,6 +136,7 @@ struct LocationSharingScreen: View {
                 }
             }
 
+            RowRule(inset: 16)
             StatusTile(title: "Last update", symbol: "checkmark.circle", tint: Theme.Colors.accent) {
                 if let last = viewModel.lastUpdateAt, viewModel.isActive {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -161,6 +148,7 @@ struct LocationSharingScreen: View {
                 }
             }
 
+            RowRule(inset: 16)
             StatusTile(title: "Next update", symbol: "timer", tint: Theme.Colors.accent) {
                 if let next = viewModel.nextUpdateAt, viewModel.isActive {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -178,12 +166,14 @@ struct LocationSharingScreen: View {
                 }
             }
 
+            RowRule(inset: 16)
             // Readings that couldn't be sent yet (offline or server down); they go out automatically.
             StatusTile(title: "Waiting to send", symbol: "tray.full", tint: viewModel.pendingCount > 0 ? Theme.Colors.warning : Theme.Colors.accent) {
                 Text(viewModel.pendingCount == 0 ? "None" : "\(viewModel.pendingCount)")
                     .monospacedDigit()
             }
         }
+        .card(cornerRadius: Theme.Radius.sm)
     }
 
     // MARK: How it works
@@ -193,7 +183,7 @@ struct LocationSharingScreen: View {
             SectionHeader(title: "How it works")
 
             HowItWorksStep(number: 1, symbol: "iphone.radiowaves.left.and.right", title: "Your phone checks in",
-                           detail: "Every 2 minutes, while sharing is on, the app sends your current location and the time, with no ID.")
+                           detail: "Every 2 minutes, while sharing is on, the app sends your current location with a random ID for this install.")
             HowItWorksStep(number: 2, symbol: "square.grid.3x3.fill", title: "Combined with everyone else",
                            detail: "Check-ins are grouped into ~\(Int(AppConfig.aggregationCellMeters)) m cells and counted together.")
             HowItWorksStep(number: 3, symbol: "map.fill", title: "Only crowds appear",
@@ -205,18 +195,7 @@ struct LocationSharingScreen: View {
 
     private var privacyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Theme.Colors.sectionRule)
-                    .frame(height: Theme.Stroke.sectionRule)
-                HStack {
-                    Text("Your privacy").sectionLabelStyle()
-                    Spacer()
-                    Image(systemName: "lock.shield.fill")
-                        .foregroundStyle(Theme.Colors.positive)
-                }
-                .padding(.top, 8)
-            }
+            SectionHeader(title: "Your privacy")
             ForEach(PrivacyContent.principles.prefix(4)) { item in
                 PrivacyPoint(symbol: item.symbol, title: item.title, detail: item.detail, tint: Theme.Colors.positive)
             }
@@ -278,23 +257,20 @@ private struct StatusTile<Value: View>: View {
     let tint: Color
     @ViewBuilder var value: () -> Value
 
+    /// One label/value row of the status list (`symbol` and `tint` are kept for call sites).
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol)
-                    .imageScale(.small)
-                    .foregroundStyle(tint)
-                Text(title).sectionLabelStyle()
-            }
+        HStack(spacing: 12) {
+            Text(title)
+                .typeStyle(.body)
+                .foregroundStyle(Theme.Colors.textSecondary)
+            Spacer(minLength: 8)
             value()
-                .typeStyle(.metricSmall)
+                .typeStyle(.body)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .card(cornerRadius: Theme.Radius.sm)
+        .padding(.horizontal, 16)
+        .frame(minHeight: 48)
         .accessibilityElement(children: .combine)
     }
 }
@@ -323,11 +299,10 @@ private struct HowItWorksStep: View {
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(spacing: 0) {
-                Image(systemName: symbol)
-                    .imageScale(.medium)
-                    .foregroundStyle(Theme.Colors.onAccent)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                Text("\(number)")
+                    .typeStyle(.headline)
+                    .foregroundStyle(Theme.Colors.accent)
+                    .frame(width: 24, height: 24)
                 if !isLast {
                     Rectangle()
                         .fill(Theme.Colors.rule)

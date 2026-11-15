@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// Light ("Day Edition"), dark ("Night Edition"), or follow the system.
+/// Light, dark, or follow the system.
 enum Appearance: String, CaseIterable, Identifiable {
     case light, dark, system
 
@@ -10,8 +10,8 @@ enum Appearance: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .light: "Day"
-        case .dark: "Night"
+        case .light: "Light"
+        case .dark: "Dark"
         case .system: "System"
         }
     }

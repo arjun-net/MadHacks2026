@@ -90,6 +90,16 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private let terrain = SCNNode()
     private let overlay = PassthroughView()
     private var markers: [String: AreaAnnotationView] = [:]
+    /// Group markers for places that overlap on screen, reused frame to frame.
+    private var clusterViews: [ClusterAnnotationView] = []
+    /// Member IDs each group marker shows now (most popular first).
+    private var clusterMembers: [[String]] = []
+    /// Places of the group that was tapped open: shown one by one until the camera pulls back.
+    private var openedIDs: Set<String> = []
+    /// Camera distance the opened group was framed at; zooming well past it closes the group.
+    private var openedDistance: Float = 0
+    /// Where each place's marker sits on screen, as of the last frame.
+    private var markerAnchors: [String: CGPoint] = [:]
     private var levels: [String: ActivityLevel] = [:]
     private let userDot = UserDotView()
 
@@ -135,12 +145,18 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private var camera = CameraState(target: .zero, distance: 3000, heading: 0)
     /// Angle from straight down.
     private let pitch: Float = 54 * .pi / 180
-    private let distanceRange: ClosedRange<Float> = 300...6500
+    private let distanceRange: ClosedRange<Float> = 200...6500
     private var velocity = SIMD2<Float>.zero
-    private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval)?
+    private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval, softLanding: Bool)?
     private var displayLink: CADisplayLink?
     private var lastTick: CFTimeInterval = 0
     private var lastPanLocation: CGPoint?
+    /// Fingers down at the last pan update. When it changes, the pan's location (the fingers'
+    /// midpoint) jumps, so that update must not move the map.
+    private var panTouchCount = 0
+    /// When the finger count last changed or a pinch last moved; a fling right after either
+    /// would carry the jump's speed.
+    private var lastGestureDisturbance: CFTimeInterval = 0
     private var lastPinchLocation: CGPoint?
 
     private let locationManager = CLLocationManager()
@@ -370,9 +386,11 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         if animated { animateCamera(to: to) } else { camera = to; applyCamera() }
     }
 
+    /// Selected, then the opened group's places, then busiest: who wins when labels overlap.
     private func sortedMarkers() -> [CampusArea] {
         campus.areas.sorted {
             if ($0.id == selectedAreaID) != ($1.id == selectedAreaID) { return $0.id == selectedAreaID }
+            if openedIDs.contains($0.id) != openedIDs.contains($1.id) { return openedIDs.contains($0.id) }
             return $0.popularity > $1.popularity
         }
     }
@@ -382,6 +400,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         for area in campus.areas {
             markers[area.id]?.configure(area: area, level: levels[area.id], highlighted: area.id == selectedAreaID)
         }
+        // Group markers redraw their busyness ring next frame.
+        clusterMembers = clusterMembers.map { _ in [] }
         updateOverlay()
     }
 
@@ -389,6 +409,39 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         guard let id = gesture.view?.accessibilityIdentifier else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         onSelectArea(id)
+    }
+
+    private let haptics: UIImpactFeedbackGenerator = {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        return generator
+    }()
+
+    private func openGroup(_ view: ClusterAnnotationView) {
+        guard let index = clusterViews.firstIndex(of: view), index < clusterMembers.count else { return }
+        let members = clusterMembers[index].compactMap { campus.area(withID: $0) }
+        guard !members.isEmpty else { return }
+        haptics.impactOccurred()
+
+        // Open the group: its places show one by one, and the camera glides in just far
+        // enough for them to sit apart while all staying on screen.
+        let available = bounds.inset(by: contentInsets).size
+        let points = members.compactMap { markerAnchors[$0.id] }
+        let factor = GroupZoom.factor(points: points, available: available, maxFactor: CGFloat(max(1, camera.distance / distanceRange.lowerBound)))
+        openedIDs = Set(members.map(\.id))
+        markerOrder = sortedMarkers()
+        for (index, area) in members.enumerated() {
+            markers[area.id]?.popIn(delay: Double(index) * 0.025)
+        }
+
+        let scenePoints = members.map { scenePoint(MKMapPoint($0.coordinate.clCoordinate)) }
+        let xs = scenePoints.map(\.x), zs = scenePoints.map(\.z)
+        var to = camera
+        to.target = SIMD2((xs.min()! + xs.max()!) / 2, (zs.min()! + zs.max()!) / 2)
+        to.distance = max(distanceRange.lowerBound, camera.distance / Float(factor))
+        openedDistance = to.distance
+        animateCamera(to: to, duration: 0.7, softLanding: true)
+        updateOverlay()
     }
 
     // MARK: Basemap textures
@@ -459,9 +512,40 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         }
         material.blendMode = .alpha
         material.isDoubleSided = true
+        // Contour lines over the stepped tints: a relief map rather than smooth plastic.
+        material.shaderModifiers = [.surface: Self.contourShader]
+        material.setValue(
+            style == .dark ? UIColor(red: 0.05, green: 0.02, blue: 0.02, alpha: 0.75) : UIColor(red: 0.18, green: 0.06, blue: 0.04, alpha: 0.55),
+            forKey: "contourInk"
+        )
         terrainMaterials[style] = material
         return material
     }
+
+    /// How many height steps (tint layers and contour intervals) the mountains are cut into.
+    private static let contourSteps = 10
+
+    /// Topographic contour lines, drawn per pixel from the density the texture coordinate
+    /// already carries: a thin ink line at each step edge and a bolder index line every fifth,
+    /// like a survey map. Widths are in screen pixels (via `fwidth`), so lines stay crisp at
+    /// any zoom and on any slope. A few arithmetic ops per pixel; no extra geometry or passes.
+    private static let contourShader = """
+    #pragma arguments
+    float4 contourInk;
+    #pragma body
+    float steps = \(Double(contourSteps));
+    float f = _surface.diffuseTexcoord.x * steps;
+    float distanceToLine = abs(fract(f + 0.5) - 0.5);
+    float pixelsPerStep = max(fwidth(f), 1e-4);
+    bool isIndex = fmod(round(f), 5.0) < 0.5;
+    float halfWidth = isIndex ? 0.9 : 0.45;
+    float line = 1.0 - smoothstep(halfWidth, halfWidth + 0.9, distanceToLine / pixelsPerStep);
+    // None on the flat floor around the mountains.
+    line *= smoothstep(0.6, 1.2, f);
+    float ink = line * contourInk.a;
+    _surface.diffuse.rgb = mix(_surface.diffuse.rgb, contourInk.rgb * _surface.diffuse.a, ink);
+    _surface.emission.rgb *= (1.0 - ink);
+    """
 
     private static func rampStops(style: UIUserInterfaceStyle) -> [HeatPalette.Stop] {
         style == .dark
@@ -487,16 +571,19 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         var pixels = [UInt8](repeating: 0, count: width * 4)
         for i in 0..<width {
             let t = Double(i) / Double(width - 1)
-            let upper = stops.firstIndex { $0.location >= t } ?? stops.count - 1
+            // Colors come in flat steps (layers of a relief model); the fade-in edge stays smooth.
+            let steps = Double(contourSteps)
+            let tint = min(1, (floor(t * steps) + 0.5) / steps)
+            let upper = stops.firstIndex { $0.location >= tint } ?? stops.count - 1
             let lower = max(0, upper - 1)
             let a = stops[lower], b = stops[upper]
-            let f = b.location > a.location ? (t - a.location) / (b.location - a.location) : 0
+            let f = b.location > a.location ? (tint - a.location) / (b.location - a.location) : 0
             let rgb = (a.red + (b.red - a.red) * f, a.green + (b.green - a.green) * f, a.blue + (b.blue - a.blue) * f)
             // Invisible at zero, solid from about a fifth of the way up.
             let edge = min(1, max(0, (t - 0.015) / 0.2))
             var alpha = edge * edge * (3 - 2 * edge) * (style == .dark ? 0.97 : 0.94)
             var gain = 1.0
-            if glow { gain = 0.06 + 0.16 * t; alpha = 1 }
+            if glow { gain = 0.06 + 0.16 * tint; alpha = 1 }
             pixels[i * 4 + 0] = UInt8(min(255, rgb.0 * gain * alpha * 255))
             pixels[i * 4 + 1] = UInt8(min(255, rgb.1 * gain * alpha * 255))
             pixels[i * 4 + 2] = UInt8(min(255, rgb.2 * gain * alpha * 255))
@@ -705,7 +792,9 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         return (CGPoint(x: CGFloat(x + 1) / 2 * bounds.width, y: CGFloat(1 - y) / 2 * bounds.height), clip.w)
     }
 
-    /// Where a screen point lands on the ground, or nil above the horizon.
+    /// Where a screen point lands on the ground, or nil above the horizon. Points so far off
+    /// that a fingertip's move there would throw the map miles (near the horizon) count as
+    /// nil too.
     private func groundPoint(_ point: CGPoint) -> SIMD2<Float>? {
         guard bounds.width > 0, bounds.height > 0 else { return nil }
         let x = Float(point.x / bounds.width) * 2 - 1
@@ -716,41 +805,64 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         let direction = SIMD3<Float>(q.x, q.y, q.z) / q.w - eye
         guard direction.y < -1e-5 else { return nil }
         let t = -eye.y / direction.y
-        return SIMD2(eye.x + direction.x * t, eye.z + direction.z * t)
+        let ground = SIMD2(eye.x + direction.x * t, eye.z + direction.z * t)
+        guard simd_distance(ground, camera.target) < camera.distance * 4 else { return nil }
+        return ground
     }
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
         let location = gesture.location(in: sceneView)
+        let touches = gesture.numberOfTouches
         switch gesture.state {
         case .began:
             cameraAnimation = nil
             velocity = .zero
             lastPanLocation = location
+            panTouchCount = touches
         case .changed:
+            if touches != panTouchCount {
+                // A finger landed or lifted: start again from the new midpoint, without moving.
+                panTouchCount = touches
+                lastPanLocation = location
+                lastGestureDisturbance = CACurrentMediaTime()
+                return
+            }
             if let last = lastPanLocation, let from = groundPoint(last), let to = groundPoint(location) {
                 camera.target += from - to
                 applyCamera()
             }
             lastPanLocation = location
         case .ended:
-            // Keep gliding in the direction of the flick.
+            defer { lastPanLocation = nil; panTouchCount = 0 }
+            // Keep gliding in the direction of the flick, but not out of a pinch or a finger
+            // change, whose speed is the jump's, not the hand's.
+            guard CACurrentMediaTime() - lastGestureDisturbance > 0.15 else { return }
             let v = gesture.velocity(in: sceneView)
             let ahead = CGPoint(x: location.x - v.x * 0.05, y: location.y - v.y * 0.05)
             if let a = groundPoint(location), let b = groundPoint(ahead) {
                 // A short, quick glide: stops in about a third of a second.
                 velocity = (b - a) / 0.05 * 0.6
+                // Never faster than a few screens a second.
+                let limit = camera.distance * 3
+                if simd_length(velocity) > limit { velocity = simd_normalize(velocity) * limit }
                 startTicking()
             }
-            lastPanLocation = nil
         default:
             lastPanLocation = nil
+            panTouchCount = 0
         }
     }
 
     @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
-        guard gesture.state == .changed || gesture.state == .began else { return }
+        guard gesture.state == .changed || gesture.state == .began else {
+            lastGestureDisturbance = CACurrentMediaTime()
+            return
+        }
+        // Mid-pinch a finger can lift without ending the pinch; its midpoint then jumps.
+        guard gesture.numberOfTouches >= 2 else { return }
         cameraAnimation = nil
         velocity = .zero
+        lastGestureDisturbance = CACurrentMediaTime()
         let location = gesture.location(in: sceneView)
         let before = groundPoint(location)
         camera.distance /= Float(gesture.scale)
@@ -763,13 +875,14 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         }
     }
 
-    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4) {
+    /// `softLanding` settles more gently (opening a group); both start moving at once.
+    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4, softLanding: Bool = false) {
         velocity = .zero
         var to = clamped(state)
         // Turn the short way round.
         let turn = remainder(to.heading - camera.heading, 2 * .pi)
         to.heading = camera.heading + turn
-        cameraAnimation = (camera, to, CACurrentMediaTime(), duration)
+        cameraAnimation = (camera, to, CACurrentMediaTime(), duration, softLanding)
         startTicking()
     }
 
@@ -795,9 +908,13 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
         if let animation = cameraAnimation {
             let t = min(1, (now - animation.start) / animation.duration)
-            let e = Float(1 - pow(1 - t, 3))
-            camera.target = animation.from.target + (animation.to.target - animation.from.target) * e
+            let e = Float(animation.softLanding ? easeOutQuart(t) : 1 - pow(1 - t, 3))
             camera.distance = animation.from.distance * pow(animation.to.distance / animation.from.distance, e)
+            // The target follows how far the zoom has come, so the group holds steady on screen
+            // instead of sliding while the camera closes in.
+            let from = animation.from.distance, to = animation.to.distance
+            let moved = from == to ? e : (1 / camera.distance - 1 / from) / (1 / to - 1 / from)
+            camera.target = animation.from.target + (animation.to.target - animation.from.target) * moved
             camera.heading = animation.from.heading + (animation.to.heading - animation.from.heading) * e
             if t >= 1 { cameraAnimation = nil } else { active = true }
         } else if simd_length(velocity) > 8 {
@@ -826,30 +943,77 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
     // MARK: Markers
 
-    /// Puts each marker on top of its mountain. Busier and selected places win when labels overlap.
+    /// Puts each marker on top of its mountain. Markers that would overlap merge into a group
+    /// marker, led by the busiest (or selected) place, instead of disappearing.
     private func updateOverlay() {
         guard bounds.width > 0 else { return }
+        // Zooming out past where the group opened merges it again (checked every frame, so
+        // it happens mid-pinch).
+        var regrouping: Set<String> = []
+        if !openedIDs.isEmpty, cameraAnimation == nil, camera.distance > openedDistance * 1.15 {
+            regrouping = openedIDs
+            openedIDs = []
+            markerOrder = sortedMarkers()
+        }
         let lift: Float = heatVisible ? 1 : 0
         let order = markerOrder
         let matrix = viewProjection
         let scale = window?.screen.scale ?? 3
-        var placed: [CGRect] = []
+        func snapped(_ point: CGPoint) -> CGPoint {
+            // Whole points, so markers don't shimmer between pixels while moving.
+            CGPoint(x: (point.x * scale).rounded() / scale, y: (point.y * scale).rounded() / scale)
+        }
+
+        struct Group {
+            var members: [CampusArea]
+            var anchor: CGPoint
+            var frame: CGRect
+            var depth: Float
+            /// The selected place and an opened group's places never join a group, and nothing joins them.
+            var isPinned: Bool
+        }
+        var groups: [Group] = []
         for area in order {
             guard let view = markers[area.id] else { continue }
             let mapPoint = MKMapPoint(area.coordinate.clCoordinate)
             let projected = project(scenePoint(mapPoint, height: surfaceHeight(at: mapPoint) * lift + 4), using: matrix)
             guard let projected else { view.isHidden = true; continue }
-            // Whole points, so markers don't shimmer between pixels while moving.
-            let center = CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y)
-            view.center = CGPoint(x: (center.x * scale).rounded() / scale, y: (center.y * scale).rounded() / scale)
-            let visible = bounds.insetBy(dx: -80, dy: -80).contains(view.center)
+            view.center = snapped(CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y))
+            guard bounds.insetBy(dx: -80, dy: -80).contains(view.center) else { view.isHidden = true; continue }
             let frame = view.frame.insetBy(dx: 6, dy: 3)
-            let selected = area.id == selectedAreaID
-            let collides = !selected && placed.contains { $0.intersects(frame) }
-            view.isHidden = !visible || collides
-            if !view.isHidden { placed.append(frame) }
-            view.layer.zPosition = (selected ? 20_000 : 10_000) - CGFloat(projected.depth)
+            markerAnchors[area.id] = projected.point
+            let pinned = area.id == selectedAreaID || openedIDs.contains(area.id)
+            if !pinned, let index = groups.firstIndex(where: { !$0.isPinned && $0.frame.intersects(frame) }) {
+                groups[index].members.append(area)
+            } else if !pinned, groups.contains(where: { $0.isPinned && $0.frame.intersects(frame) }) {
+                view.isHidden = true
+            } else {
+                groups.append(Group(members: [area], anchor: projected.point, frame: frame, depth: projected.depth, isPinned: pinned))
+            }
         }
+
+        var used = 0
+        for group in groups {
+            guard let lead = group.members.first, let leadView = markers[lead.id] else { continue }
+            if group.members.count == 1 {
+                leadView.isHidden = false
+                leadView.layer.zPosition = (lead.id == selectedAreaID ? 20_000 : group.isPinned ? 16_000 : 10_000) - CGFloat(group.depth)
+                continue
+            }
+            for member in group.members { markers[member.id]?.isHidden = true }
+            let cluster = clusterView(at: used)
+            let ids = group.members.map(\.id)
+            if clusterMembers[used] != ids {
+                clusterMembers[used] = ids
+                cluster.configure(members: group.members) { [levels] in levels[$0] }
+            }
+            if ids.contains(where: regrouping.contains) { cluster.popIn() }
+            cluster.center = snapped(CGPoint(x: group.anchor.x + cluster.centerOffset.x, y: group.anchor.y + cluster.centerOffset.y))
+            cluster.isHidden = false
+            cluster.layer.zPosition = 15_000 - CGFloat(group.depth)
+            used += 1
+        }
+        for index in used..<clusterViews.count { clusterViews[index].isHidden = true }
 
         if let userLocation {
             let mapPoint = MKMapPoint(userLocation)
@@ -863,6 +1027,21 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         } else {
             userDot.isHidden = true
         }
+    }
+
+    private func clusterView(at index: Int) -> ClusterAnnotationView {
+        while clusterViews.count <= index {
+            let view = ClusterAnnotationView(annotation: nil, reuseIdentifier: nil)
+            view.isUserInteractionEnabled = true
+            view.onTap = { [weak self, weak view] in
+                guard let self, let view else { return }
+                self.openGroup(view)
+            }
+            overlay.insertSubview(view, belowSubview: userDot)
+            clusterViews.append(view)
+            clusterMembers.append([])
+        }
+        return clusterViews[index]
     }
 
     // MARK: Your location

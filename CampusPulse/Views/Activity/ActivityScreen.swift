@@ -64,7 +64,7 @@ struct ActivityScreen: View {
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Spacer()
                 UpdatedAgoText(date: viewModel.snapshot?.generatedAt)
-                .typeStyle(.caption)
+                    .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
             }
             Rectangle()
@@ -79,7 +79,7 @@ struct ActivityScreen: View {
         OverviewCard(snapshot: snapshot, participantsText: viewModel.participantsText, activeAreasText: viewModel.activeAreasText)
 
         if !viewModel.favorites.isEmpty {
-            section(title: "Your places", trailing: "Saved") {
+            section(title: "Your places", trailing: "") {
                 areaList(viewModel.favorites)
             }
         }
@@ -125,7 +125,7 @@ struct ActivityScreen: View {
 
     @ViewBuilder
     private var rankedSections: some View {
-        section(title: "Busiest right now", trailing: "Top 5") {
+        section(title: "Busiest right now", trailing: "") {
             VStack(spacing: 0) {
                 ForEach(Array(viewModel.busiest.enumerated()), id: \.element.id) { index, activity in
                     NavigationLink(value: AreaRoute(areaID: activity.id)) {
@@ -144,7 +144,7 @@ struct ActivityScreen: View {
             .card(cornerRadius: Theme.Radius.sm)
         }
 
-        section(title: "Quiet spots", trailing: "Good for focus") {
+        section(title: "Quiet spots", trailing: "") {
             ScrollView(.horizontal) {
                 HStack(spacing: 12) {
                     ForEach(viewModel.quietSpots) { activity in
@@ -206,24 +206,18 @@ struct ActivityScreen: View {
     }
 
     private var privacyFooter: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "lock.shield.fill")
-                .imageScale(.large)
-                .foregroundStyle(Theme.Colors.positive)
-            Text("All figures are estimates from anonymous, aggregated data. Counts are rounded, and areas with fewer than \(AppConfig.privacyThreshold) students are never shown.")
-                .typeStyle(.caption)
-                .foregroundStyle(Theme.Colors.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(16)
-        .card(cornerRadius: Theme.Radius.sm)
+        Text("All figures are estimates from anonymous, aggregated data. Counts are rounded, and areas with fewer than \(AppConfig.privacyThreshold) students are never shown.")
+            .typeStyle(.caption)
+            .foregroundStyle(Theme.Colors.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
     }
 
     private func section<Content: View>(title: String, trailing: String, @ViewBuilder content: () -> Content) -> some View {
         section(title: title) {
             Text(trailing)
-                .typeStyle(.micro)
-                .foregroundStyle(Theme.Colors.accent)
+                .typeStyle(.caption)
+                .foregroundStyle(Theme.Colors.textTertiary)
         } content: {
             content()
         }
@@ -235,18 +229,13 @@ struct ActivityScreen: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(spacing: 0) {
-                Rectangle()
-                    .fill(Theme.Colors.sectionRule)
-                    .frame(height: Theme.Stroke.sectionRule)
-                HStack {
-                    Text(title).sectionLabelStyle()
-                        .contentTransition(.opacity)
-                    Spacer()
-                    trailing()
-                }
-                .frame(minHeight: 32)
+            HStack(alignment: .firstTextBaseline) {
+                Text(title).sectionLabelStyle()
+                    .contentTransition(.opacity)
+                Spacer()
+                trailing()
             }
+            .frame(minHeight: 32)
             content()
         }
     }

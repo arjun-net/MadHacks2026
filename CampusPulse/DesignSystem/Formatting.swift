@@ -26,11 +26,11 @@ enum Formatting {
         }
     }
 
-    /// Newspaper dateline: "SAT · NOV 14".
+    /// Dateline: "Sat, Nov 14".
     static func dateline(_ date: Date) -> String {
         let weekday = date.formatted(.dateTime.weekday(.abbreviated))
         let day = date.formatted(.dateTime.month(.abbreviated).day())
-        return "\(weekday) · \(day)".uppercased()
+        return "\(weekday), \(day)"
     }
 
     /// "3 PM", "12 AM", or "3a" when `compact`.

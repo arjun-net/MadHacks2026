@@ -15,7 +15,7 @@ struct Capacities: Sendable {
     var area: [String: Double]
     var campus: Double
 
-    /// Scaled by each area's popularity. Used before history has loaded.
+    /// Scaled by each area's popularity. Used before history has loaded, and for simulated data.
     static func fallback(for campus: Campus, perPopularity: Double = AppConfig.fallbackAreaCapacity) -> Capacities {
         let area = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, max(10, $0.popularity * perPopularity)) })
         return Capacities(area: area, campus: max(30, area.values.reduce(0, +)))
@@ -44,13 +44,20 @@ enum ActivityAggregator {
 
     /// Counts each slot's readings per area by the building the server tagged them with.
     /// Untagged readings still count toward the heat and the campus total.
+    /// Readings the server placed in a building the campus doesn't track are left out entirely
+    /// (no heat, not in the total); readings outside any building are kept.
     static func tally(_ slots: [Date: [Reading]], campus: Campus) -> [Date: SlotTally] {
         slots.mapValues { readings in
             var counts: [String: Int] = [:]
+            var points: [Coordinate] = []
             for reading in readings {
-                if let id = reading.building.flatMap(campus.areaID(forBuilding:)) { counts[id, default: 0] += 1 }
+                if let building = reading.building {
+                    guard let id = campus.areaID(forBuilding: building) else { continue }
+                    counts[id, default: 0] += 1
+                }
+                points.append(reading.coordinate)
             }
-            return SlotTally(points: readings.map(\.coordinate), areaCounts: counts)
+            return SlotTally(points: points, areaCounts: counts)
         }
     }
 
@@ -67,6 +74,7 @@ enum ActivityAggregator {
     /// Makes the server's building counts the truth for `slot`: each counted building's own
     /// readings in that slot are swapped for `count` readings at the building. Those then
     /// drive both the building's number and its heat (still under the privacy cutoff).
+    /// Pass real readings only; simulated ones are added afterwards.
     static func applying(buildingCounts: [String: Int], to slots: [Date: [Reading]], at slot: Date, campus: Campus) -> [Date: [Reading]] {
         guard !buildingCounts.isEmpty else { return slots }
         var result = slots
@@ -85,12 +93,15 @@ enum ActivityAggregator {
 
     /// Snapshot for `frame`, with the 12 slots up to it as the trend.
     /// A nil frame (no recent readings) produces an empty snapshot.
+    /// `campusTotal`: everyone on campus in the frame (all rows, every building), shown as the
+    /// "on campus" number. Nil uses the tracked readings. Everything else uses only those.
     static func snapshot(
         campus: Campus,
         tallies: [Date: SlotTally],
         frame: Date?,
         capacities: Capacities,
-        generatedAt: Date
+        generatedAt: Date,
+        campusTotal: Int? = nil
     ) -> CampusSnapshot {
         let slots: [Date] = frame.map { frame in
             (0..<historyLength).map { frame.addingTimeInterval(-Double(historyLength - 1 - $0) * slot) }
@@ -109,7 +120,7 @@ enum ActivityAggregator {
         return CampusSnapshot(
             campusID: campus.id,
             generatedAt: generatedAt,
-            participantCount: Int((Double(current.total) / 10).rounded()) * 10,
+            participantCount: Int((Double(frame == nil ? 0 : campusTotal ?? current.total) / 10).rounded()) * 10,
             overallIntensity: campusHistory.last ?? 0,
             cells: cells(from: current.points, around: campus.center),
             areas: areas,
@@ -152,6 +163,8 @@ enum ActivityAggregator {
     }
 }
 
+/// One stored day of readings (the server's history), replayed at the current time of day.
+/// The dataset's timestamps are campus wall-clock times, so 2:30 PM today maps to 14:30 on that day.
 /// The last 24 hours of real readings for one campus: how big each place gets (its busiest
 /// slot) and its usual busy times by hour.
 struct HistoryDay: Sendable {

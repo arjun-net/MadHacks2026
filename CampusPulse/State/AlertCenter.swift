@@ -5,7 +5,7 @@ import UserNotifications
 /// Local notifications behind the Settings switches:
 /// - Busy area alerts: a saved place becomes busy.
 /// - Quiet study spots: a library or academic building, or a saved place, quiets down.
-/// - Weekly recap: Sunday evening, the busiest and quietest places over the last 24 hours.
+/// - Weekly recap: Sunday evening, the busiest and quietest places on the stored day.
 ///
 /// Alerts are worked out on the device from each live refresh; nothing is sent anywhere.
 @MainActor
@@ -21,7 +21,7 @@ final class AlertCenter: NSObject {
     private var lastAlerted: [String: Date] = [:]
     private static let cooldown: TimeInterval = 60 * 60
     private static let studyCategories: Set<AreaCategory> = [.library, .academic]
-    /// Campus and history window the scheduled recap was written for.
+    /// Campus and stored day the scheduled recap was written for.
     private var recapSource: String?
     private static let recapID = "weekly-recap"
     private static let log = Logger(subsystem: "CampusPulse", category: "Alerts")
@@ -102,7 +102,7 @@ final class AlertCenter: NSObject {
 
     // MARK: - Weekly recap
 
-    /// Rewrites the recap when the history or campus it describes has changed.
+    /// Rewrites the recap when the stored day or campus it describes has changed.
     func refreshRecapIfNeeded(history: HistoryDay?, campus: Campus) {
         let source = "\(campus.id)|\(history?.campusID ?? "-")|\(history?.start.timeIntervalSince1970 ?? 0)|\(preferences.weeklyRecap)"
         guard source != recapSource else { return }
@@ -110,8 +110,8 @@ final class AlertCenter: NSObject {
         updateWeeklyRecap(history: history, campus: campus)
     }
 
-    /// Schedules (or cancels) the Sunday 6 PM recap. Its text is written now from the last 24 hours,
-    /// and rewritten whenever that history or the campus changes.
+    /// Schedules (or cancels) the Sunday 6 PM recap. Its text is written now from the stored day,
+    /// and rewritten whenever the stored day or campus changes.
     func updateWeeklyRecap(history: HistoryDay?, campus: Campus) {
         center.removePendingNotificationRequests(withIdentifiers: [Self.recapID])
         guard preferences.weeklyRecap else { return }

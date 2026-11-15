@@ -2,6 +2,19 @@ import MapKit
 import SwiftUI
 import UIKit
 
+extension MKAnnotationView {
+    /// Grows the marker in from a dot: places coming out of an opened group, and the group
+    /// marker coming back when they merge again.
+    func popIn(delay: TimeInterval = 0) {
+        alpha = 0
+        transform = CGAffineTransform(scaleX: 0.4, y: 0.4)
+        UIView.animate(withDuration: 0.5, delay: delay, usingSpringWithDamping: 0.72, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.alpha = 1
+            self.transform = .identity
+        }
+    }
+}
+
 final class AreaAnnotation: NSObject, MKAnnotation {
     let area: CampusArea
     var level: ActivityLevel?
@@ -85,7 +98,20 @@ final class AreaAnnotationView: MKAnnotationView {
         }
     }
 
+    /// Whether MapKit may merge this marker into a group marker. Set only before MapKit shows
+    /// the view (in `mapView(_:viewFor:)`): changing it on a marker already on the map, above
+    /// all to nil, crashes MapKit ("setObject:forKey: key cannot be nil"). To change it, remove
+    /// and re-add the annotation.
+    func setGroupable(_ groupable: Bool) {
+        clusteringIdentifier = groupable ? ClusterAnnotationView.clusteringIdentifier : nil
+    }
+
     func configure(area: CampusArea, level: ActivityLevel?, highlighted: Bool) {
+        // Data refreshes reconfigure every marker; skip the ones that haven't changed, since a
+        // relayout animates.
+        if self.area?.id == area.id, self.level == level, isHighlightedArea == highlighted {
+            return
+        }
         self.area = area
         self.level = level
         isHighlightedArea = highlighted
@@ -96,9 +122,9 @@ final class AreaAnnotationView: MKAnnotationView {
         )
         applyColors()
 
-        displayPriority = highlighted
-            ? .required
-            : MKFeatureDisplayPriority(rawValue: 600 + Float(area.popularity) * 350)
+        // Nothing is dropped when markers overlap: they merge into a group marker instead
+        // (see `setGroupable`).
+        displayPriority = .required
         zPriority = highlighted ? .max : MKAnnotationViewZPriority(rawValue: Float(area.popularity) * 100)
         accessibilityLabel = [area.name, level?.title].compactMap { $0 }.joined(separator: ", ")
 
@@ -162,7 +188,7 @@ final class AreaAnnotationView: MKAnnotationView {
         ringTrack.strokeColor = paper.withAlphaComponent(0.85).cgColor
         ring.strokeColor = UIColor(level?.textColor ?? Theme.Colors.textTertiary).resolvedColor(with: traits).cgColor
 
-        let font = UIFont(name: highlighted ? FontName.sansBold : FontName.sansSemi, size: highlighted ? 12 : 11)
+        let font = UIFont(name: FontName.textBold, size: highlighted ? 12.5 : 11.5)
             ?? .systemFont(ofSize: 11, weight: .semibold)
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
@@ -178,6 +204,9 @@ final class AreaAnnotationView: MKAnnotationView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        area = nil
+        layer.removeAllAnimations()
+        alpha = 1
         transform = .identity
     }
 }

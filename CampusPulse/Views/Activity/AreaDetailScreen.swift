@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Detail for one hall or building: live reading, usual busy times by weekday,
-/// today compared with a normal day, and the past week.
+/// today compared with a normal day, and each of the past days against its usual.
 struct AreaDetailScreen: View {
     let areaID: String
     @Bindable var viewModel: ActivityViewModel
@@ -53,7 +53,12 @@ struct AreaDetailScreen: View {
                 LiveCard(activity: activity, insights: insights)
                 PopularTimesSection(insights: insights, liveIntensity: activity.intensity)
                 TodayVersusUsualSection(insights: insights)
-                PastWeekSection(insights: insights)
+                ThisTimeSection(state: viewModel.storyState(for: areaID), recentDays: viewModel.recentDays(for: areaID)) {
+                    Task { await viewModel.loadStory(for: areaID, force: true) }
+                }
+                PastDaysSection(state: viewModel.pastDaysState(for: areaID)) {
+                    Task { await viewModel.loadPastDays(for: areaID, force: true) }
+                }
 
                 Text("History and usual times are estimates built from anonymous, aggregated activity.")
                     .typeStyle(.caption)
@@ -67,7 +72,13 @@ struct AreaDetailScreen: View {
             .animation(Theme.Motion.smooth, value: activity.intensity)
         }
         .scrollIndicators(.hidden)
-        .refreshable { await viewModel.refresh() }
+        .refreshable {
+            await viewModel.refresh()
+            await viewModel.loadStory(for: areaID, force: true)
+            await viewModel.loadPastDays(for: areaID, force: true)
+        }
+        .task(id: areaID) { await viewModel.loadStory(for: areaID) }
+        .task(id: areaID) { await viewModel.loadPastDays(for: areaID) }
     }
 
     private func header(_ activity: AreaActivity) -> some View {
@@ -81,7 +92,6 @@ struct AreaDetailScreen: View {
 
     private func headerTitle(_ activity: AreaActivity) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            AreaIconTile(symbol: activity.area.symbol, color: activity.level.textColor, size: 52)
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.area.name)
                     .typeStyle(.title)
@@ -92,5 +102,13 @@ struct AreaDetailScreen: View {
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
         }
+    }
+}
+
+#Preview("Area detail") {
+    let container = PreviewData.container()
+    let viewModel = ActivityViewModel(store: container.store)
+    NavigationStack {
+        AreaDetailScreen(areaID: viewModel.allAreas.first?.id ?? "", viewModel: viewModel)
     }
 }

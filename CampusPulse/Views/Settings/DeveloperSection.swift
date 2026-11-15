@@ -2,7 +2,7 @@ import SwiftUI
 
 #if DEBUG
 /// Debug builds only: point the app at a new server (the Cloudflare tunnel URL changes on
-/// every restart) without rebuilding.
+/// every restart), without rebuilding.
 struct DeveloperSection: View {
     var onApply: () -> Void
 

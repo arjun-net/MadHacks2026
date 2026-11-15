@@ -76,11 +76,10 @@ extension View {
     }
 
     /// Small, tracked, uppercase section label.
+    /// Section headings: the signage face, sentence case.
     func sectionLabelStyle() -> some View {
         self
-            .font(.cpMicro)
-            .tracking(1.6)
-            .textCase(.uppercase)
+            .typeStyle(.section)
             .foregroundStyle(Theme.Colors.ink)
     }
 }
@@ -93,10 +92,7 @@ struct SectionHeader: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Rectangle()
-                .fill(Theme.Colors.sectionRule)
-                .frame(height: Theme.Stroke.sectionRule)
-            HStack(spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title).sectionLabelStyle()
                 Spacer(minLength: 8)
                 if let trailing {
@@ -107,13 +103,10 @@ struct SectionHeader: View {
                         }
                         Text(trailing)
                     }
-                    .font(.cpMicro)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
-                    .foregroundStyle(Theme.Colors.accent)
+                    .typeStyle(.caption)
+                    .foregroundStyle(Theme.Colors.textTertiary)
                 }
             }
-            .padding(.top, 8)
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -135,13 +128,14 @@ extension View {
 /// Flat newsprint page background. Day mode adds a faint ruled-paper texture unless `ruled` is off
 /// (Settings turns it off: the lines fight with stacked rows of cards).
 struct ScreenBackground: View {
-    var ruled = true
+    /// Kept for call sites; the background is plain paper.
+    var ruled = false
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
             Theme.Colors.background
-            if ruled, colorScheme == .light {
+            if ruled, colorScheme == .light, false {
                 Canvas { context, size in
                     var y: CGFloat = 28
                     var path = Path()

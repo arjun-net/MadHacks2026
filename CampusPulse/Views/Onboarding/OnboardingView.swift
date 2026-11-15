@@ -52,10 +52,10 @@ struct OnboardingView: View {
     private func point(symbol: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
-                .imageScale(.medium)
-                .foregroundStyle(Theme.Colors.onAccent)
-                .frame(width: 36, height: 36)
-                .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Theme.Colors.accent)
+                .frame(width: 26, alignment: .center)
+                .padding(.top, 2)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -73,12 +73,8 @@ struct OnboardingView: View {
     /// Plain statement of what's sent, right before the system prompt.
     private var sharingCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "lock.shield.fill")
-                    .foregroundStyle(Theme.Colors.positive)
-                Text("What sharing means").sectionLabelStyle()
-            }
-            Text("The map is built from students who share. While sharing is on, your phone sends its location every 2 minutes with no ID, name or account.")
+            Text("What sharing means").sectionLabelStyle()
+            Text("The map is built from students who share. While sharing is on, your phone sends its location every 2 minutes with a random ID, never your name or account.")
                 .typeStyle(.subheadline)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)

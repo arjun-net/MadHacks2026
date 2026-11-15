@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Masthead: a dateline (live, last update, date) over the campus name in display serif,
-/// and a one-line summary underneath: how busy campus is, how many are sharing, and the
-/// busiest place (tap to find it on the map). The ranked lists live on the Activity tab.
+/// and a one-line summary underneath: how busy campus is and roughly how many people are out
+/// on it, and the busiest place (tap to find it on the map). The ranked lists live on the Activity tab.
 struct MapHeader: View {
     let campus: Campus
     let snapshot: CampusSnapshot?
@@ -61,26 +61,26 @@ struct MapHeader: View {
 
 extension MapHeader {
     fileprivate func summary(_ snapshot: CampusSnapshot) -> some View {
-        // Even gaps between the three items, spread across the card.
+        // Two sides: how busy campus is (level and headcount read as one phrase) on the left,
+        // the busiest place on the right. Nothing floats alone in the middle.
         HStack(spacing: 0) {
-            ActivityLevelBadge(level: snapshot.level)
-                .accessibilityLabel("Campus is \(snapshot.level.title.lowercased())")
-
-            Spacer(minLength: 10)
-
-            HStack(spacing: 4) {
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 10))
-                Text("≈ \(Formatting.number(snapshot.participantCount)) sharing")
+            HStack(spacing: 8) {
+                ActivityLevelBadge(level: snapshot.level)
+                    .fixedSize()
+                Text("≈\(Formatting.number(snapshot.participantCount)) on campus")
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(snapshot.participantCount)))
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(Theme.Colors.textSecondary)
+            .layoutPriority(1)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("About \(snapshot.participantCount) students sharing")
+            .accessibilityLabel("Campus is \(snapshot.level.title.lowercased()), about \(snapshot.participantCount) people on campus")
+
+            Spacer(minLength: 12)
 
             if let top = snapshot.busiest(1).first {
-                Spacer(minLength: 10)
                 Button { onSelectArea(top.id) } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "flame.fill")
