@@ -19,7 +19,8 @@ struct RootView: View {
         _settingsViewModel = State(initialValue: SettingsViewModel(
             store: container.store,
             preferences: container.preferences,
-            sharing: container.sharing
+            sharing: container.sharing,
+            alerts: container.alerts
         ))
     }
 

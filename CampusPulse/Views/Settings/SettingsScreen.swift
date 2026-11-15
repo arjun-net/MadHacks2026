@@ -87,7 +87,9 @@ struct SettingsScreen: View {
 
                     SettingsSection(
                         title: "Notifications",
-                        footer: "Get a heads-up when your favorite places get busy or quiet down."
+                        footer: viewModel.hasFavorites
+                            ? "Busy alerts cover your saved places. Quiet alerts cover libraries, academic buildings and your saved places. The recap arrives Sunday evening."
+                            : "Busy alerts cover places you save with the star (on the map card or a place's page). Quiet alerts cover libraries and academic buildings. The recap arrives Sunday evening."
                     ) {
                         Toggle(isOn: $preferences.busyAreaAlerts) {
                             SettingsLabel(symbol: "flame.fill", color: Theme.Colors.accent, title: "Busy Area Alerts")
@@ -151,6 +153,15 @@ struct SettingsScreen: View {
                     #endif
                 }
                 .toggleStyle(.paper)
+                .onChange(of: preferences.busyAreaAlerts) { _, isOn in
+                    Task { await viewModel.notificationSettingChanged(isOn: isOn) { preferences.busyAreaAlerts = false } }
+                }
+                .onChange(of: preferences.quietSpotAlerts) { _, isOn in
+                    Task { await viewModel.notificationSettingChanged(isOn: isOn) { preferences.quietSpotAlerts = false } }
+                }
+                .onChange(of: preferences.weeklyRecap) { _, isOn in
+                    Task { await viewModel.notificationSettingChanged(isOn: isOn) { preferences.weeklyRecap = false } }
+                }
                 .padding(.horizontal, Theme.Spacing.md)
                 .padding(.top, 8)
                 .padding(.bottom, Theme.tabBarClearance + 20)
@@ -171,10 +182,10 @@ struct SettingsScreen: View {
                 Text("Readings sent from now on get a new random ID, and any readings still waiting to send are discarded. Sharing stays on.")
             }
             .alert(
-                viewModel.resetMessage ?? "",
+                viewModel.message ?? "",
                 isPresented: Binding(
-                    get: { viewModel.resetMessage != nil },
-                    set: { if !$0 { viewModel.resetMessage = nil } }
+                    get: { viewModel.message != nil },
+                    set: { if !$0 { viewModel.message = nil } }
                 )
             ) {
                 Button("OK", role: .cancel) {}
@@ -287,7 +298,7 @@ private struct CampusBanner: View {
 #Preview {
     let container = PreviewData.container()
     SettingsScreen(
-        viewModel: SettingsViewModel(store: container.store, preferences: container.preferences, sharing: container.sharing),
+        viewModel: SettingsViewModel(store: container.store, preferences: container.preferences, sharing: container.sharing, alerts: container.alerts),
         sharingViewModel: LocationSharingViewModel(sharing: container.sharing, store: container.store)
     )
 }
