@@ -3,6 +3,7 @@ use std::sync::Arc;
 use axum::body::{to_bytes, Body};
 use axum::http::{Request, StatusCode};
 use madhacks_backend::buffer::WriteBuffer;
+use madhacks_backend::buildings::{BuildingIndex, BuildingsConfig};
 use madhacks_backend::routes::{router, AppState};
 use madhacks_backend::store::Store;
 use serde_json::{json, Value};
@@ -12,7 +13,8 @@ use tower::ServiceExt;
 async fn existing_ingest_appends_all_zero_minute_locations() {
     let store = Arc::new(Store::memory());
     let buffer = WriteBuffer::new(store.clone(), 100);
-    let app = router(AppState { store, buffer: buffer.clone() });
+    let buildings = Arc::new(BuildingIndex::load_or_build(&BuildingsConfig::default()).unwrap());
+    let app = router(AppState { store, buffer: buffer.clone(), buildings });
 
     let body = json!({ "points": [
         { "device_id": "a", "lat": 43.0, "lng": -89.0, "timestamp": "2026-11-14T07:00:10Z", "building": "Memorial Union" },
@@ -66,7 +68,8 @@ async fn existing_ingest_appends_all_zero_minute_locations() {
 async fn accepts_optional_building_and_rejects_excessive_text() {
     let store = Arc::new(Store::memory());
     let buffer = WriteBuffer::new(store.clone(), 100);
-    let app = router(AppState { store, buffer });
+    let buildings = Arc::new(BuildingIndex::load_or_build(&BuildingsConfig::default()).unwrap());
+    let app = router(AppState { store, buffer, buildings });
 
     let too_long = "x".repeat(257);
     let body = json!({

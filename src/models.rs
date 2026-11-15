@@ -1,6 +1,8 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::buildings::BuildingIndex;
+
 /// Timestamps must include an explicit timezone offset.
 #[derive(Deserialize)]
 pub struct LocationIn {
@@ -10,6 +12,10 @@ pub struct LocationIn {
     pub device_id: Option<String>,
     /// Optional to preserve compatibility with clients that do not send a building yet.
     pub building: Option<String>,
+    /// Horizontal GPS accuracy in meters, if the client reports it. Too vague a fix isn't
+    /// matched to a building.
+    #[serde(default, alias = "horizontal_accuracy")]
+    pub accuracy: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -55,7 +61,9 @@ pub type Row = (DateTime<Utc>, f64, f64, Option<String>);
 pub type BBox = (f64, f64, f64, f64);
 
 impl LocationIn {
-    pub fn validate(self) -> Result<Point, String> {
+    /// The building comes from the server's grid lookup (see `buildings`); a name sent by the
+    /// client is kept only when the grid finds none.
+    pub fn validate(self, buildings: &BuildingIndex) -> Result<Point, String> {
         if !(-90.0..=90.0).contains(&self.lat) {
             return Err("lat must be between -90 and 90".into());
         }
@@ -77,6 +85,10 @@ impl LocationIn {
         if building.as_ref().is_some_and(|name| name.chars().count() > 256) {
             return Err("building must be at most 256 characters".into());
         }
+        let building = buildings
+            .lookup(self.lat, self.lng, self.accuracy)
+            .map(|name| name.to_string())
+            .or(building);
         Ok(Point {
             lat: self.lat,
             lng: self.lng,
@@ -104,8 +116,9 @@ mod tests {
             timestamp: time,
             device_id: None,
             building: Some("  Memorial Union  ".to_string()),
+            accuracy: None,
         }
-        .validate()
+        .validate(&BuildingIndex::empty())
         .unwrap();
         assert_eq!(point.building.as_deref(), Some("Memorial Union"));
         assert_eq!(point.device_id, "unknown");
@@ -113,6 +126,6 @@ mod tests {
             r#"{"lat":43.07,"lng":-89.40,"timestamp":"2026-11-14T07:00:00Z"}"#,
         )
         .unwrap();
-        assert_eq!(missing.validate().unwrap().building, None);
+        assert_eq!(missing.validate(&BuildingIndex::empty()).unwrap().building, None);
     }
 }

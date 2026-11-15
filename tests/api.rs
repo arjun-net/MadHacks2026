@@ -5,6 +5,7 @@ use axum::http::{Request, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
 use madhacks_backend::buffer::WriteBuffer;
+use madhacks_backend::buildings::{BuildingIndex, BuildingsConfig};
 use madhacks_backend::routes::{router, AppState};
 use madhacks_backend::store::Store;
 use serde_json::{json, Value};
@@ -14,7 +15,8 @@ use tower::ServiceExt;
 fn app() -> (Router, Arc<WriteBuffer>) {
     let store = Arc::new(Store::memory());
     let buffer = WriteBuffer::new(store.clone(), 100);
-    (router(AppState { store, buffer: buffer.clone() }), buffer)
+    let buildings = Arc::new(BuildingIndex::load_or_build(&BuildingsConfig::default()).unwrap());
+    (router(AppState { store, buffer: buffer.clone(), buildings }), buffer)
 }
 
 async fn send(app: &Router, req: Request<Body>) -> (StatusCode, Value) {

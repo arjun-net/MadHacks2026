@@ -10,6 +10,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde_json::json;
 
 use crate::buffer::WriteBuffer;
+use crate::buildings::BuildingIndex;
 use crate::models::{Accepted, BBox, BatchIn, HeatmapOut, LatLng, LocationIn};
 use crate::store::{Dataset, Store};
 
@@ -17,6 +18,8 @@ use crate::store::{Dataset, Store};
 pub struct AppState {
     pub store: Arc<Store>,
     pub buffer: Arc<WriteBuffer>,
+    /// Loaded once at startup; every ping is matched to a building in constant time.
+    pub buildings: Arc<BuildingIndex>,
 }
 
 fn unprocessable(msg: impl Into<String>) -> Response {
@@ -35,7 +38,7 @@ pub fn router(state: AppState) -> Router {
 }
 
 async fn ingest_one(State(s): State<AppState>, Json(body): Json<LocationIn>) -> Response {
-    match body.validate() {
+    match body.validate(&s.buildings) {
         Ok(p) => {
             s.buffer.add(vec![p]);
             (StatusCode::ACCEPTED, Json(Accepted { accepted: 1 })).into_response()
@@ -50,7 +53,7 @@ async fn ingest_batch(State(s): State<AppState>, Json(body): Json<BatchIn>) -> R
     }
     let mut points = Vec::with_capacity(body.points.len());
     for p in body.points {
-        match p.validate() {
+        match p.validate(&s.buildings) {
             Ok(p) => points.push(p),
             Err(e) => return unprocessable(e),
         }

@@ -1,4 +1,5 @@
 pub mod buffer;
+pub mod buildings;
 pub mod config;
 pub mod models;
 pub mod routes;

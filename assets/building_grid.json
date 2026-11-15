@@ -1,0 +1,648 @@
+{
+  "format_version": 1,
+  "source_checksum": "86c54da163603bf8",
+  "campus": "UW-Madison",
+  "resolution_m": 2.0,
+  "margin_m": 10.0,
+  "min_lat": 43.064279975771846,
+  "max_lat": 43.07889821378084,
+  "min_lng": -89.42522548029,
+  "max_lng": -89.3892508553205,
+  "meters_per_deg_lat": 111094.1003287173,
+  "meters_per_deg_lng": 81446.2972855078,
+  "rows": 812,
+  "cols": 1465,
+  "buildings": [
+    {
+      "id": 1,
+      "key": "college_library",
+      "name": "College Library (Helen C. White Hall)",
+      "type": "study",
+      "area_m2": 5403.0
+    },
+    {
+      "id": 2,
+      "key": "engineering_hall",
+      "name": "Engineering Hall",
+      "type": "class",
+      "area_m2": 12266.3
+    },
+    {
+      "id": 3,
+      "key": "gordon_dining",
+      "name": "Gordon Avenue Dining & Market",
+      "type": "dining",
+      "area_m2": 4432.0
+    },
+    {
+      "id": 4,
+      "key": "memorial_union",
+      "name": "Memorial Union",
+      "type": "social",
+      "area_m2": 11637.2
+    },
+    {
+      "id": 5,
+      "key": "gym_nat",
+      "name": "Nicholas Recreation Center",
+      "type": "gym",
+      "area_m2": 7246.4
+    },
+    {
+      "id": 6,
+      "key": "union_south",
+      "name": "Union South",
+      "type": "social",
+      "area_m2": 6792.9
+    },
+    {
+      "id": 7,
+      "key": "bascom_hall",
+      "name": "Bascom Hall",
+      "type": "class",
+      "area_m2": 4304.0
+    },
+    {
+      "id": 8,
+      "key": "science_hall",
+      "name": "Science Hall",
+      "type": "class",
+      "area_m2": 3940.4
+    },
+    {
+      "id": 9,
+      "key": "van_hise",
+      "name": "Van Hise Hall (Languages)",
+      "type": "class",
+      "area_m2": 6142.2
+    },
+    {
+      "id": 10,
+      "key": "humanities",
+      "name": "Humanities Building",
+      "type": "class",
+      "area_m2": 8070.6
+    },
+    {
+      "id": 11,
+      "key": "social_sciences",
+      "name": "Social Science Building",
+      "type": "class",
+      "area_m2": 8181.7
+    },
+    {
+      "id": 12,
+      "key": "ingraham",
+      "name": "Ingraham Hall",
+      "type": "class",
+      "area_m2": 4059.5
+    },
+    {
+      "id": 13,
+      "key": "chamberlin_hall",
+      "name": "Chamberlin Hall (Physics)",
+      "type": "class",
+      "area_m2": 5462.4
+    },
+    {
+      "id": 14,
+      "key": "sterling_hall",
+      "name": "Sterling Hall",
+      "type": "class",
+      "area_m2": 3566.7
+    },
+    {
+      "id": 15,
+      "key": "chemistry_building",
+      "name": "Chemistry Building",
+      "type": "class",
+      "area_m2": 7621.3
+    },
+    {
+      "id": 16,
+      "key": "weeks_hall",
+      "name": "Weeks Hall (Geosciences)",
+      "type": "class",
+      "area_m2": 5110.8
+    },
+    {
+      "id": 17,
+      "key": "chazen_museum",
+      "name": "Chazen Museum of Art",
+      "type": "study",
+      "area_m2": 2556.0
+    },
+    {
+      "id": 18,
+      "key": "education_bldg",
+      "name": "Education Building",
+      "type": "class",
+      "area_m2": 2347.1
+    },
+    {
+      "id": 19,
+      "key": "grainger_hall",
+      "name": "Grainger Hall (Wisconsin School of Business)",
+      "type": "class",
+      "area_m2": 10450.9
+    },
+    {
+      "id": 20,
+      "key": "human_ecology",
+      "name": "School of Human Ecology",
+      "type": "class",
+      "area_m2": 4855.7
+    },
+    {
+      "id": 21,
+      "key": "law_school",
+      "name": "Law School",
+      "type": "class",
+      "area_m2": 3996.4
+    },
+    {
+      "id": 22,
+      "key": "vilas_hall",
+      "name": "Vilas Hall (Communication Arts / Journalism)",
+      "type": "class",
+      "area_m2": 6953.5
+    },
+    {
+      "id": 23,
+      "key": "memorial_library",
+      "name": "Memorial Library",
+      "type": "study",
+      "area_m2": 5307.9
+    },
+    {
+      "id": 24,
+      "key": "steenbock_library",
+      "name": "Steenbock Library (Agricultural & Life Sciences)",
+      "type": "study",
+      "area_m2": 2412.3
+    },
+    {
+      "id": 25,
+      "key": "art_library",
+      "name": "Kohler Art Library (Elvehjem Building)",
+      "type": "study",
+      "area_m2": 2033.4
+    },
+    {
+      "id": 26,
+      "key": "ebling_library",
+      "name": "Ebling Library (Health Sciences Learning Center)",
+      "type": "study",
+      "area_m2": 2804.9
+    },
+    {
+      "id": 27,
+      "key": "computer_sciences",
+      "name": "Computer Sciences Building (Hill Center)",
+      "type": "class",
+      "area_m2": 5662.6
+    },
+    {
+      "id": 28,
+      "key": "mechanical_engineering",
+      "name": "Mechanical Engineering Building",
+      "type": "class",
+      "area_m2": 5028.8
+    },
+    {
+      "id": 29,
+      "key": "materials_science",
+      "name": "Materials Science & Engineering Building",
+      "type": "class",
+      "area_m2": 1561.6
+    },
+    {
+      "id": 30,
+      "key": "wendt_library",
+      "name": "Wendt Commons (Engineering Library)",
+      "type": "study",
+      "area_m2": 1600.3
+    },
+    {
+      "id": 31,
+      "key": "kemper_chemistry",
+      "name": "Kemper K. Knapp / Biochemistry (Hector F. DeLuca) Building",
+      "type": "class",
+      "area_m2": 2071.6
+    },
+    {
+      "id": 32,
+      "key": "biotech_center",
+      "name": "Biotechnology Center (Genetics/Biotech)",
+      "type": "class",
+      "area_m2": 6654.8
+    },
+    {
+      "id": 33,
+      "key": "rustjergen",
+      "name": "Microbial Sciences Building",
+      "type": "class",
+      "area_m2": 5979.2
+    },
+    {
+      "id": 34,
+      "key": "integrated_likeness",
+      "name": "Integrated Liberal Studies (Meiklejohn House area)",
+      "type": "class",
+      "area_m2": 935.8
+    },
+    {
+      "id": 35,
+      "key": "chadbourne_res",
+      "name": "Chadbourne Residential College",
+      "type": "dorm",
+      "area_m2": 1206.0
+    },
+    {
+      "id": 36,
+      "key": "barnard_res",
+      "name": "Barnard Residence Hall",
+      "type": "dorm",
+      "area_m2": 1677.4
+    },
+    {
+      "id": 37,
+      "key": "sellery_hall",
+      "name": "Sellery Residence Hall",
+      "type": "dorm",
+      "area_m2": 4920.4
+    },
+    {
+      "id": 38,
+      "key": "witte_hall",
+      "name": "Witte Residence Hall",
+      "type": "dorm",
+      "area_m2": 6147.5
+    },
+    {
+      "id": 39,
+      "key": "smith_res",
+      "name": "Smith Residence Hall",
+      "type": "dorm",
+      "area_m2": 3513.8
+    },
+    {
+      "id": 40,
+      "key": "ogg_res",
+      "name": "Ogg Residence Hall",
+      "type": "dorm",
+      "area_m2": 3724.3
+    },
+    {
+      "id": 41,
+      "key": "lowell_res",
+      "name": "Lowell Residence Hall",
+      "type": "dorm",
+      "area_m2": 3691.6
+    },
+    {
+      "id": 42,
+      "key": "slichter_hall",
+      "name": "Slichter Residence Hall",
+      "type": "dorm",
+      "area_m2": 955.5
+    },
+    {
+      "id": 43,
+      "key": "trippl_hall",
+      "name": "Tripp Residence Hall",
+      "type": "dorm",
+      "area_m2": 2166.4
+    },
+    {
+      "id": 44,
+      "key": "adams_hall",
+      "name": "Adams Residence Hall",
+      "type": "dorm",
+      "area_m2": 2162.2
+    },
+    {
+      "id": 45,
+      "key": "cole_hall",
+      "name": "Cole Residence Hall",
+      "type": "dorm",
+      "area_m2": 894.0
+    },
+    {
+      "id": 46,
+      "key": "leopold_hall",
+      "name": "Leopold Residence Hall",
+      "type": "dorm",
+      "area_m2": 1346.1
+    },
+    {
+      "id": 47,
+      "key": "kronshage_hall",
+      "name": "Kronshage Residence Hall",
+      "type": "dorm",
+      "area_m2": 6817.7
+    },
+    {
+      "id": 48,
+      "key": "sullivan_hall",
+      "name": "Sullivan Residence Hall",
+      "type": "dorm",
+      "area_m2": 915.7
+    },
+    {
+      "id": 49,
+      "key": "phillips_hall",
+      "name": "Phillips Residence Hall",
+      "type": "dorm",
+      "area_m2": 1061.8
+    },
+    {
+      "id": 50,
+      "key": "bradley_hall",
+      "name": "Bradley Residence Hall",
+      "type": "dorm",
+      "area_m2": 984.3
+    },
+    {
+      "id": 51,
+      "key": "dejope_hall",
+      "name": "Dejope Residence Hall",
+      "type": "dorm",
+      "area_m2": 6625.2
+    },
+    {
+      "id": 52,
+      "key": "waters_hall",
+      "name": "Waters Residence Hall",
+      "type": "dorm",
+      "area_m2": 3129.9
+    },
+    {
+      "id": 53,
+      "key": "merit_hall",
+      "name": "Merit Residence Hall",
+      "type": "dorm",
+      "area_m2": 879.5
+    },
+    {
+      "id": 54,
+      "key": "camp_randall",
+      "name": "Camp Randall Stadium",
+      "type": "social",
+      "area_m2": 33413.4
+    },
+    {
+      "id": 55,
+      "key": "morgridge_institute",
+      "name": "Morgridge Institute for Research",
+      "type": "study",
+      "area_m2": 5914.3
+    },
+    {
+      "id": 56,
+      "key": "wisconsin_historical_society",
+      "name": "Wisconsin Historical Society",
+      "type": "study",
+      "area_m2": 2399.3
+    },
+    {
+      "id": 57,
+      "key": "red_gym",
+      "name": "Red Gym (Armory and Gymnasium)",
+      "type": "social",
+      "area_m2": 1881.4
+    },
+    {
+      "id": 58,
+      "key": "van_vleck",
+      "name": "Van Vleck Hall (Mathematical Sciences)",
+      "type": "class",
+      "area_m2": 1224.4
+    },
+    {
+      "id": 59,
+      "key": "hamel_music_center",
+      "name": "Hamel Music Center",
+      "type": "social",
+      "area_m2": 2199.6
+    },
+    {
+      "id": 60,
+      "key": "birge_hall",
+      "name": "Birge Hall (Biological Sciences)",
+      "type": "class",
+      "area_m2": 1648.8
+    },
+    {
+      "id": 61,
+      "key": "lathrop_hall",
+      "name": "Lathrop Hall (Dance)",
+      "type": "class",
+      "area_m2": 1498.6
+    },
+    {
+      "id": 62,
+      "key": "bakke_rec",
+      "name": "Bakke Recreation & Wellbeing Center",
+      "type": "gym",
+      "area_m2": 13828.3
+    },
+    {
+      "id": 63,
+      "key": "carsons_market",
+      "name": "Carson's Market (Carson Gulley Center)",
+      "type": "dining",
+      "area_m2": 950.6
+    },
+    {
+      "id": 64,
+      "key": "lizes_market",
+      "name": "Liz's Market (Waters Hall)",
+      "type": "dining",
+      "area_m2": 3129.9
+    },
+    {
+      "id": 65,
+      "key": "rhetas_market",
+      "name": "Rheta's Market (Chadbourne/Barnard)",
+      "type": "dining",
+      "area_m2": 128.0
+    },
+    {
+      "id": 66,
+      "key": "four_lakes_market",
+      "name": "Four Lakes Market (Dejope dining)",
+      "type": "dining",
+      "area_m2": 6625.2
+    },
+    {
+      "id": 67,
+      "key": "kohl_center",
+      "name": "Kohl Center",
+      "type": "social",
+      "area_m2": 14695.2
+    },
+    {
+      "id": 68,
+      "key": "morgridge_hall",
+      "name": "Morgridge Hall (College of Computing & AI)",
+      "type": "class",
+      "area_m2": 5510.7
+    },
+    {
+      "id": 69,
+      "key": "lucky_777",
+      "name": "Lucky Apartments",
+      "type": "housing",
+      "area_m2": 4071.7
+    },
+    {
+      "id": 70,
+      "key": "grand_central",
+      "name": "Grand Central",
+      "type": "housing",
+      "area_m2": 1900.0
+    },
+    {
+      "id": 71,
+      "key": "theory_madison",
+      "name": "Theory Madison",
+      "type": "housing",
+      "area_m2": 4242.5
+    },
+    {
+      "id": 72,
+      "key": "embassy_505",
+      "name": "The Embassy",
+      "type": "housing",
+      "area_m2": 1023.2
+    },
+    {
+      "id": 73,
+      "key": "hub_madison",
+      "name": "Collegiate Madison",
+      "type": "housing",
+      "area_m2": 534.1
+    },
+    {
+      "id": 74,
+      "key": "the_james",
+      "name": "The James",
+      "type": "housing",
+      "area_m2": 3668.5
+    },
+    {
+      "id": 75,
+      "key": "domain",
+      "name": "The Domain",
+      "type": "housing",
+      "area_m2": 4929.9
+    },
+    {
+      "id": 76,
+      "key": "constellation",
+      "name": "The Constellation",
+      "type": "housing",
+      "area_m2": 133.4
+    },
+    {
+      "id": 77,
+      "key": "langdon_625",
+      "name": "625 on Langdon",
+      "type": "housing",
+      "area_m2": 536.3
+    },
+    {
+      "id": 78,
+      "key": "abbie_142",
+      "name": "The Abbie",
+      "type": "housing",
+      "area_m2": 182.9
+    },
+    {
+      "id": 79,
+      "key": "towers_on_state",
+      "name": "The Towers on State",
+      "type": "housing",
+      "area_m2": 1633.3
+    },
+    {
+      "id": 80,
+      "key": "oak_tree",
+      "name": "Oak Tree Apartments",
+      "type": "housing",
+      "area_m2": 1259.9
+    },
+    {
+      "id": 81,
+      "key": "sba_2217",
+      "name": "2217 University Ave",
+      "type": "housing",
+      "area_m2": 245.1
+    },
+    {
+      "id": 82,
+      "key": "sba_1917",
+      "name": "1917 University Ave",
+      "type": "housing",
+      "area_m2": 269.6
+    },
+    {
+      "id": 83,
+      "key": "sba_1932",
+      "name": "1932 University Ave",
+      "type": "housing",
+      "area_m2": 271.5
+    },
+    {
+      "id": 84,
+      "key": "the_regent",
+      "name": "The Regent",
+      "type": "housing",
+      "area_m2": 2801.3
+    },
+    {
+      "id": 85,
+      "key": "longfellow_lofts",
+      "name": "Longfellow Lofts",
+      "type": "housing",
+      "area_m2": 1780.1
+    },
+    {
+      "id": 86,
+      "key": "capitol_506",
+      "name": "Capitol Apartments",
+      "type": "housing",
+      "area_m2": 199.1
+    },
+    {
+      "id": 87,
+      "key": "laurel_commons",
+      "name": "Laurel Commons",
+      "type": "housing",
+      "area_m2": 2463.4
+    }
+  ],
+  "overlap_policy": "smaller polygon area wins; equal areas go to the lower id",
+  "overlaps": [
+    {
+      "a": "chadbourne_res",
+      "b": "rhetas_market",
+      "cells": 29,
+      "winner": "rhetas_market"
+    },
+    {
+      "a": "dejope_hall",
+      "b": "four_lakes_market",
+      "cells": 1663,
+      "winner": "dejope_hall"
+    },
+    {
+      "a": "waters_hall",
+      "b": "lizes_market",
+      "cells": 783,
+      "winner": "waters_hall"
+    }
+  ],
+  "skipped": []
+}

@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# MadHacks2026
-=======
 # MadHacks 2026 – Location API (Rust)
 
 Same API as the Python version (`~/Code/MadHacks2026`), built with axum + sqlx. Phone → `POST /api/v1/locations` → buffered → Lakebase. Frontend → `GET /api/v1/heatmap`.
@@ -26,6 +23,16 @@ Heatmap response: `{"start","end","count","data":{"<timestamp>":[{"lat","lng"},.
 
 Writes are buffered and flushed every 5s or 100 points, so a heatmap read right after a POST may not include it yet.
 
+## Building lookup
+Every ping is tagged with the campus building it falls in, saved in the `building` column on the same row (`NULL` when it's not in a building) and returned as `building` on heatmap points. A `building` sent by the client is kept only when the grid finds none.
+
+- **How:** `assets/buildings.json` (outline polygons) is rasterized once into a grid of 2 m cells covering the buildings plus a 10 m margin. Each cell stores a `u16` building id (0 = none), decided by point-in-polygon at the cell center in a flat local metric projection. A lookup is a bounds check, two multiplies and one array read: O(1), about 5 ns, about 2.4 MB in memory. No external API is called.
+- **It's an approximation.** It answers "is this coordinate inside a building outline, to within about 2 m". It does not mean the student is indoors: GPS error is often 5–30 m and worse near buildings. Fixes reporting `accuracy` (or `horizontal_accuracy`) above `BUILDING_MAX_ACCURACY_M` (default 30) get `NULL`. Fixes that don't report it are still looked up.
+- **Overlaps:** when outlines overlap, the smaller building wins (e.g. a market inside a dorm). On equal area, the one listed first in the JSON wins. Overlaps and malformed polygons (fewer than 3 points, non-finite or out-of-range coordinates, zero area) are logged at startup and listed in `assets/building_grid.json`.
+- **Artifacts:** `assets/building_grid.json` (metadata, the id→name map, and a checksum of buildings.json) plus `assets/building_grid.bin` (run-length-encoded cells). After editing buildings.json, regenerate them with `cargo run --release --bin build_building_grid` and commit both. If they're stale at startup, the server rebuilds in memory (a few ms) and tries to save them. With `BUILDING_GRID_REBUILD=false`, it exits with an error instead.
+- **Env:** `BUILDINGS_JSON`, `BUILDING_GRID_DIR`, `BUILDING_GRID_RESOLUTION_M` (2), `BUILDING_GRID_MARGIN_M` (10), `BUILDING_MAX_ACCURACY_M` (30, or `off`), `BUILDING_GRID_REBUILD` (true).
+- **Database:** uses the nullable `building TEXT` column on `location_events` and `location_events_broad` (added by the DB owner).
+- **Speed:** `cargo run --release --example bench_building_lookup`.
+
 ## Test
 `cargo test` (in-memory store only; never touches the database).
->>>>>>> fcd15e6d7fd9343962cb77cf5182c8f7a920ad55

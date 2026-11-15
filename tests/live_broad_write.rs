@@ -95,7 +95,8 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
     let device_id = format!("hourly-api-test-{}-{}", std::process::id(), now.timestamp_micros());
     let lat = 43.0731;
     let lng = -89.4012;
-    let building = "Memorial Union";
+    // The grid maps these coordinates to Grainger Hall, and the server stores its answer.
+    let building = "Grainger Hall (Wisconsin School of Business)";
     let payload = json!({
         "device_id": device_id,
         "lat": lat,
