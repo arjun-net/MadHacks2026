@@ -10,7 +10,11 @@ const MAPBOX_TOKEN = "pk.eyJ1Ijoiam9zaGNvbGNvcmQiLCJhIjoiY213Z3k4ajMyMDJ1cTJ4cGw
 
 const MAP_CENTER = [-89.4005, 43.0765]; // UW-Madison [lng, lat]
 const PING_INTERVAL_MIN = 2;            // must match generator ping_interval
-const STEPS_PER_DAY = (24 * 60) / PING_INTERVAL_MIN; // 288
+const DEFAULT_STEPS = 288;              // 24h at 2-min pings (fallback)
+
+/* Actual time extent of the loaded CSV; set by ingestRows. */
+let timeMin = 0;             // first step index in the data
+let timeMax = DEFAULT_STEPS - 1; // last step index in the data
 
 const map = new mapboxgl.Map({
   container: "map",
@@ -22,6 +26,8 @@ const map = new mapboxgl.Map({
 });
 
 map.on("load", () => {
+  document.body.classList.add("heat-on");
+
   map.addSource("pings", {
     type: "geojson",
     data: emptyFC(),
@@ -37,22 +43,22 @@ map.on("load", () => {
         "interpolate", ["linear"], ["get", "weight"],
         0, 0, 1, 1,
       ],
-      "heatmap-intensity": 0.9,
+      "heatmap-intensity": 0.7,
       "heatmap-radius": [
         "interpolate", ["linear"], ["zoom"],
-        12, 22, 16, 40,
+        12, 18, 16, 34,
       ],
-      "heatmap-opacity": 0.85,
-      // Green → yellow → red ramp
+      "heatmap-opacity": 0.6,
+      // Softer green → yellow → red ramp (lower alpha, gentler low end)
       "heatmap-color": [
         "interpolate", ["linear"],
         ["heatmap-density"],
-        0,   "rgba(0,0,0,0)",
-        0.2, "rgba(34,197,94,0.45)",
-        0.4, "rgba(74,222,128,0.7)",
-        0.6, "rgba(250,204,21,0.85)",
-        0.8, "rgba(249,115,22,0.9)",
-        1.0, "rgba(239,68,68,0.95)",
+        0,    "rgba(0,0,0,0)",
+        0.25, "rgba(34,197,94,0.2)",
+        0.45, "rgba(74,222,128,0.42)",
+        0.65, "rgba(250,204,21,0.58)",
+        0.85, "rgba(249,115,22,0.7)",
+        1.0,  "rgba(239,68,68,0.8)",
       ],
     },
   });
@@ -225,6 +231,18 @@ function ingestRows(rows) {
   const first = rows[0];
   const hasTs = "timestamp" in first;
 
+  // Anchor the step scale at the data's earliest timestamp so the
+  // scrub range starts at step 0 no matter when the sim begins.
+  if (hasTs) {
+    let minMs = Infinity;
+    for (const r of rows) {
+      const ms = parseTimestamp(r.timestamp);
+      if (ms !== null && ms < minMs) minMs = ms;
+    }
+    if (minMs === Infinity) throw new Error("No readable timestamps in CSV");
+    epoch0 = minMs;
+  }
+
   allFeatures = [];
   byStep = new Map();
   byAgent = new Map();
@@ -235,7 +253,7 @@ function ingestRows(rows) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
     const step = hasTs ? timestampToStep(r.timestamp) : Number(r.step) || 0;
-    if (step < 0 || step >= STEPS_PER_DAY) continue;
+    if (step < 0) continue;
 
     const f = {
       type: "Feature",
@@ -264,15 +282,22 @@ function ingestRows(rows) {
 
   if (!allFeatures.length) throw new Error("No valid rows (need lat/lng columns)");
 
+  // Derive the scrub range from the data's actual time extent
+  const stepsInData = [...new Set(allFeatures.map((f) => f.properties.step))];
+  timeMin = Math.min(...stepsInData);
+  timeMax = Math.max(...stepsInData);
+  updateTicks();
+
   if (selectedAgent !== null && !byAgent.has(selectedAgent)) clearSelection();
 
   const nAgents = new Set(allFeatures.map((f) => f.properties.agent_id)).size;
-  toast(`Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents`);
+  toast(`Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents · ${stepToClock(timeMin)}–${stepToClock(timeMax)}`);
 
+  slider.min = timeMin;
+  slider.max = timeMax;
   slider.disabled = false;
   playBtn.disabled = false;
-  slider.max = STEPS_PER_DAY - 1;
-  setStep(0);
+  setStep(timeMin);
 }
 
 /* ── Agent selection: click a dot → trace its full path ── */
@@ -281,11 +306,11 @@ function selectAgent(agentId, props, coords) {
   const trail = byAgent.get(agentId) || [];
   updateAgentPanel();
 
-  // Deduped full-day line for the gradient trace
+  // Deduped full-day line for the gradient trace (smoothed)
   const coordsLine = trail.map((p) => [p.lng, p.lat]);
   map.getSource("selected-path").setData(
     trail.length >= 2
-      ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coordsLine } }
+      ? { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: smoothCoords(coordsLine) } }
       : emptyFC()
   );
 
@@ -375,27 +400,49 @@ function togglePaths() {
 }
 
 /* Accepts a Date (PapaParse dynamicTyping converts ISO 8601 stamps to
- * Date objects), an ISO 8601 string, or "HH:MM(:SS)". */
-function timestampToStep(ts) {
-  let h, m;
-  if (ts instanceof Date && !isNaN(ts)) {
-    h = ts.getUTCHours();
-    m = ts.getUTCMinutes();
-  } else if (typeof ts === "string") {
-    let match = ts.match(/T(\d{2}):(\d{2})/); // ISO 8601
-    if (!match) match = ts.match(/^(\d{1,2}):(\d{2})/); // HH:MM
-    if (!match) return 0;
-    h = Number(match[1]);
-    m = Number(match[2]);
-  } else {
-    return 0;
+ * Date objects), an ISO 8601 string, or "HH:MM(:SS)". Steps are
+ * anchored at the CSV's earliest timestamp (epoch0), so multi-day
+ * data scrubs continuously from the first ping onward. */
+let epoch0 = 0; // ms of the data's first timestamp; set in ingestRows
+
+function parseTimestamp(ts) {
+  if (ts instanceof Date && !isNaN(ts)) return ts.getTime();
+  if (typeof ts === "string") {
+    let m = ts.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); // ISO 8601
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+    m = ts.match(/^(\d{1,2}):(\d{2})/); // HH:MM — treated as day 0
+    if (m) return (Number(m[1]) * 60 + Number(m[2])) * 60000;
   }
-  const mins = h * 60 + m;
-  return Math.min(STEPS_PER_DAY - 1, Math.floor(mins / PING_INTERVAL_MIN));
+  return null;
+}
+
+function timestampToStep(ts) {
+  const ms = parseTimestamp(ts);
+  if (ms === null) return 0;
+  return Math.max(0, Math.floor((ms - epoch0) / (PING_INTERVAL_MIN * 60000)));
 }
 
 function emptyFC() {
   return { type: "FeatureCollection", features: [] };
+}
+
+/* Chaikin corner-cutting: turns jagged waypoint polylines into smooth
+ * curves while preserving endpoints. 2 iterations ≈ 4× the points. */
+function smoothCoords(coords, iterations = 2) {
+  if (coords.length < 3) return coords;
+  let pts = coords;
+  for (let it = 0; it < iterations; it++) {
+    const out = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x1, y1] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      out.push([0.75 * x1 + 0.25 * x2, 0.75 * y1 + 0.25 * y2]);
+      out.push([0.25 * x1 + 0.75 * x2, 0.25 * y1 + 0.75 * y2]);
+    }
+    out.push(pts[pts.length - 1]);
+    pts = out;
+  }
+  return pts;
 }
 
 /* ── Timeline ── */
@@ -455,7 +502,7 @@ function selectedPathToStep(agentId, step) {
   const here = at && at.find((f) => f.properties.agent_id === agentId);
   if (here) coords.push(here.geometry.coordinates);
   if (coords.length < 2) return emptyFC();
-  return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } };
+  return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: smoothCoords(coords) } };
 }
 
 /* All agents' full-day trails, trimmed to steps <= current */
@@ -468,17 +515,32 @@ function allPathsToStep(step) {
       coords.push([p.lng, p.lat]);
     }
     if (coords.length >= 2) {
-      features.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } });
+      features.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: smoothCoords(coords) } });
     }
   }
   return { type: "FeatureCollection", features };
 }
 
 function stepToClock(step) {
-  const mins = step * PING_INTERVAL_MIN;
-  const h = String(Math.floor(mins / 60)).padStart(2, "0");
-  const m = String(mins % 60).padStart(2, "0");
-  return `${h}:${m}`;
+  // Display anchor = wall clock of the data's first timestamp
+  const base = epoch0 ? new Date(epoch0) : new Date(0);
+  const t = new Date(base.getTime() + step * PING_INTERVAL_MIN * 60000);
+  const dayOffset = Math.floor((Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) -
+    Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate())) / 86400000);
+  const label = `${String(t.getUTCHours()).padStart(2, "0")}:${String(t.getUTCMinutes()).padStart(2, "0")}`;
+  return dayOffset ? `${label}+${dayOffset}d` : label;
+}
+
+/* Fill the tick labels from the data's actual extent (5 evenly
+ * spaced marks between timeMin and timeMax). */
+function updateTicks() {
+  const ticksEl = document.getElementById("ticks");
+  if (!ticksEl) return;
+  const spans = ticksEl.children;
+  for (let i = 0; i < spans.length; i++) {
+    const step = Math.round(timeMin + (timeMax - timeMin) * (i / (spans.length - 1)));
+    spans[i].textContent = stepToClock(step);
+  }
 }
 
 slider.addEventListener("input", () => {
@@ -492,12 +554,12 @@ function play() {
   if (slider.disabled) return;
   playing = true;
   playBtn.textContent = "⏸";
-  if (currentStep >= STEPS_PER_DAY - 1) setStep(0);
+  if (currentStep >= timeMax) setStep(timeMin);
   playTimer = setInterval(() => {
     const next = currentStep + 1;
-    if (next >= STEPS_PER_DAY) {
+    if (next > timeMax) {
       pause();
-      setStep(STEPS_PER_DAY - 1);
+      setStep(timeMax);
       return;
     }
     setStep(next);

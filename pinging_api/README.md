@@ -43,6 +43,7 @@ them):
 | `PULSE_DEVICES` | *(all)* | post only the first N rows per tick |
 | `PULSE_START_TICK` | `0` | begin mid-timeline |
 | `PULSE_ONCE` | *(off)* | `true` = exit after one pass instead of looping |
+| `PULSE_WALLCLOCK` | *(off)* | `true` = fire the tick whose timestamp matches the current wall clock (2-min grid); `PULSE_TICK_MS` ignored |
 
 ## Build
 

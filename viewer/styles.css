@@ -85,29 +85,31 @@ html, body {
 
 .tool-btn:disabled { opacity: 0.35; cursor: default; }
 
-/* ── Timeline dock (bottom left) ── */
+/* ── Timeline dock (bottom center) ── */
 .dock {
-  bottom: 20px;
-  left: 20px;
-  width: min(560px, calc(100vw - 32px));
-  padding: 16px 20px 12px;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 32px));
+  padding: 10px 16px 8px;
+  border-radius: 24px;
   z-index: 10;
 }
 
 .dock-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .icon-btn {
-  width: 38px;
-  height: 38px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 1px solid var(--glass-border);
   background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  font-size: 14px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
@@ -118,18 +120,18 @@ html, body {
 
 .time-label {
   font-variant-numeric: tabular-nums;
-  font-size: 15px;
-  font-weight: 700;
-  min-width: 56px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 46px;
   text-align: center;
 }
 
 #time-slider {
   flex: 1;
-  height: 5px;
+  height: 3px;
   -webkit-appearance: none;
   appearance: none;
-  border-radius: 3px;
+  border-radius: 2px;
   background: rgba(255, 255, 255, 0.12);
   outline: none;
 }
@@ -139,18 +141,18 @@ html, body {
 #time-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid #0b0e13;
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.45);
   cursor: pointer;
 }
 
 #time-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--accent);
   border: 2px solid #0b0e13;
@@ -171,10 +173,11 @@ html, body {
 .ticks {
   display: flex;
   justify-content: space-between;
-  margin-top: 8px;
-  padding: 0 52px 0 52px;
-  font-size: 10px;
+  margin-top: 5px;
+  padding: 0 40px 0 40px;
+  font-size: 9px;
   color: var(--text-dim);
+  opacity: 0.75;
 }
 
 /* ── Toast (load status) ── */

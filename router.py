@@ -213,7 +213,9 @@ class Router:
 
     # ── Doors ──
     def door_of(self, building):
-        """Nearest-to-centroid perimeter vertex, pushed DOOR_OFFSET out."""
+        """Nearest-to-centroid perimeter vertex, pushed OUTSIDE the footprint
+        plus the wall margin (DOOR_OFFSET minimum) along the centroid ray —
+        doors that sit inside the building make routes cut the footprint."""
         bid = building["id"]
         cached = self._door_cache.get(bid)
         if cached:
@@ -224,6 +226,20 @@ class Router:
         # pick the perimeter vertex closest to the centroid as the door side
         best = min(poly, key=lambda p: _dist_m(p, (clat, clng)))
         door = _push_out(best, poly, DOOR_OFFSET)
+        # Walk further out until clear of footprint + margin + 1m slack
+        lat, lng = door
+        dlat = (lat - clat) / METERS_PER_DEG_LAT
+        dlng = (lng - clng) / METERS_PER_DEG_LNG
+        norm = math.hypot(dlat, dlng)
+        if norm > 1e-12:
+            ulat, ulng = dlat / norm, dlng / norm
+            for _ in range(200):  # 1m steps, hard cap 200m
+                if not (point_in_polygon(lat, lng, poly)
+                        or self._near_polygon(lat, lng, poly, self.margin)):
+                    break
+                lat += ulat / METERS_PER_DEG_LAT
+                lng += ulng / METERS_PER_DEG_LNG
+            door = [lat, lng]
         self._door_cache[bid] = door
         return door
 

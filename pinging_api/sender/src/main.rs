@@ -9,10 +9,12 @@
 //! Payload shape per point (API contract):
 //! ```json
 //! {"lat": 43.07, "lng": -89.39, "timestamp": "2026-11-12T00:00:00Z",
-//!  "device_id": "sim-12", "building": "sellery_hall"}
+//!  "device_id": "sim-12"}
 //! ```
+//! TEMP: building metadata removed from payload (was "building": "sellery_hall").
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use rand::Rng;
 use serde::Serialize;
@@ -57,6 +59,15 @@ struct Args {
     /// Exit after one full pass of the CSV instead of looping forever
     #[arg(long, env = "PULSE_ONCE", action = clap::ArgAction::SetTrue)]
     once: bool,
+
+    /// Wall-clock mode: fire the CSV tick whose timestamp matches the
+    /// current wall-clock time (2-minute boundaries) instead of pacing a
+    /// replay with its own timer. When the wall clock reaches a timestamp
+    /// in the CSV, that tick's points are posted. Outside the CSV's range
+    /// it idles until the range begins, then exits at the range end if
+    /// --once is set.
+    #[arg(long, env = "PULSE_WALLCLOCK", action = clap::ArgAction::SetTrue)]
+    wallclock: bool,
 }
 
 /// One point, exactly the API's LocationIn schema.
@@ -66,7 +77,8 @@ struct Point {
     lng: f64,
     timestamp: String,
     device_id: String,
-    building: String,
+    // TEMP: building metadata stripped from the payload — re-enable when needed.
+    // building: String,
 }
 
 /// Batch envelope per the API's BatchIn schema (max 500 points).
@@ -78,6 +90,8 @@ struct BatchIn {
 /// ticks in chronological order; ticks[i] = the device points for tick i
 struct Schedule {
     ticks: Vec<Vec<Point>>,
+    /// UTC epoch seconds of each tick's CSV timestamp (parallel to ticks)
+    tick_ts: Vec<i64>,
 }
 
 fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
@@ -95,7 +109,8 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
         let lat: f64 = rec[0].parse().unwrap_or(0.0);
         let long: f64 = rec[1].parse().unwrap_or(0.0);
         let timestamp = rec[2].to_string();
-        let building = rec[3].to_string();
+        // TEMP: building metadata stripped — re-enable when needed.
+        // let building = rec[3].to_string();
         let ts = timestamp.clone();
         let slot = by_ts.entry(ts).or_default().len();
         by_ts.entry(rec[2].to_string()).or_default().push(Point {
@@ -103,7 +118,7 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
             lng: long,
             timestamp,
             device_id: format!("sim-{slot}"),
-            building,
+            // building, // TEMP: building metadata stripped — re-enable when needed.
         });
     }
 
@@ -113,7 +128,16 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
             t.truncate(n);
         }
     }
-    Ok(Schedule { ticks })
+    // Parse each tick's timestamp into UTC epoch seconds (parallel vec).
+    let tick_ts: Vec<i64> = ticks
+        .iter()
+        .map(|t| {
+            DateTime::parse_from_rfc3339(&t[0].timestamp)
+                .map(|dt| dt.with_timezone(&Utc).timestamp())
+                .unwrap_or(0)
+        })
+        .collect();
+    Ok(Schedule { ticks, tick_ts })
 }
 
 #[tokio::main]
@@ -171,9 +195,66 @@ async fn main() -> Result<()> {
     let mut tick = Instant::now();
     let mut rng = rand::thread_rng();
 
+    // ── Wall-clock mode ─────────────────────────────────────────────
+    // Map the current wall clock onto the CSV's 2-minute tick grid: the
+    // tick whose timestamp == floor(now / 2min). If we've landed between
+    // ticks (e.g. launched at 9:01), still fire the 9:00 tick (late),
+    // then stay on the grid. Outside the CSV range: wait until the range
+    // begins, or exit if --once and the range has passed.
+    let mut next_wall_ts: Option<i64> = None; // next tick ts to fire (wallclock mode)
+    if args.wallclock {
+        let mut now = Utc::now().timestamp();
+        let step = schedule
+            .tick_ts
+            .get(1)
+            .copied()
+            .unwrap_or(120)
+            .saturating_sub(*schedule.tick_ts.first().unwrap_or(&0))
+            .max(1);
+        let first = *schedule.tick_ts.first().unwrap_or(&0);
+        let _last = *schedule.tick_ts.last().unwrap_or(&0);
+        if now < first {
+            let wait = (first - now) as u64;
+            println!(
+                "wall-clock: CSV starts at {}, waiting {}s for the range to begin",
+                DateTime::<Utc>::from_timestamp(first, 0)
+                    .map(|d| d.to_rfc3339())
+                    .unwrap_or_default(),
+                wait
+            );
+            sleep(Duration::from_secs(wait)).await;
+            now = Utc::now().timestamp();
+        }
+        // index of the most recent tick at/before now (snapped to grid)
+        let mut idx = ((now - first) / step).max(0) as usize;
+        if idx >= schedule.ticks.len() {
+            if args.once {
+                println!("wall-clock: current time is past the CSV range; nothing to send");
+                return Ok(());
+            }
+            idx = 0; // loop mode: wrap and wait for next occurrence
+        }
+        tick_idx = idx.min(schedule.ticks.len() - 1);
+        next_wall_ts = Some(first + (tick_idx as i64) * step);
+        // if we're within the first tick's window it fires immediately (late start ok)
+        println!(
+            "wall-clock mode: firing CSV timestamp {} at wall {}",
+            schedule.ticks[tick_idx][0].timestamp,
+            Utc::now().to_rfc3339()
+        );
+    }
+
     loop {
         let points = &schedule.ticks[tick_idx];
         if !points.is_empty() {
+            // In wall-clock mode, wait until this tick's timestamp (or fire
+            // immediately if we're at/after it — late start is fine).
+            if let Some(ts) = next_wall_ts {
+                let now = Utc::now().timestamp();
+                if ts > now {
+                    sleep(Duration::from_secs((ts - now) as u64)).await;
+                }
+            }
             // Chunk into API-legal batches of <=500 points
             let mut handles = Vec::new();
             for chunk in points.chunks(500) {
@@ -235,21 +316,43 @@ async fn main() -> Result<()> {
             }
         }
 
-        // Pace: next tick starts exactly tick_ms after the previous one
-        tick += Duration::from_millis(args.tick_ms);
-        let now = Instant::now();
-        if tick > now {
-            sleep(tick - now).await;
-        } else {
-            tick = now; // fell behind — reset pace instead of bursting
-        }
-
-        tick_idx += 1;
-        if tick_idx >= schedule.ticks.len() {
-            if args.once {
-                break;
+        // Pace: timer mode advances exactly tick_ms after the previous tick;
+        // wall-clock mode advances to the next tick timestamp on the grid.
+        if args.wallclock {
+            let step = schedule
+                .tick_ts
+                .get(1)
+                .copied()
+                .unwrap_or(120)
+                .saturating_sub(*schedule.tick_ts.first().unwrap_or(&0))
+                .max(1);
+            let next_ts = next_wall_ts.unwrap_or(0) + step;
+            let idx_next = tick_idx + 1;
+            if idx_next >= schedule.ticks.len() {
+                if args.once {
+                    break;
+                }
+                tick_idx = 0;
+                next_wall_ts = Some(next_ts); // keep grid continuity across the wrap
+            } else {
+                tick_idx = idx_next;
+                next_wall_ts = Some(next_ts);
             }
-            tick_idx = 0;
+        } else {
+            tick += Duration::from_millis(args.tick_ms);
+            let now = Instant::now();
+            if tick > now {
+                sleep(tick - now).await;
+            } else {
+                tick = now; // fell behind — reset pace instead of bursting
+            }
+            tick_idx += 1;
+            if tick_idx >= schedule.ticks.len() {
+                if args.once {
+                    break;
+                }
+                tick_idx = 0;
+            }
         }
     }
     Ok(())

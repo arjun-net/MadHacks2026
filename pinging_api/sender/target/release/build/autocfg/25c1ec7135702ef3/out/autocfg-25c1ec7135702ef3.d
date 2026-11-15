@@ -1,0 +1,10 @@
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/pinging_api/sender/target/release/build/autocfg/25c1ec7135702ef3/out/autocfg-25c1ec7135702ef3.d: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/error.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/rustc.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/version.rs
+
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/pinging_api/sender/target/release/build/autocfg/25c1ec7135702ef3/out/libautocfg-25c1ec7135702ef3.rlib: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/error.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/rustc.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/version.rs
+
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/pinging_api/sender/target/release/build/autocfg/25c1ec7135702ef3/out/libautocfg-25c1ec7135702ef3.rmeta: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/error.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/rustc.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/version.rs
+
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/lib.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/error.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/rustc.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.1/src/version.rs:
