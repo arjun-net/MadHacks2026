@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Floating top bar: live indicator, campus name, and sharing status.
+/// Masthead: a dateline (live, last update, date) over the campus name in display serif.
 struct MapHeader: View {
     let campus: Campus
     let snapshot: CampusSnapshot?
@@ -9,43 +9,46 @@ struct MapHeader: View {
     var onOpenSharing: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    PulsingDot(color: Theme.Colors.live, size: 7)
-                    Text("LIVE")
-                        .typeStyle(.micro)
-                        .foregroundStyle(Theme.Colors.live)
-                    Text("·")
-                        .foregroundStyle(Theme.Colors.textTertiary)
-                    UpdatedAgoText(date: snapshot?.generatedAt)
-                        .font(.system(size: 11.5, weight: .medium))
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                    if isRefreshing, snapshot != nil {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(Theme.Colors.textSecondary)
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                PulsingDot(color: Theme.Colors.live, size: 7)
+                Text("Live")
+                    .foregroundStyle(Theme.Colors.accent)
+                Text("·")
+                UpdatedAgoText(date: snapshot?.generatedAt)
+                if isRefreshing, snapshot != nil {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(Theme.Colors.textSecondary)
                 }
-                Text(campus.shortName)
-                    .typeStyle(.title)
-                    .foregroundStyle(Theme.Colors.textPrimary)
+                Spacer(minLength: 6)
+                Text(Formatting.dateline(snapshot?.generatedAt ?? .now))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .contentTransition(.opacity)
+            }
+            .typeStyle(.micro)
+            .foregroundStyle(Theme.Colors.textSecondary)
+            .padding(.bottom, 7)
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(Theme.Colors.ink).frame(height: Theme.Stroke.hairline)
             }
 
-            Spacer(minLength: 8)
-
-            SharingStatusPill(status: sharingStatus, action: onOpenSharing)
+            HStack(alignment: .center, spacing: 12) {
+                Text(campus.shortName)
+                    .typeStyle(.masthead)
+                    .foregroundStyle(Theme.Colors.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .contentTransition(.opacity)
+                Spacer(minLength: 8)
+                SharingStatusPill(status: sharingStatus, action: onOpenSharing)
+            }
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 10)
-        .padding(.vertical, 12)
-        .glass(cornerRadius: Theme.Radius.lg)
+        .padding(EdgeInsets(top: 12, leading: 16, bottom: 14, trailing: 14))
+        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
     }
 }
 
+/// Square, tracked-caps sharing button.
 struct SharingStatusPill: View {
     let status: SharingStatus
     var action: () -> Void
@@ -61,15 +64,15 @@ struct SharingStatusPill: View {
         switch status {
         case .active: "location.fill"
         case .permissionDenied: "location.slash.fill"
-        case .off: "location"
+        case .off: "location.fill"
         }
     }
 
-    private var tint: Color {
+    private var foreground: Color {
         switch status {
-        case .active: Theme.Colors.live
+        case .active: Theme.Colors.positive
         case .permissionDenied: Theme.Colors.danger
-        case .off: .white
+        case .off: Theme.Colors.onAccent
         }
     }
 
@@ -77,16 +80,20 @@ struct SharingStatusPill: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: symbol)
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .contentTransition(.symbolEffect(.replace))
                 Text(label)
-                    .font(.system(size: 13, weight: .semibold))
+                    .typeStyle(.button)
             }
-            .foregroundStyle(tint)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(tint.opacity(status == .off ? 0.1 : 0.15), in: Capsule())
-            .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.75))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(status == .off ? Theme.Colors.accentFill : Theme.Colors.paper, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+            .overlay {
+                if status != .off {
+                    RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(foreground, lineWidth: Theme.Stroke.hairline)
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Location sharing: \(label)")
@@ -94,7 +101,7 @@ struct SharingStatusPill: View {
     }
 }
 
-/// Vertical glass column of map actions.
+/// Vertical paper column of map actions.
 struct MapControlStack: View {
     let isHeatmapVisible: Bool
     var onRecenter: () -> Void
@@ -107,24 +114,24 @@ struct MapControlStack: View {
             MapControlButton(
                 symbol: isHeatmapVisible ? "flame.fill" : "flame",
                 label: isHeatmapVisible ? "Hide heatmap" : "Show heatmap",
-                tint: isHeatmapVisible ? HeatPalette.color(at: 0.85) : .white,
+                tint: isHeatmapVisible ? Theme.Colors.accent : Theme.Colors.ink,
                 action: onToggleHeatmap
             )
         }
-        .glass(cornerRadius: 16)
+        .paper(cornerRadius: Theme.Radius.sm)
     }
 
     private var divider: some View {
         Rectangle()
-            .fill(Color.white.opacity(0.1))
-            .frame(width: 26, height: 0.5)
+            .fill(Theme.Colors.ink)
+            .frame(width: 46, height: Theme.Stroke.hairline)
     }
 }
 
 struct MapControlButton: View {
     let symbol: String
     let label: String
-    var tint: Color = .white
+    var tint: Color = Theme.Colors.ink
     let action: () -> Void
 
     var body: some View {

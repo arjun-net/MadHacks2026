@@ -24,7 +24,6 @@ struct CampusMapView: UIViewRepresentable {
             coordinator.recenter(mapView, animated: false)
         }
         mapView.delegate = context.coordinator
-        mapView.overrideUserInterfaceStyle = .dark
 
         let configuration = MKStandardMapConfiguration(elevationStyle: .flat, emphasisStyle: .muted)
         configuration.pointOfInterestFilter = .excludingAll
@@ -42,6 +41,7 @@ struct CampusMapView: UIViewRepresentable {
         // Re-color the heat overlay and labels live when the appearance changes.
         mapView.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak coordinator = context.coordinator] (view: MKMapView, _: UITraitCollection) in
             coordinator?.animator.setStyle(view.traitCollection.userInterfaceStyle)
+            coordinator?.basemapRenderer?.style = view.traitCollection.userInterfaceStyle
             coordinator?.refreshAnnotationStyles(in: view)
         }
         return mapView
@@ -89,6 +89,7 @@ struct CampusMapView: UIViewRepresentable {
         var recenterToken: Int
 
         private var overlay: HeatmapOverlay?
+        private(set) weak var basemapRenderer: BasemapRenderer?
         private var annotations: [String: AreaAnnotation] = [:]
         private var gridTask: Task<Void, Never>?
 
@@ -177,7 +178,10 @@ struct CampusMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let overlay = overlay as? BasemapOverlay {
-                return BasemapRenderer(overlay: overlay)
+                let renderer = BasemapRenderer(overlay: overlay)
+                renderer.style = mapView.traitCollection.userInterfaceStyle
+                basemapRenderer = renderer
+                return renderer
             }
             if let overlay = overlay as? HeatmapOverlay {
                 let renderer = HeatmapOverlayRenderer(overlay: overlay)

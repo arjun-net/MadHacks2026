@@ -13,8 +13,8 @@ struct ActivityPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(Color.white.opacity(0.28))
-                .frame(width: 38, height: 5)
+                .fill(Theme.Colors.rule)
+                .frame(width: 38, height: 4)
                 .padding(.top, 9)
                 .padding(.bottom, 12)
 
@@ -41,7 +41,7 @@ struct ActivityPanel: View {
         .padding(.horizontal, 18)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
-        .glass(cornerRadius: Theme.Radius.xl)
+        .paper(cornerRadius: Theme.Radius.xl)
         .offset(y: resistedOffset)
         .gesture(dragGesture)
         .animation(Theme.Motion.smooth, value: isExpanded)
@@ -52,24 +52,18 @@ struct ActivityPanel: View {
 
     private func summary(_ snapshot: CampusSnapshot) -> some View {
         HStack(spacing: 14) {
-            ZStack {
-                ActivityGauge(intensity: snapshot.overallIntensity, lineWidth: 6)
-                Image(systemName: snapshot.level.symbol)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(snapshot.level.color)
-                    .contentTransition(.symbolEffect(.replace))
-            }
-            .frame(width: 56, height: 56)
+            ActivityGauge(intensity: snapshot.overallIntensity)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text("Campus is")
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                    Text(snapshot.level.title.lowercased())
-                        .foregroundStyle(snapshot.level.color)
-                        .contentTransition(.interpolate)
-                }
-                .font(.system(size: 19, weight: .bold))
+                (Text("Campus is ")
+                    .foregroundStyle(Theme.Colors.ink)
+                    + Text(snapshot.level.title.lowercased() + ".")
+                    .font(.cpTitleItalic)
+                    .foregroundStyle(Theme.Colors.accent))
+                    .font(.cpTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .contentTransition(.interpolate)
 
                 HStack(spacing: 5) {
                     Image(systemName: "person.2.fill")
@@ -84,7 +78,7 @@ struct ActivityPanel: View {
                     HStack(spacing: 5) {
                         Image(systemName: "flame.fill")
                             .font(.system(size: 10))
-                            .foregroundStyle(top.level.color)
+                            .foregroundStyle(Theme.Colors.accent)
                         Text("Busiest: \(top.area.shortName)")
                             .lineLimit(1)
                     }
@@ -97,10 +91,10 @@ struct ActivityPanel: View {
 
             Image(systemName: "chevron.up")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.Colors.textTertiary)
+                .foregroundStyle(Theme.Colors.ink)
                 .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                .frame(width: 30, height: 30)
-                .background(Color.white.opacity(0.08), in: Circle())
+                .frame(width: 44, height: 44)
+                .overlay(Circle().strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint(isExpanded ? "Collapse activity panel" : "Expand to see busiest areas")
@@ -110,9 +104,8 @@ struct ActivityPanel: View {
     private var loadingSummary: some View {
         HStack(spacing: 14) {
             Circle()
-                .stroke(Color.white.opacity(0.09), lineWidth: 6)
-                .frame(width: 50, height: 50)
-                .padding(3)
+                .stroke(Theme.Colors.surfaceStrong, lineWidth: 2)
+                .frame(width: 60, height: 60)
                 .shimmering()
             VStack(alignment: .leading, spacing: 8) {
                 SkeletonBlock(width: 150, height: 16)
@@ -142,37 +135,29 @@ struct ActivityPanel: View {
     // MARK: Expanded
 
     private func expandedContent(_ snapshot: CampusSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(height: 0.5)
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "Busiest right now", trailing: snapshot.trend.title, trailingSymbol: snapshot.trend.symbol)
                 .padding(.top, 16)
 
-            HStack {
-                Text("Busiest right now").sectionLabelStyle()
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: snapshot.trend.symbol)
-                    Text(snapshot.trend.title)
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.Colors.textTertiary)
-            }
-
-            VStack(spacing: 14) {
-                ForEach(Array(snapshot.busiest(5).enumerated()), id: \.element.id) { index, activity in
+            VStack(spacing: 0) {
+                let rows = snapshot.busiest(5)
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, activity in
                     Button {
                         onSelectArea(activity.id)
                     } label: {
                         AreaActivityRow(activity: activity, rank: index + 1)
+                            .padding(.vertical, 4)
                     }
-                    .buttonStyle(PressableButtonStyle())
+                    .buttonStyle(RowButtonStyle())
+                    if index < rows.count - 1 {
+                        Rectangle().fill(Theme.Colors.rule).frame(height: Theme.Stroke.hairline)
+                    }
                 }
             }
 
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield.fill")
-                    .foregroundStyle(Theme.Colors.live.opacity(0.8))
+                    .foregroundStyle(Theme.Colors.positive)
                 Text("Anonymous & aggregated · spots under \(snapshot.privacyThreshold) hidden")
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
@@ -180,7 +165,7 @@ struct ActivityPanel: View {
                 Text(Formatting.time(snapshot.generatedAt))
                     .monospacedDigit()
             }
-            .font(.system(size: 11, weight: .medium))
+            .typeStyle(.caption)
             .foregroundStyle(Theme.Colors.textTertiary)
             .padding(.top, 2)
         }
@@ -228,9 +213,10 @@ struct AreaFocusCard: View {
                 AreaIconTile(symbol: activity.area.symbol, color: activity.level.color, size: 44)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(activity.area.name)
-                        .typeStyle(.headline)
-                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .typeStyle(.title3)
+                        .foregroundStyle(Theme.Colors.ink)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                     Text("\(activity.area.category.title) · \(activity.countLabel)")
                         .typeStyle(.caption)
                         .foregroundStyle(Theme.Colors.textSecondary)
@@ -238,12 +224,13 @@ struct AreaFocusCard: View {
                 Spacer(minLength: 4)
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Colors.textSecondary)
-                        .frame(width: 30, height: 30)
-                        .background(Color.white.opacity(0.1), in: Circle())
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.Colors.ink)
+                        .frame(width: 44, height: 44)
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(PressableButtonStyle())
+                .buttonStyle(RowButtonStyle())
                 .accessibilityLabel("Close")
             }
 
@@ -255,13 +242,13 @@ struct AreaFocusCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Trend").sectionLabelStyle()
                     Label(activity.trend.shortTitle, systemImage: activity.trend.symbol)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .typeStyle(.rowTitle)
+                        .foregroundStyle(Theme.Colors.ink)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("Last 24 min").sectionLabelStyle()
-                    Sparkline(values: activity.history, color: activity.level.color, lineWidth: 2)
+                    Sparkline(values: activity.history, color: activity.level.textColor, lineWidth: 2)
                         .frame(width: 96, height: 30)
                 }
             }
@@ -274,15 +261,15 @@ struct AreaFocusCard: View {
                         Image(systemName: "chart.bar.xaxis")
                             .font(.system(size: 12.5, weight: .semibold))
                         Text("Busy times & history")
-                            .font(.system(size: 14, weight: .semibold))
+                            .typeStyle(.button)
                         Spacer()
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .foregroundStyle(Theme.Colors.onAccent)
                     .padding(.horizontal, 14)
-                    .frame(height: 42)
-                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                    .frame(height: 44)
+                    .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(RowButtonStyle())
@@ -290,7 +277,7 @@ struct AreaFocusCard: View {
             }
         }
         .padding(16)
-        .glass(cornerRadius: Theme.Radius.lg, tint: activity.level.color)
+        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
     }
 }
 

@@ -26,6 +26,13 @@ enum Formatting {
         }
     }
 
+    /// Newspaper dateline: "SAT · NOV 14".
+    static func dateline(_ date: Date) -> String {
+        let weekday = date.formatted(.dateTime.weekday(.abbreviated))
+        let day = date.formatted(.dateTime.month(.abbreviated).day())
+        return "\(weekday) · \(day)".uppercased()
+    }
+
     /// "3 PM", "12 AM", or "3a" when `compact`.
     static func hour(_ hour: Double, compact: Bool = false) -> String {
         let h = ((Int(hour) % 24) + 24) % 24

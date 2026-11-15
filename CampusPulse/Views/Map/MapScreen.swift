@@ -72,13 +72,13 @@ struct MapScreen: View {
         .onChange(of: viewModel.campus.id) { _, _ in viewModel.campusDidChange() }
     }
 
-    /// Soft dark fades at the top and bottom keep floating chrome legible over the map.
+    /// Newsprint fades at the top and bottom keep floating chrome legible over the map.
     private var edgeScrims: some View {
         VStack(spacing: 0) {
-            LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [Theme.Colors.mapScrim.opacity(0.9), Theme.Colors.mapScrim.opacity(0)], startPoint: .top, endPoint: .bottom)
                 .frame(height: 180)
             Spacer()
-            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [Theme.Colors.mapScrim.opacity(0), Theme.Colors.mapScrim.opacity(0.85)], startPoint: .top, endPoint: .bottom)
                 .frame(height: 260)
         }
         .ignoresSafeArea()
@@ -92,7 +92,7 @@ struct MapScreen: View {
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
         } else if case .failed(let message) = viewModel.loadState {
             ErrorStateView(message: message, retry: viewModel.retry)
-                .glass(cornerRadius: Theme.Radius.xl)
+                .paper(cornerRadius: Theme.Radius.sm)
                 .padding(.horizontal, 24)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
         } else if viewModel.loadState == .empty {
@@ -100,7 +100,7 @@ struct MapScreen: View {
                 threshold: viewModel.snapshot?.privacyThreshold ?? AppConfig.privacyThreshold,
                 campusName: viewModel.campus.shortName
             )
-            .glass(cornerRadius: Theme.Radius.xl)
+            .paper(cornerRadius: Theme.Radius.sm)
             .padding(.horizontal, 24)
             .offset(y: -60)
             .transition(.opacity.combined(with: .scale(scale: 0.95)))
