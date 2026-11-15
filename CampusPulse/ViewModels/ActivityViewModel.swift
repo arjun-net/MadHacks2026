@@ -86,7 +86,7 @@ final class ActivityViewModel {
     }
 
     var campus: Campus { store.campus }
-    /// The Activity tab shows trends from the server's stored day (see `CampusStore`).
+    /// The Activity tab's reading: the live one on fake data, else the server's stored day (see `CampusStore`).
     var snapshot: CampusSnapshot? { store.historySnapshot }
     var loadState: LoadState { store.historyState }
 
@@ -163,9 +163,13 @@ final class ActivityViewModel {
         snapshot?.activity(for: areaID)
     }
 
-    /// Usual busy times and past days for an area, from the server's stored day.
+    /// Usual busy times and past days for an area: generated when the app runs on fake data,
+    /// otherwise from the server's stored day.
     func insights(for areaID: String) -> AreaInsights? {
         guard let snapshot, let activity = snapshot.activity(for: areaID) else { return nil }
+        if AppConfig.simulatesActivityData {
+            return SampleActivityData.insights(for: activity, campus: campus, date: snapshot.generatedAt)
+        }
         if let history = store.history, history.campusID == campus.id {
             return history.insights(for: activity, now: snapshot.generatedAt)
         }

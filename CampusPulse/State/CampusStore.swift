@@ -5,7 +5,8 @@ import os
 /// Activity for the selected campus, from the backend.
 /// - `snapshot`: live, from the last few 2-minute slots (the map).
 /// - `historySnapshot` / `history`: the server's stored day, replayed at the current time of day
-///   (the Activity tab's trends and the area detail screens).
+///   (the Activity tab's trends and the area detail screens). With `AppConfig.simulatesActivityData`
+///   the Activity tab shows the live reading instead, and no stored day is loaded.
 /// - Every 15 seconds the server's people-per-building counts (`/buildings/counts`) are pulled.
 ///   For the campus's tracked buildings they set the current number and heat on the map, and the
 ///   current reading on the Activity tab.
@@ -108,7 +109,9 @@ final class CampusStore {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        if history?.campusID != campus.id {
+        if AppConfig.simulatesActivityData {
+            // The Activity tab follows the live reading (see `rebuildLive`); no stored day needed.
+        } else if history?.campusID != campus.id {
             loadHistory()
         } else if let history {
             updateHistorySnapshot(from: history)
@@ -181,6 +184,7 @@ final class CampusStore {
         } catch {
             Self.log.error("Live heatmap failed: \(error.localizedDescription, privacy: .public)")
             if snapshot == nil { state = .failed(Self.message(for: error)) }
+            if AppConfig.simulatesActivityData, historySnapshot == nil { historyState = state }
         }
     }
 
@@ -235,7 +239,12 @@ final class CampusStore {
         )
         snapshot = next
         state = next.isEmpty ? .empty : .loaded
-        if let history { updateHistorySnapshot(from: history) }
+        if AppConfig.simulatesActivityData {
+            historySnapshot = next
+            historyState = state
+        } else if let history {
+            updateHistorySnapshot(from: history)
+        }
         if notify { onLiveUpdate?(next) }
     }
 

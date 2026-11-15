@@ -32,6 +32,11 @@ enum AppConfig {
     /// They're never uploaded. Set to false to show only what real phones send.
     static let simulatesLiveData = true
 
+    /// Fill the Activity tab with fake data too: it shows the same reading as the map, and each
+    /// place gets a generated week of history (usual busy times per weekday, the past seven
+    /// days and today so far) instead of the server's one stored day. Needs `simulatesLiveData`.
+    static let simulatesActivityData = simulatesLiveData
+
     /// Simulated headcount of a packed building (scaled by its popularity).
     static let simulatedPeakHeadcount = 120.0
 
