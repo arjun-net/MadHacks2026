@@ -169,7 +169,7 @@ final class ActivityViewModel {
 
     var participantsText: String {
         guard let snapshot else { return "—" }
-        return "≈ " + Formatting.number(snapshot.participantCount)
+        return "≈" + Formatting.number(snapshot.participantCount)
     }
 
     var activeAreasText: String {

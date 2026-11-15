@@ -6,75 +6,63 @@ struct OverviewCard: View {
     let participantsText: String
     let activeAreasText: String
 
-    /// The ring grows with Dynamic Type so the percentage and level stay inside it.
-    @ScaledMetric(relativeTo: .title) private var gaugeSize: CGFloat = 124
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// Side by side normally; stacked at accessibility text sizes so the stats keep their width.
+    /// Side by side normally; stacked at accessibility text sizes.
     private var summaryLayout: AnyLayout {
         dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 18))
-            : AnyLayout(HStackLayout(spacing: 20))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             summaryLayout {
-                ZStack {
-                    ActivityGauge(intensity: snapshot.overallIntensity, lineWidth: 8, style: .ring)
-                    VStack(spacing: 0) {
-                        Image(systemName: snapshot.level.symbol)
-                            .imageScale(.small)
-                            .foregroundStyle(snapshot.level.textColor)
-                            .contentTransition(.symbolEffect(.replace))
-                        Text("\(Int((snapshot.overallIntensity * 100).rounded()))%")
-                            .typeStyle(.metric)
-                            .foregroundStyle(Theme.Colors.accent)
-                            .contentTransition(.numericText())
-                        Text(snapshot.level.title)
-                            .typeStyle(.badge)
-                            .foregroundStyle(Theme.Colors.textPrimary)
-                    }
+                // The level in words, and which way it's heading. No gauge: the word says it.
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Campus is")
+                        .typeStyle(.caption)
+                        .foregroundStyle(Theme.Colors.textTertiary)
+                    Text(snapshot.level.title)
+                        .typeStyle(.metric)
+                        .foregroundStyle(snapshot.level.textColor)
+                        .contentTransition(.opacity)
+                    Text(snapshot.trend.title)
+                        .typeStyle(.caption)
+                        .foregroundStyle(Theme.Colors.textSecondary)
                 }
-                .frame(width: gaugeSize, height: gaugeSize)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    metric(value: participantsText, label: "students sharing", symbol: "person.2.fill")
-                    metric(value: activeAreasText, label: "areas active", symbol: "mappin.and.ellipse")
-                    HStack(spacing: 5) {
-                        Image(systemName: snapshot.trend.symbol)
-                        Text(snapshot.trend.title)
-                    }
-                    .typeStyle(.badge)
-                    .foregroundStyle(snapshot.level.textColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(snapshot.level.textColor, lineWidth: Theme.Stroke.hairline))
-                }
-                .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
+                HStack(alignment: .top, spacing: 22) {
+                    metric(value: participantsText, label: "on campus")
+                    metric(value: activeAreasText, label: "places busy")
+                }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                SectionHeader(title: "Campus activity", trailing: "Last 24 min")
+            VStack(alignment: .leading, spacing: 6) {
+                Rectangle().fill(Theme.Colors.rule).frame(height: Theme.Stroke.hairline)
+                Text("Last 24 minutes")
+                    .typeStyle(.caption)
+                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .padding(.top, 8)
                 CampusTrendChart(history: snapshot.history, updatedAt: snapshot.generatedAt)
-                    .frame(height: 96)
+                    .frame(height: 80)
             }
         }
         .padding(18)
-        .paper(cornerRadius: Theme.Radius.sm)
+        .card(cornerRadius: Theme.Radius.sm)
+        .accessibilityElement(children: .combine)
     }
 
-    private func metric(value: String, label: String, symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+    private func metric(value: String, label: String) -> some View {
+        VStack(alignment: .trailing, spacing: 2) {
             Text(value)
                 .typeStyle(.metricSmall)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .contentTransition(.numericText())
-            Label(label, systemImage: symbol)
+                .monospacedDigit()
+            Text(label)
                 .typeStyle(.caption)
-                .foregroundStyle(Theme.Colors.textSecondary)
-                .labelStyle(.titleAndIcon)
+                .foregroundStyle(Theme.Colors.textTertiary)
         }
     }
 }

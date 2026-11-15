@@ -92,7 +92,6 @@ struct AreaDetailScreen: View {
 
     private func headerTitle(_ activity: AreaActivity) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            AreaIconTile(symbol: activity.area.symbol, color: activity.level.textColor, size: 52)
             VStack(alignment: .leading, spacing: 4) {
                 Text(activity.area.name)
                     .typeStyle(.title)

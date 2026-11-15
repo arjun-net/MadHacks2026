@@ -31,7 +31,8 @@ struct PulsingDot: View {
     }
 }
 
-/// Square, tracked-caps level chip. Text always carries the level word, never color alone.
+/// The level as colored text (a solid chip only for Packed). The word is always there, never
+/// color alone.
 struct ActivityLevelBadge: View {
     let level: ActivityLevel
     var showsIcon = false
@@ -45,16 +46,11 @@ struct ActivityLevelBadge: View {
                 .typeStyle(.badge)
         }
         .foregroundStyle(level == .packed ? Theme.Colors.onAccent : level.textColor)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2.5)
+        .padding(.horizontal, level == .packed ? 6 : 0)
+        .padding(.vertical, level == .packed ? 2.5 : 0)
         .background {
             if level == .packed {
                 RoundedRectangle(cornerRadius: Theme.Radius.sm).fill(Theme.Colors.accentFill)
-            }
-        }
-        .overlay {
-            if level != .packed {
-                RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(level.textColor, lineWidth: 1)
             }
         }
         .accessibilityLabel("Activity: \(level.title)")

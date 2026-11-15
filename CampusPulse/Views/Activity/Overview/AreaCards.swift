@@ -5,12 +5,9 @@ struct QuietSpotCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                AreaIconTile(symbol: activity.area.symbol, color: activity.level.textColor, size: 36)
-                Spacer()
-                ActivityLevelBadge(level: activity.level)
-            }
             VStack(alignment: .leading, spacing: 3) {
+                ActivityLevelBadge(level: activity.level)
+                    .typeStyle(.caption)
                 Text(activity.area.name)
                     .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
@@ -54,8 +51,6 @@ struct CompactAreaRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
             Spacer(minLength: 8)
-            ActivityBar(intensity: activity.intensity, height: 4)
-                .frame(width: 64)
             Text(activity.level.title)
                 .typeStyle(.badge)
                 .foregroundStyle(activity.level.textColor)

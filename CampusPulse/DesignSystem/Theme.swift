@@ -91,7 +91,7 @@ enum Theme {
         /// Edges of interactive controls (chips, switches, segmented pickers, small buttons).
         static let borderStrong = Color(light: Hex(0xC4B7A1), dark: night(0x4A4137, 0x4E3030, 0x464D56))
         /// Section and masthead rules: ink in Day for the newspaper feel, softened in Night.
-        static let sectionRule = Color(light: Hex(0x1F1B16), dark: night(0x5A5045, 0x5E3B39, 0x535A64))
+        static let sectionRule = Color(light: Hex(0xD9CDB8), dark: night(0x3A332B, 0x3F2626, 0x343A42))
         /// Selected chip, segment and tab: ink in Day, press red in Night (a cream block glares on dark).
         static let selectionFill = Color(light: Hex(0x1F1B16), dark: night(0x9B0000, 0xC5050C, 0xA80F14))
         static let onSelection = Color(light: Hex(0xFFFDF8), dark: night(0xFFFDF8, 0xFFFFFF, 0xFFFFFF))
@@ -142,7 +142,7 @@ enum Theme {
 
     enum Stroke {
         static let hairline: CGFloat = 1
-        static let sectionRule: CGFloat = 2
+        static let sectionRule: CGFloat = 1
     }
 
     enum Motion {

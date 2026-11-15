@@ -14,8 +14,6 @@ struct SettingsScreen: View {
                 VStack(alignment: .leading, spacing: 28) {
                     header
 
-                    CampusBanner(campus: viewModel.selectedCampus)
-
                     SettingsSection(title: "Campus") {
                         NavigationLink {
                             UniversityPickerView(viewModel: viewModel)
@@ -192,7 +190,7 @@ struct SettingsScreen: View {
         }
     }
 
-    /// Masthead title with a 2pt rule, matching the Activity tab.
+    /// Page title over a hairline, matching the Activity tab.
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Settings")
@@ -217,9 +215,7 @@ struct SettingsIcon: View {
         Image(systemName: symbol)
             .imageScale(.medium)
             .foregroundStyle(color)
-            .frame(width: 29, height: 29)
-            .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
+            .frame(width: 24, height: 29)
     }
 }
 
