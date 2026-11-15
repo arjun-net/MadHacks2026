@@ -4,7 +4,7 @@ import Foundation
 enum AppConfig {
     /// Location API. Temporary Cloudflare tunnel: it changes whenever the server or tunnel restarts.
     /// Docs at the same host under /docs.
-    static let defaultAPIBaseURL = URL(string: "https://dragon-easily-atlas-airplane.trycloudflare.com/api/v1")!
+    static let defaultAPIBaseURL = URL(string: "https://valuable-friday-bruce-bottom.trycloudflare.com/api/v1")!
 
     /// The server in use. Override without rebuilding from Settings > Developer (debug builds),
     /// or with the launch argument `-api.baseURL https://…/api/v1`.
