@@ -751,7 +751,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     @objc private func handleRotate(_ gesture: UIRotationGestureRecognizer) {
         guard gesture.state == .changed || gesture.state == .began else { return }
         cameraAnimation = nil
-        camera.heading -= Float(gesture.rotation)
+        // A clockwise twist (positive rotation) turns the map clockwise, following the fingers.
+        camera.heading += Float(gesture.rotation)
         gesture.rotation = 0
         applyCamera()
     }
