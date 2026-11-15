@@ -42,9 +42,7 @@ struct UniversityPickerView: View {
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .background(ScreenBackground(ruled: false))
-        .navigationTitle("University")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .paperNavigationBar("University")
     }
 
     private var searchField: some View {

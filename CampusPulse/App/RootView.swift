@@ -54,16 +54,8 @@ struct RootView: View {
         }
         .ignoresSafeArea(.keyboard)
         .sheet(isPresented: $isSharingSheetPresented) {
-            NavigationStack {
-                LocationSharingScreen(viewModel: sharingViewModel)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") { isSharingSheetPresented = false }
-                                .font(.cpButton)
-                                .foregroundStyle(Theme.Colors.accent)
-                        }
-                    }
-            }
+            LocationSharingScreen(viewModel: sharingViewModel, onDone: { isSharingSheetPresented = false })
+                .safeAreaPadding(.top, 12) // clear of the drag indicator
             .presentationDragIndicator(.visible)
             .presentationBackground(Theme.Colors.background)
             .presentationCornerRadius(Theme.Radius.xl)
@@ -86,7 +78,7 @@ struct RootView: View {
         }
     }
 
-    /// `-screen activity|settings|sharing|denied|onboarding` jumps straight to a screen (debug builds only).
+    /// `-screen activity|settings|sharing|denied|onboarding|detail` jumps straight to a screen (debug builds only).
     private func applyDebugLaunchOptions() {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "screen") {
@@ -94,6 +86,7 @@ struct RootView: View {
         case "settings": selectedTab = .settings
         case "sharing": isSharingSheetPresented = true
         case "onboarding": isOnboardingPresented = true
+        case "detail": openAreaDetails(mapViewModel.campus.areas.first?.id ?? "")
         case "denied":
             container.sharing.simulate(permission: .denied)
             isSharingSheetPresented = true

@@ -39,9 +39,7 @@ struct PrivacyInfoView: View {
             .padding(.bottom, Theme.tabBarClearance)
         }
         .background(ScreenBackground(ruled: false))
-        .navigationTitle("Privacy")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .paperNavigationBar("Privacy")
     }
 
     private func bullet(_ text: String) -> some View {
@@ -110,9 +108,7 @@ struct AboutView: View {
             .padding(.bottom, Theme.tabBarClearance)
         }
         .background(ScreenBackground(ruled: false))
-        .navigationTitle("About")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .paperNavigationBar("About")
     }
 }
 

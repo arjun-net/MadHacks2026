@@ -17,25 +17,25 @@ struct AreaDetailScreen: View {
             }
         }
         .background(ScreenBackground())
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                let isFavorite = viewModel.isFavorite(areaID)
+        .paperNavigationBar(showsRule: false) {
+            let isFavorite = viewModel.isFavorite(areaID)
+            // Joined like the map controls: one paper strip, a hairline between.
+            HStack(spacing: 0) {
                 Button {
                     withAnimation(Theme.Motion.snappy) { viewModel.toggleFavorite(areaID) }
                 } label: {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
-                        .contentTransition(.symbolEffect(.replace))
+                    PaperIconLabel(symbol: isFavorite ? "star.fill" : "star", tint: Theme.Colors.accent)
                 }
                 .accessibilityLabel(isFavorite ? "Remove from your places" : "Save to your places")
                 .sensoryFeedback(.selection, trigger: isFavorite)
+                Rectangle().fill(Theme.Colors.border).frame(width: Theme.Stroke.hairline, height: 42)
                 Button { onShowOnMap(areaID) } label: {
-                    Image(systemName: "map")
+                    PaperIconLabel(symbol: "map", tint: Theme.Colors.accent)
                 }
                 .accessibilityLabel("Show on map")
             }
+            .buttonStyle(PressableButtonStyle())
+            .paper(cornerRadius: Theme.Radius.sm)
         }
     }
 

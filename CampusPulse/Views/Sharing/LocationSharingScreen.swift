@@ -2,6 +2,8 @@ import SwiftUI
 
 struct LocationSharingScreen: View {
     @Bindable var viewModel: LocationSharingViewModel
+    /// Set when shown as a sheet: the bar gets a Done button instead of Back.
+    var onDone: (() -> Void)?
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -35,9 +37,11 @@ struct LocationSharingScreen: View {
         }
         .scrollIndicators(.hidden)
         .background(ScreenBackground(ruled: false))
-        .navigationTitle("Location Sharing")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .paperNavigationBar("Location Sharing", showsBack: onDone == nil) {
+            if let onDone {
+                PaperTextButton(title: "Done", action: onDone)
+            }
+        }
     }
 
     // MARK: Hero
