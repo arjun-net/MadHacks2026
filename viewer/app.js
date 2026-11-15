@@ -153,8 +153,18 @@ const STATE_COLORS = {
 /* ── CSV loading ── */
 const fileInput = document.getElementById("csv-input");
 const statusEl = document.getElementById("status");
-const statsEl = document.getElementById("stats");
 const slider = document.getElementById("time-slider");
+
+/* Toast: transient status message (auto-hides) */
+let toastTimer = null;
+function toast(msg, sticky = false, isError = false) {
+  statusEl.textContent = msg;
+  statusEl.classList.toggle("error", isError);
+  statusEl.hidden = false;
+  statusEl.style.opacity = "1";
+  if (toastTimer) clearTimeout(toastTimer);
+  if (!sticky) toastTimer = setTimeout(() => { statusEl.hidden = true; }, 3500);
+}
 const playBtn = document.getElementById("play-btn");
 const timeLabel = document.getElementById("time-label");
 const speedSelect = document.getElementById("speed-select");
@@ -162,6 +172,18 @@ const speedSelect = document.getElementById("speed-select");
 fileInput.addEventListener("change", (e) => {
   if (e.target.files.length) loadCSVFile(e.target.files[0]);
 });
+
+/* Mock analysis tools — placeholders for the Databricks-backed analytics */
+const MOCK_TOOLS = [
+  ["tool-congestion", "Congestion analysis", "coming soon — Databricks-backed"],
+  ["tool-peaks", "Peak times by place", "coming soon — Databricks-backed"],
+  ["tool-hotspots", "Busiest places", "coming soon — Databricks-backed"],
+];
+for (const [id, label, note] of MOCK_TOOLS) {
+  document.getElementById(id).addEventListener("click", () => {
+    toast(`${label} · ${note}`);
+  });
+}
 
 /* Drag-and-drop anywhere on the page */
 document.addEventListener("dragover", (e) => {
@@ -177,7 +199,7 @@ document.addEventListener("drop", (e) => {
 });
 
 function loadCSVFile(file) {
-  statusEl.textContent = "Parsing…";
+  toast("Parsing…", true);
   Papa.parse(file, {
     header: true,
     skipEmptyLines: true,
@@ -186,12 +208,12 @@ function loadCSVFile(file) {
       try {
         ingestRows(results.data);
       } catch (err) {
-        statusEl.textContent = "Error: " + err.message;
+        toast("Error: " + err.message, false, true);
         console.error(err);
       }
     },
     error: (err) => {
-      statusEl.textContent = "Parse error: " + err.message;
+      toast("Parse error: " + err.message, false, true);
     },
   });
 }
@@ -245,11 +267,7 @@ function ingestRows(rows) {
   if (selectedAgent !== null && !byAgent.has(selectedAgent)) clearSelection();
 
   const nAgents = new Set(allFeatures.map((f) => f.properties.agent_id)).size;
-  document.getElementById("stat-pings").textContent = "—";
-  document.getElementById("stat-agents").textContent = nAgents;
-  document.getElementById("stat-frames").textContent = STEPS_PER_DAY;
-  statsEl.hidden = false;
-  statusEl.textContent = `Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents`;
+  toast(`Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents`);
 
   slider.disabled = false;
   playBtn.disabled = false;
@@ -284,7 +302,7 @@ function selectAgent(agentId, props, coords) {
     )
     .addTo(map);
 
-  statusEl.textContent = `Agent ${agentId} selected · ${trail.length} waypoints`;
+  toast(`Agent ${agentId} selected · ${trail.length} waypoints`);
 }
 
 function clearSelection() {
@@ -386,7 +404,6 @@ function setStep(step) {
   const feats = byStep.get(step) || [];
   slider.value = step;
   timeLabel.textContent = stepToClock(step);
-  document.getElementById("stat-pings").textContent = feats.length.toLocaleString();
 
   if (map.getSource("pings")) {
     map.getSource("pings").setData({ type: "FeatureCollection", features: feats });
