@@ -128,7 +128,7 @@ enum ActivityAggregator {
     private static func clamp(_ value: Double) -> Double { min(1, max(0, value)) }
 
     /// Small counts are hidden; larger ones are rounded to the nearest 5.
-    private static func displayCount(_ value: Int) -> Int? {
+    static func displayCount(_ value: Int) -> Int? {
         guard value >= AppConfig.minimumDisplayedCount else { return nil }
         return Int((Double(value) / 5).rounded()) * 5
     }

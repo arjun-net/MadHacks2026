@@ -298,7 +298,7 @@ final class SharingState {
     }
 
     /// Ray-casting point-in-polygon test against the campus outline.
-    private static func contains(_ polygon: [Coordinate], _ point: Coordinate) -> Bool {
+    static func contains(_ polygon: [Coordinate], _ point: Coordinate) -> Bool {
         guard polygon.count >= 3 else { return true }
         var inside = false
         var j = polygon.count - 1
