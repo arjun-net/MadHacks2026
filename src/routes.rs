@@ -33,7 +33,8 @@ pub fn router(state: AppState) -> Router {
         .route("/locations/batch", post(ingest_batch))
         .route("/heatmap", get(heatmap))
         .route("/heatmap/broad", get(heatmap_broad))
-        .route("/health", get(health));
+        .route("/health", get(health))
+        .route("/buildings/{building}/story", get(crate::story::story_handler));
     Router::new().nest("/api/v1", v1).with_state(state)
 }
 
