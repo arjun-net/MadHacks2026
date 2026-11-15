@@ -72,7 +72,7 @@ struct SettingsScreen: View {
                     // The picker is its own bordered box, so it isn't wrapped in a card.
                     SettingsSection(
                         title: "Display",
-                        footer: "Day Edition is the default. Night Edition is easier on the eyes after dark.",
+                        footer: "Light is the default. Dark is easier on the eyes at night.",
                         boxed: false
                     ) {
                         PaperSegmentedPicker(
