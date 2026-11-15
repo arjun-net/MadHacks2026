@@ -8,8 +8,7 @@ final class SettingsViewModel {
     private let store: CampusStore
     private let sharing: SharingState
 
-    var isDeletingData = false
-    var deletionMessage: String?
+    var resetMessage: String?
 
     init(store: CampusStore, preferences: AppPreferences, sharing: SharingState) {
         self.store = store
@@ -32,11 +31,9 @@ final class SettingsViewModel {
         store.select(campus)
     }
 
-    /// UI-only: shows a progress state, then a confirmation.
-    func deleteSharedData() async {
-        isDeletingData = true
-        try? await Task.sleep(for: .milliseconds(800))
-        isDeletingData = false
-        deletionMessage = "Your past contributions have been removed."
+    /// New random device ID; unsent readings are dropped.
+    func resetDeviceID() {
+        sharing.resetIdentity()
+        resetMessage = "Your device ID was reset. Readings from now on start fresh."
     }
 }

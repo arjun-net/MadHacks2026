@@ -34,7 +34,9 @@ final class CampusStore {
     init(campuses: [Campus], preferences: AppPreferences, initialSnapshot: CampusSnapshot? = nil) {
         self.campuses = campuses
         self.preferences = preferences
-        self.campus = campuses.first { $0.id == preferences.selectedCampusID } ?? campuses[0]
+        // A campus saved before it was marked "Coming soon" falls back to one with data.
+        self.campus = campuses.first { $0.id == preferences.selectedCampusID && $0.isAvailable }
+            ?? campuses.first(where: \.isAvailable) ?? campuses[0]
         self.isPreview = initialSnapshot != nil
         if let initialSnapshot, initialSnapshot.campusID == campus.id {
             snapshot = initialSnapshot
@@ -68,7 +70,7 @@ final class CampusStore {
     }
 
     func select(_ newCampus: Campus) {
-        guard newCampus.id != campus.id else { return }
+        guard newCampus.id != campus.id, newCampus.isAvailable else { return }
         campus = newCampus
         preferences.selectedCampusID = newCampus.id
         snapshot = nil

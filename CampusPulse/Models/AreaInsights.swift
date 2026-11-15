@@ -68,6 +68,12 @@ struct AreaInsights: Sendable {
 
     var todayWeekday: Int { Calendar.current.component(.weekday, from: generatedAt) }
 
+    /// False when every weekday shares one profile (only one stored day so far),
+    /// so the screen shows a single "typical day" instead of a weekday picker.
+    var variesByWeekday: Bool {
+        Set(typicalByWeekday.values.map { $0.map(\.intensity) }).count > 1
+    }
+
     func typical(weekday: Int) -> [HourlyValue] {
         typicalByWeekday[weekday] ?? []
     }

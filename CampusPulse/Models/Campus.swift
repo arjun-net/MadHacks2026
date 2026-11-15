@@ -11,10 +11,10 @@ struct Campus: Identifiable, Hashable, Sendable {
     let areas: [CampusArea]
     /// Relative share of students using the app (drives mock data volume).
     let participationScale: Double
-    /// Newly launched campuses may not yet have enough participants to show data.
-    let isPilot: Bool
     /// Hand-drawn campus outline. When nil, an outline is derived from the campus areas.
     var customBoundary: [Coordinate]? = nil
+    /// Whether the backend collects data here yet. Unavailable campuses are listed as "Coming soon".
+    var isAvailable = true
 
     /// Closed outline of campus used to frame, mask and clip the map.
     var boundary: [Coordinate] {

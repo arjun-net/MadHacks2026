@@ -46,8 +46,7 @@ enum CampusCatalog {
             CampusArea(id: "kohl-center", name: "Kohl Center", shortName: "Kohl Center",
                        category: .athletics, coordinate: Coordinate(43.0694, -89.3968), radiusMeters: 75, popularity: 0.32),
         ],
-        participationScale: 1.0,
-        isPilot: false
+        participationScale: 1.0
     )
 
     static let michigan = Campus(
@@ -78,7 +77,7 @@ enum CampusCatalog {
                        symbolOverride: "flask.fill"),
         ],
         participationScale: 0.85,
-        isPilot: false
+        isAvailable: false
     )
 
     static let stanford = Campus(
@@ -104,10 +103,13 @@ enum CampusCatalog {
         ],
         // Just launched: too few participants yet, which exercises the privacy-suppressed empty state.
         participationScale: 0.025,
-        isPilot: true
+        isAvailable: false
     )
 
     static let all: [Campus] = [madison, michigan, stanford]
+
+    /// Campuses with data, in catalog order.
+    static var available: [Campus] { all.filter(\.isAvailable) }
 
     static func campus(withID id: String) -> Campus? {
         all.first { $0.id == id }

@@ -26,7 +26,7 @@ struct UniversityPickerView: View {
                 } else {
                     SettingsSection(
                         title: "Universities",
-                        footer: "Don't see your school? Campus Pulse is rolling out to more universities soon."
+                        footer: "Campuses marked Coming soon don't have enough people sharing yet. More universities are on the way."
                     ) {
                         ForEach(results) { campus in
                             row(campus)
@@ -100,20 +100,20 @@ struct UniversityPickerView: View {
             dismiss()
         } label: {
             HStack(spacing: 12) {
-                SettingsIcon(symbol: "building.columns.fill", color: campus.isPilot ? Theme.Colors.graphite : Theme.Colors.accent)
+                SettingsIcon(symbol: "building.columns.fill", color: campus.isAvailable ? Theme.Colors.accent : Theme.Colors.textTertiary)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(campus.name)
                             .typeStyle(.headline)
-                            .foregroundStyle(Theme.Colors.textPrimary)
+                            .foregroundStyle(campus.isAvailable ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
                             .multilineTextAlignment(.leading)
-                        if campus.isPilot {
-                            Text("Pilot")
+                        if !campus.isAvailable {
+                            Text("Coming soon")
                                 .typeStyle(.micro)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
-                                .foregroundStyle(Theme.Colors.warning)
+                                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.textTertiary, lineWidth: Theme.Stroke.hairline))
+                                .foregroundStyle(Theme.Colors.textSecondary)
                         }
                     }
                     Text(campus.location)
@@ -132,6 +132,8 @@ struct UniversityPickerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(RowButtonStyle())
+        .disabled(!campus.isAvailable)
         .accessibilityAddTraits(campus.id == viewModel.selectedCampus.id ? .isSelected : [])
+        .accessibilityHint(campus.isAvailable ? "" : "Coming soon")
     }
 }

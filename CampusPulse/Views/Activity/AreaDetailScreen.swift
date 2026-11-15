@@ -201,6 +201,11 @@ private struct PopularTimesSection: View {
         return (0..<7).map { (first - 1 + $0) % 7 + 1 }
     }
 
+    private var trailing: String {
+        guard insights.variesByWeekday else { return "Typical day" }
+        return isToday ? "Today" : weekdayName(shownWeekday)
+    }
+
     private var caption: String {
         if let selectedHour, let value = values.first(where: { $0.hour == selectedHour }) {
             return "\(Formatting.hour(value.hour)): usually \(value.level.title.lowercased())"
@@ -212,9 +217,12 @@ private struct PopularTimesSection: View {
     }
 
     var body: some View {
-        DetailSection(title: "Popular times", trailing: isToday ? "Today" : weekdayName(shownWeekday)) {
+        DetailSection(title: "Popular times", trailing: trailing) {
             VStack(alignment: .leading, spacing: 14) {
-                dayPicker
+                // With one stored day every weekday looks the same, so there's nothing to pick.
+                if insights.variesByWeekday {
+                    dayPicker
+                }
 
                 Text(caption)
                     .typeStyle(.subheadline)
@@ -321,7 +329,7 @@ private struct PopularTimesSection: View {
             set: { newValue in selectedHour = newValue.map { min(23, max(0, $0.rounded(.down))) } }
         ))
         .sensoryFeedback(.selection, trigger: selectedHour)
-        .accessibilityLabel("Usual activity by hour on \(weekdayName(shownWeekday)). \(caption)")
+        .accessibilityLabel(insights.variesByWeekday ? "Usual activity by hour on \(weekdayName(shownWeekday)). \(caption)" : "Usual activity by hour. \(caption)")
     }
 
     /// Starts just below the quietest hour so the shape of the day reads clearly,
@@ -355,7 +363,10 @@ private struct TodayVersusUsualSection: View {
     private var typical: [HourlyValue] { insights.typical(weekday: insights.todayWeekday) }
 
     var body: some View {
-        DetailSection(title: "Today so far", trailing: "vs. a usual \(insights.generatedAt.formatted(.dateTime.weekday(.wide)))") {
+        DetailSection(
+            title: "Today so far",
+            trailing: insights.variesByWeekday ? "vs. a usual \(insights.generatedAt.formatted(.dateTime.weekday(.wide)))" : "vs. a usual day"
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 16) {
                     legend(color: Theme.Colors.accent, dashed: false, label: "Today")

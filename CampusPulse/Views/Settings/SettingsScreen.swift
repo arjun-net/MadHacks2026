@@ -4,7 +4,7 @@ struct SettingsScreen: View {
     @Bindable var viewModel: SettingsViewModel
     let sharingViewModel: LocationSharingViewModel
 
-    @State private var isConfirmingDelete = false
+    @State private var isConfirmingReset = false
 
     var body: some View {
         @Bindable var preferences = viewModel.preferences
@@ -105,7 +105,10 @@ struct SettingsScreen: View {
                         .settingsRow()
                     }
 
-                    SettingsSection(title: "Privacy") {
+                    SettingsSection(
+                        title: "Privacy",
+                        footer: "Readings carry a random ID, never your name or account. Resetting it means future readings can't be linked to past ones."
+                    ) {
                         NavigationLink {
                             PrivacyInfoView()
                         } label: {
@@ -114,18 +117,13 @@ struct SettingsScreen: View {
                         .buttonStyle(RowButtonStyle())
                         RowRule()
                         Button(role: .destructive) {
-                            isConfirmingDelete = true
+                            isConfirmingReset = true
                         } label: {
-                            HStack {
-                                SettingsLabel(symbol: "trash.fill", color: Theme.Colors.danger, title: "Delete My Shared Data", titleColor: Theme.Colors.danger)
-                                Spacer()
-                                if viewModel.isDeletingData { ProgressView().tint(Theme.Colors.ink) }
-                            }
-                            .settingsRow()
-                            .contentShape(Rectangle())
+                            SettingsLabel(symbol: "arrow.triangle.2.circlepath", color: Theme.Colors.danger, title: "Reset Device ID", titleColor: Theme.Colors.danger)
+                                .settingsRow()
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(RowButtonStyle())
-                        .disabled(viewModel.isDeletingData)
                     }
 
                     SettingsSection(title: "About") {
@@ -157,21 +155,21 @@ struct SettingsScreen: View {
             .background(ScreenBackground())
             .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog(
-                "Delete your shared data?",
-                isPresented: $isConfirmingDelete,
+                "Reset your device ID?",
+                isPresented: $isConfirmingReset,
                 titleVisibility: .visible
             ) {
-                Button("Delete Shared Data", role: .destructive) {
-                    Task { await viewModel.deleteSharedData() }
+                Button("Reset Device ID", role: .destructive) {
+                    viewModel.resetDeviceID()
                 }
             } message: {
-                Text("This removes your past contributions from campus activity. It doesn't turn off sharing.")
+                Text("Readings sent from now on get a new random ID, and any readings still waiting to send are discarded. Sharing stays on.")
             }
             .alert(
-                viewModel.deletionMessage ?? "",
+                viewModel.resetMessage ?? "",
                 isPresented: Binding(
-                    get: { viewModel.deletionMessage != nil },
-                    set: { if !$0 { viewModel.deletionMessage = nil } }
+                    get: { viewModel.resetMessage != nil },
+                    set: { if !$0 { viewModel.resetMessage = nil } }
                 )
             ) {
                 Button("OK", role: .cancel) {}
@@ -268,18 +266,8 @@ private struct CampusBanner: View {
                     .typeStyle(.title3)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(campus.location)
-                    if campus.isPilot {
-                        Text("PILOT")
-                            .typeStyle(.micro)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.warning, lineWidth: Theme.Stroke.hairline))
-                            .foregroundStyle(Theme.Colors.warning)
-                    }
-                }
-                .typeStyle(.caption)
+                Text(campus.location)
+                    .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textSecondary)
             }
             Spacer(minLength: 0)
