@@ -60,7 +60,7 @@ struct MapScreen: View {
                 }
             }
             .padding(.horizontal, Theme.Spacing.md)
-            .padding(.top, 4)
+            .padding(.top, 8)
             .padding(.bottom, Theme.tabBarClearance)
         }
         .animation(Theme.Motion.smooth, value: viewModel.selectedAreaID)

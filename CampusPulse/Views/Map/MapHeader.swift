@@ -52,7 +52,8 @@ struct MapHeader: View {
             }
         }
         .animation(Theme.Motion.smooth, value: snapshot?.isEmpty)
-        .padding(EdgeInsets(top: 12, leading: 16, bottom: 14, trailing: 14))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .paper(cornerRadius: Theme.Radius.sm, elevated: true)
     }
 }
@@ -90,8 +91,10 @@ extension MapHeader {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(Theme.Colors.textTertiary)
                     }
-                    .frame(minHeight: 36)
+                    // Tall enough to tap, without making the row (and the card) taller.
+                    .frame(minHeight: 40)
                     .contentShape(Rectangle())
+                    .padding(.vertical, -12)
                 }
                 .buttonStyle(RowButtonStyle())
                 .accessibilityLabel("Busiest: \(top.area.name)")

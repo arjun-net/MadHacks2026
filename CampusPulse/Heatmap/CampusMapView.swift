@@ -35,6 +35,10 @@ struct CampusMapView: UIViewRepresentable {
         mapView.showsScale = false
         mapView.isPitchEnabled = false
         mapView.isRotateEnabled = false
+        // The blue dot for where you are. MapKit only shows it once location access is
+        // granted (asked for when sharing is turned on), and draws it above the map canvas.
+        mapView.showsUserLocation = true
+        mapView.tintColor = .systemBlue
         mapView.register(AreaAnnotationView.self, forAnnotationViewWithReuseIdentifier: AreaAnnotationView.reuseIdentifier)
 
         context.coordinator.configure(mapView, for: campus)
@@ -244,7 +248,11 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
-            guard let annotation = view.annotation as? AreaAnnotation else { return }
+            guard let annotation = view.annotation as? AreaAnnotation else {
+                // The blue dot: no "My Location" bubble.
+                if let annotation = view.annotation { mapView.deselectAnnotation(annotation, animated: false) }
+                return
+            }
             mapView.deselectAnnotation(annotation, animated: false)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             parent.onSelectArea(annotation.area.id)
