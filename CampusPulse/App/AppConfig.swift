@@ -25,6 +25,12 @@ enum AppConfig {
     /// How often the last 24 hours (usual busy times, building sizes) is fetched again.
     static let historyRefreshInterval: TimeInterval = 10 * 60
 
+    /// Whether `/buildings/counts` overrides each building's number. Off: buildings are counted
+    /// from the 2-minute readings themselves (the server tags each with its building). The
+    /// counts endpoint currently reports far more than one 2-minute window holds (~55,000
+    /// against ~250 readings), so it stays off until that's fixed server-side.
+    static let usesBuildingCounts = false
+
     /// How often the people-per-building counts are pulled (`/buildings/counts`) while the app is open.
     static let buildingCountsInterval: TimeInterval = 15
 

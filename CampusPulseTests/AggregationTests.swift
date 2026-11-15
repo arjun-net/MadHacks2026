@@ -128,6 +128,20 @@ struct AggregationTests {
         #expect(snapshot.isEmpty == false)
     }
 
+    @Test func onCampusCountsEveryRowButBuildingsOnlyTracked() {
+        let frame = ActivityAggregator.slotStart(Date(timeIntervalSince1970: 1_800_000_000))
+        let readings = Array(repeating: Reading(coordinate: library.coordinate, building: library.name), count: 44)
+        let tallies = ActivityAggregator.tally([frame: readings], campus: campus)
+
+        let snapshot = ActivityAggregator.snapshot(
+            campus: campus, tallies: tallies, frame: frame,
+            capacities: .fallback(for: campus), generatedAt: frame, campusTotal: 251
+        )
+
+        #expect(snapshot.participantCount == 250)
+        #expect(snapshot.activity(for: "college_library")?.estimatedCount == 45)
+    }
+
     @Test func noRecentFrameMeansAnEmptySnapshot() {
         let snapshot = ActivityAggregator.snapshot(
             campus: campus, tallies: [:], frame: nil,

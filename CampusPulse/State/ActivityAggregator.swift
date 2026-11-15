@@ -93,12 +93,15 @@ enum ActivityAggregator {
 
     /// Snapshot for `frame`, with the 12 slots up to it as the trend.
     /// A nil frame (no recent readings) produces an empty snapshot.
+    /// `campusTotal`: everyone on campus in the frame (all rows, every building), shown as the
+    /// "on campus" number. Nil uses the tracked readings. Everything else uses only those.
     static func snapshot(
         campus: Campus,
         tallies: [Date: SlotTally],
         frame: Date?,
         capacities: Capacities,
-        generatedAt: Date
+        generatedAt: Date,
+        campusTotal: Int? = nil
     ) -> CampusSnapshot {
         let slots: [Date] = frame.map { frame in
             (0..<historyLength).map { frame.addingTimeInterval(-Double(historyLength - 1 - $0) * slot) }
@@ -117,7 +120,7 @@ enum ActivityAggregator {
         return CampusSnapshot(
             campusID: campus.id,
             generatedAt: generatedAt,
-            participantCount: Int((Double(current.total) / 10).rounded()) * 10,
+            participantCount: Int((Double(frame == nil ? 0 : campusTotal ?? current.total) / 10).rounded()) * 10,
             overallIntensity: campusHistory.last ?? 0,
             cells: cells(from: current.points, around: campus.center),
             areas: areas,

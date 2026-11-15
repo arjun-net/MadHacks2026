@@ -38,7 +38,7 @@ final class CampusStore {
     /// The last live window fetched, kept so new building counts can be applied without refetching.
     @ObservationIgnored private var live: LiveWindow?
     /// The latest building counts for this campus, by area ID.
-    @ObservationIgnored private var buildingCounts: (counts: [String: Int], fetchedAt: Date)?
+    @ObservationIgnored private var buildingCounts: (counts: [String: Int], total: Int, fetchedAt: Date)?
     /// Bumped per rebuild, so a slower, older rebuild can't overwrite a newer one.
     @ObservationIgnored private var rebuildGeneration = 0
     @ObservationIgnored private var historyTask: Task<Void, Never>?
@@ -75,7 +75,7 @@ final class CampusStore {
             }
         }
         // Only while the app is open: in the background nobody is looking at the counts.
-        if countsTask == nil, isInForeground {
+        if AppConfig.usesBuildingCounts, countsTask == nil, isInForeground {
             countsTask = Task { [weak self] in
                 while !Task.isCancelled {
                     await self?.refreshBuildingCounts()
@@ -195,7 +195,7 @@ final class CampusStore {
             let counts = try await countsAPI.counts()
             guard requested.id == campus.id else { return }
             let mapped = ActivityAggregator.areaCounts(fromBuildingCounts: counts.byBuilding, campus: requested)
-            buildingCounts = (mapped, .now)
+            buildingCounts = (mapped, counts.total, .now)
             await rebuildLive(notify: false)
         } catch {
             // Keep showing the last counts until they go stale.
@@ -208,6 +208,13 @@ final class CampusStore {
         guard let buildingCounts, Date.now.timeIntervalSince(buildingCounts.fetchedAt) <= AppConfig.buildingCountsFreshness,
               !buildingCounts.counts.isEmpty else { return nil }
         return buildingCounts.counts
+    }
+
+    /// Everyone on campus right now: the counts endpoint's total (all rows in its 2-minute
+    /// window, every building), or nil when the counts are stale.
+    private var freshCampusTotal: Int? {
+        guard let buildingCounts, Date.now.timeIntervalSince(buildingCounts.fetchedAt) <= AppConfig.buildingCountsFreshness else { return nil }
+        return buildingCounts.total
     }
 
     /// Builds the live snapshot from the last fetched window, with the latest building counts
@@ -228,13 +235,17 @@ final class CampusStore {
         guard generation == rebuildGeneration, live.campus.id == campus.id else { return }
         // Live means a slot with readings in the last few minutes.
         let frame = tallies.keys.filter { $0 >= now.addingTimeInterval(-AppConfig.liveFreshness) }.max()
+        // "On campus" counts every row, buildings outside the catalog included; without fresh
+        // counts, every reading the server sent for the frame.
+        let campusTotal = freshCampusTotal ?? frame.map { (live.real[$0]?.count ?? 0) + (live.simulated[$0]?.count ?? 0) }
         let next = ActivityAggregator.snapshot(
             campus: live.campus,
             tallies: tallies,
             frame: frame,
             capacities: live.capacities,
             // Stamped with the build time so every update redraws the map.
-            generatedAt: now
+            generatedAt: now,
+            campusTotal: campusTotal
         )
         snapshot = next
         state = next.isEmpty ? .empty : .loaded
