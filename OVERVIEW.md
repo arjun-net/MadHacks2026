@@ -19,6 +19,11 @@ campus-pulse-sim/  (this dir: ~/Desktop/campusmap/MadHacks2026)
 │   ├── index.html        # glassmorphism dark UI, Mapbox GL JS v3.12 + PapaParse CDN
 │   ├── app.js            # heatmap + timeline + agent dots/trails/toggles
 │   └── styles.css
+├── editor/
+│   ├── index.html        # geofence vertex + walkability-grid editor (standalone)
+│   ├── app.js            # draggable vertices; grid mirrors router.py constants
+│   ├── styles.css
+│   └── data.js           # buildings.json embedded (auto-generated; opens via file://)
 ├── data/
 │   ├── campus_simulation_history.csv   # full ping data (200,931 rows)
 │   └── campus_simulation_coords.csv    # lat,long,timestamp only
