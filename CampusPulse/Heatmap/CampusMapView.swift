@@ -42,7 +42,7 @@ struct CampusMapView: UIViewRepresentable {
         // Re-color the heat overlay and labels live when the appearance changes.
         mapView.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak coordinator = context.coordinator] (view: MKMapView, _: UITraitCollection) in
             coordinator?.animator.setStyle(view.traitCollection.userInterfaceStyle)
-            coordinator?.basemapRenderer?.style = view.traitCollection.userInterfaceStyle
+            coordinator?.setBasemapStyle(view.traitCollection.userInterfaceStyle)
             coordinator?.refreshAnnotationStyles(in: view)
         }
         return mapView
@@ -90,7 +90,8 @@ struct CampusMapView: UIViewRepresentable {
         var recenterToken: Int
 
         private var overlay: HeatmapOverlay?
-        private(set) weak var basemapRenderer: BasemapRenderer?
+        private var basemapOverlay: BasemapTileOverlay?
+        private weak var basemapRenderer: MKTileOverlayRenderer?
         private var annotations: [String: AreaAnnotation] = [:]
         private var gridTask: Task<Void, Never>?
 
@@ -112,7 +113,11 @@ struct CampusMapView: UIViewRepresentable {
             let campusRect = campus.boundaryRect
 
             if let basemap = Basemap.forCampus(campus) {
-                mapView.addOverlay(BasemapOverlay(basemap: basemap), level: .aboveLabels)
+                let basemapOverlay = BasemapTileOverlay(basemap: basemap, style: mapView.traitCollection.userInterfaceStyle)
+                self.basemapOverlay = basemapOverlay
+                mapView.addOverlay(basemapOverlay, level: .aboveLabels)
+            } else {
+                basemapOverlay = nil
             }
 
             let overlay = HeatmapOverlay(bounds: campus.heatmapBounds)
@@ -175,12 +180,18 @@ struct CampusMapView: UIViewRepresentable {
             mapView.setVisibleMapRect(rect, edgePadding: insets, animated: true)
         }
 
+        /// Redraws the basemap tiles in the new appearance.
+        func setBasemapStyle(_ style: UIUserInterfaceStyle) {
+            guard let basemapOverlay, basemapOverlay.style != (style == .dark ? .dark : .light) else { return }
+            basemapOverlay.style = style
+            basemapRenderer?.reloadData()
+        }
+
         // MARK: MKMapViewDelegate
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            if let overlay = overlay as? BasemapOverlay {
-                let renderer = BasemapRenderer(overlay: overlay)
-                renderer.style = mapView.traitCollection.userInterfaceStyle
+            if let overlay = overlay as? BasemapTileOverlay {
+                let renderer = MKTileOverlayRenderer(tileOverlay: overlay)
                 basemapRenderer = renderer
                 return renderer
             }

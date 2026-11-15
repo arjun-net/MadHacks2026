@@ -51,7 +51,7 @@ struct MapPreviewCard: View {
                 .scaledBy(x: scale, y: scale)
                 .translatedBy(x: -center.x, y: -center.y)
 
-            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(BasemapRenderer.Palette.land)))
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(BasemapPalette.land)))
 
             if let basemap {
                 func path(_ features: [Basemap.Feature]) -> Path {
@@ -62,14 +62,14 @@ struct MapPreviewCard: View {
                     return combined
                 }
                 let fill = FillStyle(eoFill: true)
-                context.fill(path(basemap.green), with: .color(Color(BasemapRenderer.Palette.green)), style: fill)
-                context.fill(path(basemap.water), with: .color(Color(BasemapRenderer.Palette.water)), style: fill)
-                context.fill(path(basemap.buildings), with: .color(Color(BasemapRenderer.Palette.building)), style: fill)
+                context.fill(path(basemap.green), with: .color(Color(BasemapPalette.green)), style: fill)
+                context.fill(path(basemap.water), with: .color(Color(BasemapPalette.water)), style: fill)
+                context.fill(path(basemap.buildings), with: .color(Color(BasemapPalette.building)), style: fill)
 
                 let roads: [(Basemap.RoadClass, UIColor, Double)] = [
-                    (.path, BasemapRenderer.Palette.path, 2),
-                    (.minor, BasemapRenderer.Palette.minor, 8),
-                    (.major, BasemapRenderer.Palette.major, 14),
+                    (.path, BasemapPalette.path, 2),
+                    (.minor, BasemapPalette.minor, 8),
+                    (.major, BasemapPalette.major, 14),
                 ]
                 for (roadClass, color, meters) in roads {
                     context.stroke(

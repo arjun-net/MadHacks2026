@@ -90,62 +90,80 @@ final class Basemap: @unchecked Sendable {
     }
 }
 
-/// World-spanning overlay that tells MapKit to skip its own map imagery and labels.
-final class BasemapOverlay: NSObject, MKOverlay {
-    let basemap: Basemap
-    let boundingMapRect = MKMapRect.world
-    let coordinate = CLLocationCoordinate2D(latitude: 0, longitude: 0)
-    let canReplaceMapContent = true
+/// Adaptive map colors: a printed-street-map look on cream (Day) and a warm dark
+/// variant tuned to the Night Edition palettes.
+enum BasemapPalette {
+    private static func color(_ light: UInt32, _ a: UInt32, _ b: UInt32, _ c: UInt32) -> UIColor {
+        .adaptive(Hex(light)) { palette in
+            switch palette {
+            case .nightEdition: Hex(a)
+            case .darkroom: Hex(b)
+            case .inkOnSlate: Hex(c)
+            }
+        }
+    }
 
-    init(basemap: Basemap) {
+    static let land = color(0xEFE8DA, 0x1A1612, 0x170D0D, 0x16191C)
+    static let green = color(0xE2E1C8, 0x1E1C16, 0x1A1210, 0x181D1C)
+    static let water = color(0xC5D1CF, 0x0D0B09, 0x0D0606, 0x0C0E10)
+    static let waterEdge = color(0x9DAFAC, 0x3A332B, 0x3F2626, 0x343A42)
+    static let building = color(0xE0D5C1, 0x25201A, 0x231414, 0x20242A)
+    static let path = color(0xE6DCC9, 0x29241E, 0x261717, 0x23272D)
+    static let minor = color(0xFBF7EF, 0x332D26, 0x311E1E, 0x2C3138)
+    static let major = color(0xFFFDF8, 0x433B32, 0x422828, 0x3A4048)
+}
+
+/// The campus basemap served to MapKit as tiles that replace Apple's map entirely.
+///
+/// A tile overlay with `canReplaceMapContent` stops MapKit from loading its own imagery,
+/// so Apple's map (blue water, its labels) never shows through while tiles are drawing.
+/// While zooming, MapKit keeps showing the previous zoom level's tiles until new ones are ready.
+final class BasemapTileOverlay: MKTileOverlay, @unchecked Sendable {
+    let basemap: Basemap
+    private let lock = NSLock()
+    private var _style: UIUserInterfaceStyle
+
+    init(basemap: Basemap, style: UIUserInterfaceStyle) {
         self.basemap = basemap
+        self._style = style == .dark ? .dark : .light
+        super.init(urlTemplate: nil)
+        canReplaceMapContent = true
+        tileSize = CGSize(width: 256, height: 256)
+        minimumZ = 1
+        maximumZ = 22
+    }
+
+    /// Appearance to draw in. Tiles load on background threads, so it's lock-guarded.
+    /// After changing it, call `reloadData()` on the renderer to redraw.
+    var style: UIUserInterfaceStyle {
+        get { lock.withLock { _style } }
+        set { lock.withLock { _style = newValue == .dark ? .dark : .light } }
+    }
+
+    override func loadTile(at path: MKTileOverlayPath, result: @escaping (Data?, Error?) -> Void) {
+        let tileWidth = MKMapSize.world.width / pow(2, Double(path.z))
+        let mapRect = MKMapRect(x: Double(path.x) * tileWidth, y: Double(path.y) * tileWidth, width: tileWidth, height: tileWidth)
+        let points = tileSize.width
+        let zoomScale = points / tileWidth
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = path.contentScaleFactor
+        format.opaque = true
+        let style = self.style
+        let data = UIGraphicsImageRenderer(size: tileSize, format: format).pngData { context in
+            let cg = context.cgContext
+            // Draw in map points: scale tile points to map points and move the tile's origin to 0,0.
+            cg.scaleBy(x: zoomScale, y: zoomScale)
+            cg.translateBy(x: -mapRect.origin.x, y: -mapRect.origin.y)
+            BasemapPainter.draw(basemap, in: mapRect, zoomScale: zoomScale, style: style, context: cg)
+        }
+        result(data, nil)
     }
 }
 
-final class BasemapRenderer: MKOverlayRenderer {
-    /// Adaptive map colors: a printed-street-map look on cream (Day) and a warm dark
-    /// variant tuned to the Night Edition palettes.
-    enum Palette {
-        private static func color(_ light: UInt32, _ a: UInt32, _ b: UInt32, _ c: UInt32) -> UIColor {
-            .adaptive(Hex(light)) { palette in
-                switch palette {
-                case .nightEdition: Hex(a)
-                case .darkroom: Hex(b)
-                case .inkOnSlate: Hex(c)
-                }
-            }
-        }
-
-        static let land = color(0xEFE8DA, 0x1A1612, 0x170D0D, 0x16191C)
-        static let green = color(0xE2E1C8, 0x1E1C16, 0x1A1210, 0x181D1C)
-        static let water = color(0xC5D1CF, 0x0D0B09, 0x0D0606, 0x0C0E10)
-        static let waterEdge = color(0x9DAFAC, 0x3A332B, 0x3F2626, 0x343A42)
-        static let building = color(0xE0D5C1, 0x25201A, 0x231414, 0x20242A)
-        static let path = color(0xE6DCC9, 0x29241E, 0x261717, 0x23272D)
-        static let minor = color(0xFBF7EF, 0x332D26, 0x311E1E, 0x2C3138)
-        static let major = color(0xFFFDF8, 0x433B32, 0x422828, 0x3A4048)
-    }
-
-    private let basemap: Basemap
-    private let lock = NSLock()
-    private var _style: UIUserInterfaceStyle = .light
-
-    /// Appearance to draw in. MapKit draws on background threads, so it's lock-guarded.
-    var style: UIUserInterfaceStyle {
-        get { lock.withLock { _style } }
-        set {
-            lock.withLock { _style = newValue == .dark ? .dark : .light }
-            setNeedsDisplay()
-        }
-    }
-
-    init(overlay: BasemapOverlay) {
-        basemap = overlay.basemap
-        super.init(overlay: overlay)
-    }
-
-    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
-        // Overlay origin is the world origin, so renderer coordinates equal map points.
+/// Draws the basemap for a map rect into a context whose coordinates are map points.
+enum BasemapPainter {
+    static func draw(_ basemap: Basemap, in mapRect: MKMapRect, zoomScale: Double, style: UIUserInterfaceStyle, context: CGContext) {
         let traits = UITraitCollection(userInterfaceStyle: style)
         func cg(_ color: UIColor) -> CGColor { color.resolvedColor(with: traits).cgColor }
         let screenPoint = 1 / zoomScale
@@ -153,8 +171,8 @@ final class BasemapRenderer: MKOverlayRenderer {
         let margin = 40 * screenPoint
         let visible = mapRect.insetBy(dx: -margin, dy: -margin)
 
-        context.setFillColor(cg(Palette.land))
-        context.fill(rect(for: mapRect))
+        context.setFillColor(cg(BasemapPalette.land))
+        context.fill(CGRect(x: mapRect.origin.x, y: mapRect.origin.y, width: mapRect.size.width, height: mapRect.size.height))
 
         func addVisible(_ features: [Basemap.Feature]) -> Bool {
             var added = false
@@ -166,29 +184,31 @@ final class BasemapRenderer: MKOverlayRenderer {
         }
 
         if addVisible(basemap.green) {
-            context.setFillColor(cg(Palette.green))
+            context.setFillColor(cg(BasemapPalette.green))
             context.fillPath(using: .evenOdd)
         }
         if addVisible(basemap.water) {
-            context.setFillColor(cg(Palette.water))
-            context.setStrokeColor(cg(Palette.waterEdge))
+            context.setFillColor(cg(BasemapPalette.water))
+            context.setStrokeColor(cg(BasemapPalette.waterEdge))
             context.setLineWidth(1.5 * screenPoint)
             context.drawPath(using: .eoFillStroke)
         }
         // Skip buildings when zoomed far out, where they'd only be noise.
         if zoomScale > 0.004, addVisible(basemap.buildings) {
-            context.setFillColor(cg(Palette.building))
+            context.setFillColor(cg(BasemapPalette.building))
             context.fillPath(using: .evenOdd)
         }
 
         context.setLineCap(.round)
         context.setLineJoin(.round)
         let roadStyles: [(Basemap.RoadClass, UIColor, minPoints: Double, meters: Double)] = [
-            (.path, Palette.path, 0.6, 2),
-            (.minor, Palette.minor, 1.2, 8),
-            (.major, Palette.major, 2.0, 14),
+            (.path, BasemapPalette.path, 0.6, 2),
+            (.minor, BasemapPalette.minor, 1.2, 8),
+            (.major, BasemapPalette.major, 2.0, 14),
         ]
         for (roadClass, color, minPoints, meters) in roadStyles {
+            // Footpaths are hairlines when zoomed far out; skipping them keeps zoomed-out tiles quick.
+            if roadClass == .path, zoomScale < 0.006 { continue }
             guard addVisible(basemap.roads[roadClass] ?? []) else { continue }
             context.setStrokeColor(cg(color))
             context.setLineWidth(max(minPoints * screenPoint, meters * meter))
