@@ -53,16 +53,20 @@ struct MapHeader: View {
         }
         .animation(Theme.Motion.smooth, value: snapshot?.isEmpty)
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.top, 14)
+        .padding(.bottom, snapshot?.isEmpty == false ? 12 : 14)
         .paper(cornerRadius: Theme.Radius.sm, elevated: true)
     }
 }
 
 extension MapHeader {
     fileprivate func summary(_ snapshot: CampusSnapshot) -> some View {
-        HStack(spacing: 10) {
+        // Even gaps between the three items, spread across the card.
+        HStack(spacing: 0) {
             ActivityLevelBadge(level: snapshot.level)
                 .accessibilityLabel("Campus is \(snapshot.level.title.lowercased())")
+
+            Spacer(minLength: 10)
 
             HStack(spacing: 4) {
                 Image(systemName: "person.2.fill")
@@ -75,9 +79,8 @@ extension MapHeader {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("About \(snapshot.participantCount) students sharing")
 
-            Spacer(minLength: 4)
-
             if let top = snapshot.busiest(1).first {
+                Spacer(minLength: 10)
                 Button { onSelectArea(top.id) } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "flame.fill")
@@ -102,8 +105,8 @@ extension MapHeader {
             }
         }
         .typeStyle(.caption)
-        // Mirrors the dateline above: 8 pt from the title row to the rule, 7 pt from the rule to the text.
-        .padding(.top, 7)
+        // As much room above the row (from the rule) as below it (to the card's edge).
+        .padding(.top, 12)
         .overlay(alignment: .top) {
             Rectangle().fill(Theme.Colors.rule).frame(height: Theme.Stroke.hairline)
         }
