@@ -15,7 +15,7 @@ struct Capacities: Sendable {
     var area: [String: Double]
     var campus: Double
 
-    /// Scaled by each area's popularity. Used before history has loaded.
+    /// Scaled by each area's popularity. Used before history has loaded, and for simulated data.
     static func fallback(for campus: Campus, perPopularity: Double = AppConfig.fallbackAreaCapacity) -> Capacities {
         let area = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, max(10, $0.popularity * perPopularity)) })
         return Capacities(area: area, campus: max(30, area.values.reduce(0, +)))
@@ -67,6 +67,7 @@ enum ActivityAggregator {
     /// Makes the server's building counts the truth for `slot`: each counted building's own
     /// readings in that slot are swapped for `count` readings at the building. Those then
     /// drive both the building's number and its heat (still under the privacy cutoff).
+    /// Pass real readings only; simulated ones are added afterwards.
     static func applying(buildingCounts: [String: Int], to slots: [Date: [Reading]], at slot: Date, campus: Campus) -> [Date: [Reading]] {
         guard !buildingCounts.isEmpty else { return slots }
         var result = slots
@@ -90,7 +91,8 @@ enum ActivityAggregator {
         tallies: [Date: SlotTally],
         frame: Date?,
         capacities: Capacities,
-        generatedAt: Date
+        generatedAt: Date,
+        replayOf: Date? = nil
     ) -> CampusSnapshot {
         let slots: [Date] = frame.map { frame in
             (0..<historyLength).map { frame.addingTimeInterval(-Double(historyLength - 1 - $0) * slot) }
@@ -114,7 +116,8 @@ enum ActivityAggregator {
             cells: cells(from: current.points, around: campus.center),
             areas: areas,
             history: campusHistory,
-            privacyThreshold: AppConfig.privacyThreshold
+            privacyThreshold: AppConfig.privacyThreshold,
+            replayOf: replayOf
         )
     }
 
@@ -152,48 +155,69 @@ enum ActivityAggregator {
     }
 }
 
-/// The last 24 hours of real readings for one campus: how big each place gets (its busiest
-/// slot) and its usual busy times by hour.
+/// One stored day of readings (the server's history), replayed at the current time of day.
+/// The dataset's timestamps are campus wall-clock times, so 2:30 PM today maps to 14:30 on that day.
 struct HistoryDay: Sendable {
-    static let length: TimeInterval = 86_400
-
     let campusID: String
-    /// The first slot of the 24 hours.
+    /// Start of the dataset day as stored (`AppConfig.historyDay`).
     let start: Date
     let tallies: [Date: SlotTally]
     let capacities: Capacities
 
     var isEmpty: Bool { tallies.isEmpty }
 
-    /// The 24 hours ending with the slot `now` is in.
-    static func window(endingAt now: Date) -> (start: Date, end: Date) {
-        let end = ActivityAggregator.slotStart(now).addingTimeInterval(ActivityAggregator.slot)
-        return (end.addingTimeInterval(-length), end)
+    /// The same wall-clock time on the dataset day.
+    func dataTime(matching date: Date, calendar: Calendar = .current) -> Date {
+        start.addingTimeInterval(date.timeIntervalSince(calendar.startOfDay(for: date)))
     }
 
-    /// Busy times for one area: average activity in each hour of the day (local time) over the
-    /// 24 hours. A slot with no readings counts as nobody there.
-    func hourly(for areaID: String, calendar: Calendar = .current) -> [HourlyValue] {
-        let capacity = capacities.area[areaID] ?? AppConfig.fallbackAreaCapacity
-        var sums = [Double](repeating: 0, count: 24)
-        var slots = [Int](repeating: 0, count: 24)
-        for index in 0..<Int(Self.length / ActivityAggregator.slot) {
-            let slot = start.addingTimeInterval(Double(index) * ActivityAggregator.slot)
-            let hour = calendar.component(.hour, from: slot)
-            sums[hour] += Double(tallies[slot]?.areaCounts[areaID] ?? 0)
-            slots[hour] += 1
+    /// The latest slot with readings at or before `dataTime`, looking back up to 10 minutes.
+    func frame(atOrBefore dataTime: Date) -> Date? {
+        var candidate = ActivityAggregator.slotStart(dataTime)
+        for _ in 0..<5 {
+            if tallies[candidate] != nil { return candidate }
+            candidate = candidate.addingTimeInterval(-ActivityAggregator.slot)
         }
+        return nil
+    }
+
+    func snapshot(for campus: Campus, now: Date = .now) -> CampusSnapshot {
+        let dataTime = dataTime(matching: now)
+        return ActivityAggregator.snapshot(
+            campus: campus,
+            tallies: tallies,
+            frame: frame(atOrBefore: dataTime),
+            capacities: capacities,
+            generatedAt: now,
+            replayOf: dataTime
+        )
+    }
+
+    /// Busy times for one area: average activity in each hour of the stored day.
+    func hourly(for areaID: String) -> [HourlyValue] {
+        let capacity = capacities.area[areaID] ?? AppConfig.fallbackAreaCapacity
+        let perHour = Int(3600 / ActivityAggregator.slot)
         return (0..<24).map { hour in
-            let average = slots[hour] == 0 ? 0 : sums[hour] / Double(slots[hour])
+            let counts = (0..<perHour).compactMap { index -> Int? in
+                let slot = start.addingTimeInterval(Double(hour) * 3600 + Double(index) * ActivityAggregator.slot)
+                return tallies[slot].map { $0.areaCounts[areaID] ?? 0 }
+            }
+            let average = counts.isEmpty ? 0 : Double(counts.reduce(0, +)) / Double(counts.count)
             return HourlyValue(hour: Double(hour), intensity: min(1, average / capacity))
         }
     }
 
-    /// With 24 hours of history, that profile is both the "usual" day and the one past day.
+    /// With a single stored day, that day is both the "usual" profile and the only past day.
     func insights(for activity: AreaActivity, now: Date, calendar: Calendar = .current) -> AreaInsights {
-        let profile = hourly(for: activity.area.id, calendar: calendar)
+        let profile = hourly(for: activity.area.id)
         let typical = Dictionary(uniqueKeysWithValues: (1...7).map { ($0, profile) })
-        let pastDays = [DayHistory(date: calendar.startOfDay(for: start), hourly: profile)]
+
+        // Shown as a local calendar date (the stored day's date, not shifted by time zone).
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = .gmt
+        let parts = utc.dateComponents([.year, .month, .day], from: start)
+        let displayDate = calendar.date(from: parts) ?? start
+        let pastDays = [DayHistory(date: displayDate, hourly: profile)]
 
         let currentHour = now.fractionalHour
         var today = profile

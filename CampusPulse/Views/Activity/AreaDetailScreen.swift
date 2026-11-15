@@ -94,3 +94,11 @@ struct AreaDetailScreen: View {
         }
     }
 }
+
+#Preview("Area detail") {
+    let container = PreviewData.container()
+    let viewModel = ActivityViewModel(store: container.store)
+    NavigationStack {
+        AreaDetailScreen(areaID: viewModel.allAreas.first?.id ?? "", viewModel: viewModel)
+    }
+}

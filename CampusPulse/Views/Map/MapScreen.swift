@@ -128,6 +128,14 @@ struct MapScreen: View {
     )
 }
 
+#Preview("Map – Loading") {
+    let container = PreviewData.container(preloaded: false)
+    MapScreen(
+        viewModel: MapViewModel(store: container.store, sharing: container.sharing),
+        onOpenSharing: {}
+    )
+}
+
 #Preview("Map – Night") {
     let container = PreviewData.container()
     MapScreen(
