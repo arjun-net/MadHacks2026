@@ -1,17 +1,16 @@
 //! Campus Pulse — persistent device-ping sender.
 //!
 //! Reads the apicalls CSV (lat,long,timestamp,building) and replays it in
-//! real time: once per tick (one CSV timestamp, 2 minutes of sim time =
-//! wall-clock `--tick-ms`) it fires one HTTP POST per device — one row per
-//! device — all within the same tick, staggered by a small random jitter
-//! (default 0–40 ms) for realism. All posts go to the configurable FastAPI
-//! target with the exact new shape:
+//! real time against the Location API (see openapi spec in the repo): once
+//! per tick (one CSV timestamp, 2 sim-minutes = wall-clock `--tick-ms`) it
+//! submits every device's ping via `POST /locations/batch` in 500-point
+//! chunks, staggered by a small random jitter for realism.
 //!
+//! Payload shape per point (API contract):
 //! ```json
-//! [{"lat": 43.071658, "long": -89.399816, "timestamp": "2026-11-12T00:00:00Z", "building": "sellery_hall"}]
+//! {"lat": 43.07, "lng": -89.39, "timestamp": "2026-11-12T00:00:00Z",
+//!  "device_id": "sim-12", "building": "sellery_hall"}
 //! ```
-//!
-//! Runs forever (loops the CSV timeline) until interrupted.
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -24,20 +23,16 @@ use tokio::sync::Semaphore;
 use tokio::time::{sleep, Duration, Instant};
 
 #[derive(Parser, Debug)]
-#[command(name = "campus-pulse-sender", about = "Replays device pings from the apicalls CSV to a live ingest endpoint")]
+#[command(name = "campus-pulse-sender", about = "Replays device pings from the apicalls CSV to the Location API")]
 struct Args {
     /// Input CSV (lat,long,timestamp,building). Default: PULSE_CSV or
     /// data/campus_simulation_apicalls.csv relative to the .env location.
     #[arg(short, long, env = "PULSE_CSV", default_value = "data/campus_simulation_apicalls.csv")]
     csv: String,
 
-    /// Target base URL of the FastAPI ingest service (no trailing slash)
-    #[arg(short, long, env = "PULSE_TARGET", default_value = "http://127.0.0.1:8000")]
+    /// Location API base URL (no trailing slash, includes /api/v1 if used)
+    #[arg(short, long, env = "PULSE_TARGET", default_value = "http://127.0.0.1:8000/api/v1")]
     target: String,
-
-    /// Ingest path on the target
-    #[arg(long, env = "PULSE_PATH", default_value = "/ingest")]
-    path: String,
 
     /// Wall-clock milliseconds per tick (one CSV timestamp per tick)
     #[arg(long, env = "PULSE_TICK_MS", default_value_t = 2000)]
@@ -51,7 +46,7 @@ struct Args {
     #[arg(long, env = "PULSE_CONCURRENCY", default_value_t = 200)]
     concurrency: usize,
 
-    /// Number of devices (rows) to post per tick — first N rows
+    /// Devices (rows) to post per tick — first N rows
     #[arg(long, env = "PULSE_DEVICES")]
     devices: Option<usize>,
 
@@ -64,17 +59,25 @@ struct Args {
     once: bool,
 }
 
+/// One point, exactly the API's LocationIn schema.
 #[derive(Debug, Clone, Serialize)]
-struct Ping {
+struct Point {
     lat: f64,
-    long: f64,
+    lng: f64,
     timestamp: String,
+    device_id: String,
     building: String,
 }
 
-/// ticks in chronological order; ticks[i] = the device pings for tick i
+/// Batch envelope per the API's BatchIn schema (max 500 points).
+#[derive(Serialize)]
+struct BatchIn {
+    points: Vec<Point>,
+}
+
+/// ticks in chronological order; ticks[i] = the device points for tick i
 struct Schedule {
-    ticks: Vec<Vec<Ping>>,
+    ticks: Vec<Vec<Point>>,
 }
 
 fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
@@ -82,9 +85,9 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
         .trim(csv::Trim::All)
         .from_reader(File::open(path).with_context(|| format!("open {}", path))?);
 
-    // BTreeMap over timestamp string sorts chronologically (ISO 8601 UTC
-    // sorts lexicographically) and merges same-timestamp rows.
-    let mut by_ts: BTreeMap<String, Vec<Ping>> = BTreeMap::new();
+    // BTreeMap over timestamp sorts chronologically (ISO 8601 UTC sorts
+    // lexicographically) and merges same-timestamp rows.
+    let mut by_ts: BTreeMap<String, Vec<Point>> = BTreeMap::new();
 
     for rec in rdr.records() {
         let rec = rec.with_context(|| "bad CSV record")?;
@@ -93,15 +96,18 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
         let long: f64 = rec[1].parse().unwrap_or(0.0);
         let timestamp = rec[2].to_string();
         let building = rec[3].to_string();
-        by_ts.entry(timestamp.clone()).or_default().push(Ping {
+        let ts = timestamp.clone();
+        let slot = by_ts.entry(ts).or_default().len();
+        by_ts.entry(rec[2].to_string()).or_default().push(Point {
             lat,
-            long,
+            lng: long,
             timestamp,
+            device_id: format!("sim-{slot}"),
             building,
         });
     }
 
-    let mut ticks: Vec<Vec<Ping>> = by_ts.into_values().collect();
+    let mut ticks: Vec<Vec<Point>> = by_ts.into_values().collect();
     if let Some(n) = devices {
         for t in ticks.iter_mut() {
             t.truncate(n);
@@ -112,8 +118,8 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Load .env: the worker may be started from any cwd, so look next to the
-    // executable's Cargo-project root (sender/) and its parent dir.
+    // Load .env: the worker may be started from any cwd, so look in the
+    // workspace dir (pinging_api/), the current dir, then walk up.
     let _ = dotenvy::from_path("pinging_api/.env")
         .or_else(|_| dotenvy::from_path(".env"))
         .or_else(|_| dotenvy::dotenv().map(|_| ()));
@@ -147,10 +153,9 @@ async fn main() -> Result<()> {
     };
     let schedule = Arc::new(load_schedule(&csv_path, args.devices)?);
     println!(
-        "loaded {} ticks · target {}{}",
+        "loaded {} ticks · target {}",
         schedule.ticks.len(),
-        args.target,
-        args.path
+        args.target
     );
 
     let client = Arc::new(
@@ -159,7 +164,7 @@ async fn main() -> Result<()> {
             .tcp_nodelay(true)
             .build()?,
     );
-    let url = format!("{}{}", args.target.trim_end_matches('/'), args.path);
+    let url = format!("{}/locations/batch", args.target.trim_end_matches('/'));
     let semaphore = Arc::new(Semaphore::new(args.concurrency));
 
     let mut tick_idx = args.start_tick.min(schedule.ticks.len().saturating_sub(1));
@@ -167,14 +172,18 @@ async fn main() -> Result<()> {
     let mut rng = rand::thread_rng();
 
     loop {
-        let pings = &schedule.ticks[tick_idx];
-        if !pings.is_empty() {
-            let mut handles = Vec::with_capacity(pings.len());
-            for ping in pings {
+        let points = &schedule.ticks[tick_idx];
+        if !points.is_empty() {
+            // Chunk into API-legal batches of <=500 points
+            let mut handles = Vec::new();
+            for chunk in points.chunks(500) {
+                let n = chunk.len();
                 let client = client.clone();
                 let url = url.clone();
-                let ping = ping.clone();
                 let sem = semaphore.clone();
+                let batch = BatchIn {
+                    points: chunk.to_vec(),
+                };
                 let jitter = if args.jitter_ms > 0 {
                     rng.gen_range(0..args.jitter_ms)
                 } else {
@@ -183,18 +192,34 @@ async fn main() -> Result<()> {
                 handles.push(tokio::spawn(async move {
                     sleep(Duration::from_millis(jitter)).await;
                     let _permit = sem.acquire().await;
-                    let res = client.post(&url).json(&vec![ping]).send().await;
-                    match res {
-                        Ok(r) if r.status().is_success() => 1,
-                        Ok(r) => {
-                            eprintln!("post failed: HTTP {}", r.status());
-                            0
+                    // Retry with exponential backoff on failures — the
+                    // tunnel target intermittently 502s whole bursts.
+                    let mut posted = 0usize;
+                    for attempt in 0..4u32 {
+                        if attempt > 0 {
+                            sleep(Duration::from_millis(200 << (attempt * 2))).await;
                         }
-                        Err(e) => {
-                            eprintln!("post error: {e}");
-                            0
+                        match client.post(&url).json(&batch).send().await {
+                            Ok(r) if r.status().is_success() => {
+                                posted = n;
+                                break;
+                            }
+                            Ok(r) => {
+                                let status = r.status();
+                                let body = r.text().await.unwrap_or_default();
+                                eprintln!(
+                                    "post failed (attempt {}): HTTP {} · {}",
+                                    attempt + 1,
+                                    status,
+                                    body
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("post error (attempt {}): {}", attempt + 1, e);
+                            }
                         }
                     }
+                    posted
                 }));
             }
             let mut ok = 0usize;
@@ -203,9 +228,9 @@ async fn main() -> Result<()> {
             }
             if tick_idx % 60 == 0 {
                 println!(
-                    "[{} · tick {}] posted {}/{} pings",
-                    pings[0].timestamp, tick_idx, ok,
-                    pings.len()
+                    "[{} · tick {}] posted {}/{} points",
+                    points[0].timestamp, tick_idx, ok,
+                    points.len()
                 );
             }
         }
