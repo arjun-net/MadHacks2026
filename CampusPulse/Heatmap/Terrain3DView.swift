@@ -151,6 +151,12 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private var displayLink: CADisplayLink?
     private var lastTick: CFTimeInterval = 0
     private var lastPanLocation: CGPoint?
+    /// Fingers down at the last pan update. When it changes, the pan's location (the fingers'
+    /// midpoint) jumps, so that update must not move the map.
+    private var panTouchCount = 0
+    /// When the finger count last changed or a pinch last moved; a fling right after either
+    /// would carry the jump's speed.
+    private var lastGestureDisturbance: CFTimeInterval = 0
     private var lastPinchLocation: CGPoint?
 
     private let locationManager = CLLocationManager()
@@ -752,7 +758,9 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         return (CGPoint(x: CGFloat(x + 1) / 2 * bounds.width, y: CGFloat(1 - y) / 2 * bounds.height), clip.w)
     }
 
-    /// Where a screen point lands on the ground, or nil above the horizon.
+    /// Where a screen point lands on the ground, or nil above the horizon. Points so far off
+    /// that a fingertip's move there would throw the map miles (near the horizon) count as
+    /// nil too.
     private func groundPoint(_ point: CGPoint) -> SIMD2<Float>? {
         guard bounds.width > 0, bounds.height > 0 else { return nil }
         let x = Float(point.x / bounds.width) * 2 - 1
@@ -763,41 +771,64 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         let direction = SIMD3<Float>(q.x, q.y, q.z) / q.w - eye
         guard direction.y < -1e-5 else { return nil }
         let t = -eye.y / direction.y
-        return SIMD2(eye.x + direction.x * t, eye.z + direction.z * t)
+        let ground = SIMD2(eye.x + direction.x * t, eye.z + direction.z * t)
+        guard simd_distance(ground, camera.target) < camera.distance * 4 else { return nil }
+        return ground
     }
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
         let location = gesture.location(in: sceneView)
+        let touches = gesture.numberOfTouches
         switch gesture.state {
         case .began:
             cameraAnimation = nil
             velocity = .zero
             lastPanLocation = location
+            panTouchCount = touches
         case .changed:
+            if touches != panTouchCount {
+                // A finger landed or lifted: start again from the new midpoint, without moving.
+                panTouchCount = touches
+                lastPanLocation = location
+                lastGestureDisturbance = CACurrentMediaTime()
+                return
+            }
             if let last = lastPanLocation, let from = groundPoint(last), let to = groundPoint(location) {
                 camera.target += from - to
                 applyCamera()
             }
             lastPanLocation = location
         case .ended:
-            // Keep gliding in the direction of the flick.
+            defer { lastPanLocation = nil; panTouchCount = 0 }
+            // Keep gliding in the direction of the flick, but not out of a pinch or a finger
+            // change, whose speed is the jump's, not the hand's.
+            guard CACurrentMediaTime() - lastGestureDisturbance > 0.15 else { return }
             let v = gesture.velocity(in: sceneView)
             let ahead = CGPoint(x: location.x - v.x * 0.05, y: location.y - v.y * 0.05)
             if let a = groundPoint(location), let b = groundPoint(ahead) {
                 // A short, quick glide: stops in about a third of a second.
                 velocity = (b - a) / 0.05 * 0.6
+                // Never faster than a few screens a second.
+                let limit = camera.distance * 3
+                if simd_length(velocity) > limit { velocity = simd_normalize(velocity) * limit }
                 startTicking()
             }
-            lastPanLocation = nil
         default:
             lastPanLocation = nil
+            panTouchCount = 0
         }
     }
 
     @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
-        guard gesture.state == .changed || gesture.state == .began else { return }
+        guard gesture.state == .changed || gesture.state == .began else {
+            lastGestureDisturbance = CACurrentMediaTime()
+            return
+        }
+        // Mid-pinch a finger can lift without ending the pinch; its midpoint then jumps.
+        guard gesture.numberOfTouches >= 2 else { return }
         cameraAnimation = nil
         velocity = .zero
+        lastGestureDisturbance = CACurrentMediaTime()
         let location = gesture.location(in: sceneView)
         let before = groundPoint(location)
         camera.distance /= Float(gesture.scale)
