@@ -1,50 +1,23 @@
 import SwiftUI
 
-/// Frosted, softly lit surface used for every floating element.
-struct GlassBackground<S: InsettableShape>: ViewModifier {
+/// Opaque newsprint card with an ink hairline. Replaces glass everywhere.
+/// `hardShadow` draws a solid, unblurred block offset behind the card (masthead, tab bar).
+struct PaperBackground<S: InsettableShape>: ViewModifier {
     var shape: S
-    var tint: Color?
-    var shadow: Bool
+    var hardShadow: Bool = false
+    var softShadow: Bool = true
 
     func body(content: Content) -> some View {
         content
+            .background(shape.fill(Theme.Colors.paper))
+            .overlay(shape.strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
             .background {
-                ZStack {
-                    shape.fill(.ultraThinMaterial)
-                    shape.fill(
-                        LinearGradient(
-                            colors: [(tint ?? .white).opacity(tint == nil ? 0.05 : 0.14), .clear],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                if hardShadow {
+                    // A filled offset shape, not `.shadow(radius: 0)`, which renders soft on some devices.
+                    shape.fill(Theme.Colors.hardShadow).offset(Theme.Shadow.offset)
                 }
             }
-            .overlay { shape.strokeBorder(Theme.Gradients.glassStroke, lineWidth: 1) }
-            .shadow(color: .black.opacity(shadow ? 0.38 : 0), radius: 22, x: 0, y: 12)
-    }
-}
-
-/// Opaque card used on scrolling screens (cheaper than material, reads better over gradients).
-struct CardBackground: ViewModifier {
-    var cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.075), Color.white.opacity(0.035)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Theme.Gradients.glassStroke, lineWidth: 1)
-            }
+            .shadow(color: hardShadow || !softShadow ? .clear : Theme.Colors.softShadow, radius: 12, x: 0, y: -4)
     }
 }
 
@@ -55,7 +28,7 @@ struct Shimmer: ViewModifier {
                 let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
                 GeometryReader { proxy in
                     LinearGradient(
-                        colors: [.clear, .white.opacity(0.14), .clear],
+                        colors: [.clear, Theme.Colors.ink.opacity(0.08), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -70,16 +43,30 @@ struct Shimmer: ViewModifier {
 }
 
 extension View {
+    /// Newsprint card: paper fill, 1pt ink border, square corners.
+    func paper(cornerRadius: CGFloat = Theme.Radius.sm, hardShadow: Bool = false) -> some View {
+        modifier(PaperBackground(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), hardShadow: hardShadow))
+    }
+
+    /// Legacy name; now a paper surface. `tint` is ignored.
     func glass(cornerRadius: CGFloat = Theme.Radius.lg, tint: Color? = nil, shadow: Bool = true) -> some View {
-        modifier(GlassBackground(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), tint: tint, shadow: shadow))
+        modifier(PaperBackground(
+            shape: RoundedRectangle(cornerRadius: min(cornerRadius, Theme.Radius.sm), style: .continuous),
+            softShadow: shadow
+        ))
     }
 
+    /// Legacy name; now a square paper chip. `tint` is ignored.
     func glassCapsule(tint: Color? = nil, shadow: Bool = true) -> some View {
-        modifier(GlassBackground(shape: Capsule(style: .continuous), tint: tint, shadow: shadow))
+        modifier(PaperBackground(shape: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous), softShadow: shadow))
     }
 
+    /// Paper without any shadow, for cards on scrolling screens.
     func card(cornerRadius: CGFloat = Theme.Radius.lg) -> some View {
-        modifier(CardBackground(cornerRadius: cornerRadius))
+        modifier(PaperBackground(
+            shape: RoundedRectangle(cornerRadius: min(cornerRadius, Theme.Radius.xl), style: .continuous),
+            softShadow: false
+        ))
     }
 
     func shimmering() -> some View {
@@ -89,32 +76,66 @@ extension View {
     /// Small, tracked, uppercase section label.
     func sectionLabelStyle() -> some View {
         self
-            .typeStyle(.micro)
+            .font(.cpMicro)
+            .tracking(1.6)
             .textCase(.uppercase)
-            .foregroundStyle(Theme.Colors.textTertiary)
+            .foregroundStyle(Theme.Colors.ink)
     }
 }
 
-/// Deep background with soft aurora glows, shared by the non-map screens.
+/// Newspaper section header: 2pt ink rule on top, tracked caps label, optional red kicker on the right.
+struct SectionHeader: View {
+    let title: String
+    var trailing: String?
+    var trailingSymbol: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Theme.Colors.ink)
+                .frame(height: Theme.Stroke.sectionRule)
+            HStack(spacing: 8) {
+                Text(title).sectionLabelStyle()
+                Spacer(minLength: 8)
+                if let trailing {
+                    HStack(spacing: 4) {
+                        if let trailingSymbol {
+                            Image(systemName: trailingSymbol)
+                                .font(.system(size: 9.5, weight: .heavy))
+                        }
+                        Text(trailing)
+                    }
+                    .font(.cpMicro)
+                    .tracking(1.6)
+                    .textCase(.uppercase)
+                    .foregroundStyle(Theme.Colors.accent)
+                }
+            }
+            .padding(.top, 8)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// Flat newsprint page background. Day mode adds a faint ruled-paper texture.
 struct ScreenBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ZStack {
             Theme.Colors.background
-            Circle()
-                .fill(Theme.Colors.accent.opacity(0.20))
-                .frame(width: 420, height: 420)
-                .blur(radius: 120)
-                .offset(x: -150, y: -320)
-            Circle()
-                .fill(Theme.Colors.accentSecondary.opacity(0.25))
-                .frame(width: 380, height: 380)
-                .blur(radius: 130)
-                .offset(x: 170, y: -180)
-            Circle()
-                .fill(Color.white.opacity(0.04))
-                .frame(width: 360, height: 360)
-                .blur(radius: 140)
-                .offset(x: 120, y: 420)
+            if colorScheme == .light {
+                Canvas { context, size in
+                    var y: CGFloat = 28
+                    var path = Path()
+                    while y < size.height {
+                        path.addRect(CGRect(x: 0, y: y, width: size.width, height: 1))
+                        y += 28
+                    }
+                    context.fill(path, with: .color(Theme.Colors.rule.opacity(0.35)))
+                }
+            }
         }
         .ignoresSafeArea()
     }
