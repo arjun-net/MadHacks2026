@@ -4,6 +4,8 @@ struct MapScreen: View {
     @Bindable var viewModel: MapViewModel
     var onOpenSharing: () -> Void
     var onOpenAreaDetails: (String) -> Void = { _ in }
+    /// Places in a tapped group the map can't zoom any closer to split apart.
+    @State private var groupChoices: [String] = []
 
     var body: some View {
         ZStack {
@@ -13,7 +15,8 @@ struct MapScreen: View {
                 isHeatmapVisible: viewModel.isHeatmapVisible,
                 selectedAreaID: viewModel.selectedAreaID,
                 recenterToken: viewModel.recenterToken,
-                onSelectArea: { viewModel.select(areaID: $0) }
+                onSelectArea: { viewModel.select(areaID: $0) },
+                onPickFromGroup: { groupChoices = $0 }
             )
             .ignoresSafeArea()
 
@@ -24,7 +27,8 @@ struct MapScreen: View {
                     isHeatmapVisible: viewModel.isHeatmapVisible,
                     selectedAreaID: viewModel.selectedAreaID,
                     recenterToken: viewModel.recenterToken,
-                    onSelectArea: { viewModel.select(areaID: $0) }
+                    onSelectArea: { viewModel.select(areaID: $0) },
+                    onPickFromGroup: { groupChoices = $0 }
                 )
                 .id(viewModel.campus.id)
                 .ignoresSafeArea()
@@ -82,6 +86,17 @@ struct MapScreen: View {
         .animation(Theme.Motion.smooth, value: viewModel.selectedAreaID)
         .animation(Theme.Motion.smooth, value: viewModel.isHeatmapVisible)
         .onChange(of: viewModel.campus.id) { _, _ in viewModel.campusDidChange() }
+        .confirmationDialog(
+            "\(groupChoices.count) places here",
+            isPresented: Binding(get: { !groupChoices.isEmpty }, set: { if !$0 { groupChoices = [] } }),
+            titleVisibility: .visible
+        ) {
+            ForEach(groupChoices, id: \.self) { id in
+                if let area = viewModel.campus.area(withID: id) {
+                    Button(area.name) { viewModel.select(areaID: id) }
+                }
+            }
+        }
     }
 
     /// Newsprint fades at the top and bottom keep floating chrome legible over the map.

@@ -96,9 +96,10 @@ final class AreaAnnotationView: MKAnnotationView {
         )
         applyColors()
 
-        displayPriority = highlighted
-            ? .required
-            : MKFeatureDisplayPriority(rawValue: 600 + Float(area.popularity) * 350)
+        // Nothing is dropped when markers overlap: they merge into a group marker instead
+        // (the selected place stays on its own).
+        displayPriority = .required
+        clusteringIdentifier = highlighted ? nil : ClusterAnnotationView.clusteringIdentifier
         zPriority = highlighted ? .max : MKAnnotationViewZPriority(rawValue: Float(area.popularity) * 100)
         accessibilityLabel = [area.name, level?.title].compactMap { $0 }.joined(separator: ", ")
 

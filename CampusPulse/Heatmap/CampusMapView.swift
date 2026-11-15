@@ -13,6 +13,8 @@ struct CampusMapView: UIViewRepresentable {
     /// Room for the masthead above and the legend and tab bar below.
     var contentInsets = UIEdgeInsets(top: 190, left: 14, bottom: 140, right: 14)
     var onSelectArea: (String?) -> Void = { _ in }
+    /// A group was tapped that's already as close as the map zooms: let the person pick from it.
+    var onPickFromGroup: ([String]) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -40,6 +42,7 @@ struct CampusMapView: UIViewRepresentable {
         mapView.showsUserLocation = true
         mapView.tintColor = .systemBlue
         mapView.register(AreaAnnotationView.self, forAnnotationViewWithReuseIdentifier: AreaAnnotationView.reuseIdentifier)
+        mapView.register(ClusterAnnotationView.self, forAnnotationViewWithReuseIdentifier: ClusterAnnotationView.reuseIdentifier)
 
         context.coordinator.configure(mapView, for: campus)
         context.coordinator.animator.setStyle(mapView.traitCollection.userInterfaceStyle)
@@ -178,6 +181,38 @@ struct CampusMapView: UIViewRepresentable {
                 guard let view = mapView.view(for: annotation) as? AreaAnnotationView else { continue }
                 view.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID)
             }
+            for cluster in mapView.annotations.compactMap({ $0 as? MKClusterAnnotation }) {
+                (mapView.view(for: cluster) as? ClusterAnnotationView).map { configure($0, for: cluster) }
+            }
+        }
+
+        private func configure(_ view: ClusterAnnotationView, for cluster: MKClusterAnnotation) {
+            let members = cluster.memberAnnotations.compactMap { $0 as? AreaAnnotation }
+            let levels = Dictionary(uniqueKeysWithValues: members.map { ($0.area.id, $0.level) })
+            view.configure(members: members.map(\.area)) { levels[$0] ?? nil }
+        }
+
+        /// Zooms in until the group's places have room to split apart. When the map is already
+        /// as close as it goes, hands the places over to pick from instead.
+        private func open(_ cluster: MKClusterAnnotation, in mapView: MKMapView) {
+            let members = cluster.memberAnnotations.compactMap { $0 as? AreaAnnotation }
+            let minDistance = mapView.cameraZoomRange.minCenterCoordinateDistance
+            if mapView.camera.centerCoordinateDistance <= minDistance * 1.2 {
+                parent.onPickFromGroup(members.sorted { $0.area.popularity > $1.area.popularity }.map(\.area.id))
+                return
+            }
+            var rect = MKMapRect.null
+            for member in members {
+                rect = rect.union(MKMapRect(origin: MKMapPoint(member.coordinate), size: MKMapSize(width: 0, height: 0)))
+            }
+            // Pad the spread so the markers and their names fit once they separate, and zoom
+            // in at least 2.5x so every tap makes clear progress.
+            let visible = mapView.visibleMapRect
+            let side = max(rect.width, rect.height) * 2.2
+            let maxSide = max(visible.width, visible.height) / 2.5
+            let span = min(max(side, MKMapPointsPerMeterAtLatitude(cluster.coordinate.latitude) * 120), maxSide)
+            let target = MKMapRect(x: rect.midX - span / 2, y: rect.midY - span / 2, width: span, height: span)
+            mapView.setVisibleMapRect(target, edgePadding: parent.contentInsets, animated: true)
         }
 
         func recenter(_ mapView: MKMapView, animated: Bool) {
@@ -238,6 +273,14 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let cluster = annotation as? MKClusterAnnotation {
+                let view = mapView.dequeueReusableAnnotationView(
+                    withIdentifier: ClusterAnnotationView.reuseIdentifier,
+                    for: cluster
+                ) as? ClusterAnnotationView
+                view.map { configure($0, for: cluster) }
+                return view
+            }
             guard let annotation = annotation as? AreaAnnotation else { return nil }
             let view = mapView.dequeueReusableAnnotationView(
                 withIdentifier: AreaAnnotationView.reuseIdentifier,
@@ -248,6 +291,12 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            if let cluster = view.annotation as? MKClusterAnnotation {
+                mapView.deselectAnnotation(cluster, animated: false)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                open(cluster, in: mapView)
+                return
+            }
             guard let annotation = view.annotation as? AreaAnnotation else {
                 // The blue dot: no "My Location" bubble.
                 if let annotation = view.annotation { mapView.deselectAnnotation(annotation, animated: false) }

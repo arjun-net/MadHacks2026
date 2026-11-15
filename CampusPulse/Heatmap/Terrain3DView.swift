@@ -29,6 +29,8 @@ struct Campus3DMapView: UIViewRepresentable {
         return view
     }
 
+    var onPickFromGroup: ([String]) -> Void = { _ in }
+
     func updateUIView(_ view: Terrain3DView, context: Context) {
         update(view)
         if context.coordinator.recenterToken != recenterToken {
@@ -39,6 +41,7 @@ struct Campus3DMapView: UIViewRepresentable {
 
     private func update(_ view: Terrain3DView) {
         view.onSelectArea = onSelectArea
+        view.onPickFromGroup = onPickFromGroup
         if let snapshot, snapshot.campusID == campus.id { view.apply(snapshot) }
         view.setHeatVisible(isHeatmapVisible)
         view.setSelectedArea(selectedAreaID)
@@ -57,6 +60,8 @@ struct Campus3DMapView: UIViewRepresentable {
 final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognizerDelegate {
     let campus: Campus
     var onSelectArea: (String?) -> Void = { _ in }
+    /// A group was tapped that's already as close as the camera goes: let the person pick from it.
+    var onPickFromGroup: ([String]) -> Void = { _ in }
     var contentInsets = UIEdgeInsets(top: 190, left: 14, bottom: 140, right: 14) {
         didSet { setNeedsLayout() }
     }
@@ -90,6 +95,10 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private let terrain = SCNNode()
     private let overlay = PassthroughView()
     private var markers: [String: AreaAnnotationView] = [:]
+    /// Group markers for places that overlap on screen, reused frame to frame.
+    private var clusterViews: [ClusterAnnotationView] = []
+    /// Member IDs each group marker shows now (most popular first).
+    private var clusterMembers: [[String]] = []
     private var levels: [String: ActivityLevel] = [:]
     private let userDot = UserDotView()
 
@@ -382,6 +391,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         for area in campus.areas {
             markers[area.id]?.configure(area: area, level: levels[area.id], highlighted: area.id == selectedAreaID)
         }
+        // Group markers redraw their busyness ring next frame.
+        clusterMembers = clusterMembers.map { _ in [] }
         updateOverlay()
     }
 
@@ -389,6 +400,27 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         guard let id = gesture.view?.accessibilityIdentifier else { return }
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         onSelectArea(id)
+    }
+
+    @objc private func clusterTapped(_ gesture: UITapGestureRecognizer) {
+        guard let view = gesture.view as? ClusterAnnotationView,
+              let index = clusterViews.firstIndex(of: view), index < clusterMembers.count else { return }
+        let members = clusterMembers[index].compactMap { campus.area(withID: $0) }
+        guard !members.isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if camera.distance <= distanceRange.lowerBound * 1.2 {
+            onPickFromGroup(members.map(\.id))
+            return
+        }
+        // Center on the group and zoom in far enough for it to split: at least 2.5x closer.
+        let points = members.map { scenePoint(MKMapPoint($0.coordinate.clCoordinate)) }
+        let xs = points.map(\.x), zs = points.map(\.z)
+        let center = SIMD2((xs.min()! + xs.max()!) / 2, (zs.min()! + zs.max()!) / 2)
+        let spread = max(xs.max()! - xs.min()!, zs.max()! - zs.min()!)
+        var to = camera
+        to.target = center
+        to.distance = max(distanceRange.lowerBound, min(camera.distance / 2.5, spread * 3.5))
+        animateCamera(to: to)
     }
 
     // MARK: Basemap textures
@@ -826,30 +858,67 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
     // MARK: Markers
 
-    /// Puts each marker on top of its mountain. Busier and selected places win when labels overlap.
+    /// Puts each marker on top of its mountain. Markers that would overlap merge into a group
+    /// marker, led by the busiest (or selected) place, instead of disappearing.
     private func updateOverlay() {
         guard bounds.width > 0 else { return }
         let lift: Float = heatVisible ? 1 : 0
         let order = markerOrder
         let matrix = viewProjection
         let scale = window?.screen.scale ?? 3
-        var placed: [CGRect] = []
+        func snapped(_ point: CGPoint) -> CGPoint {
+            // Whole points, so markers don't shimmer between pixels while moving.
+            CGPoint(x: (point.x * scale).rounded() / scale, y: (point.y * scale).rounded() / scale)
+        }
+
+        struct Group {
+            var members: [CampusArea]
+            var anchor: CGPoint
+            var frame: CGRect
+            var depth: Float
+            /// The selected place never joins a group, and nothing joins it.
+            var isSelected: Bool
+        }
+        var groups: [Group] = []
         for area in order {
             guard let view = markers[area.id] else { continue }
             let mapPoint = MKMapPoint(area.coordinate.clCoordinate)
             let projected = project(scenePoint(mapPoint, height: surfaceHeight(at: mapPoint) * lift + 4), using: matrix)
             guard let projected else { view.isHidden = true; continue }
-            // Whole points, so markers don't shimmer between pixels while moving.
-            let center = CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y)
-            view.center = CGPoint(x: (center.x * scale).rounded() / scale, y: (center.y * scale).rounded() / scale)
-            let visible = bounds.insetBy(dx: -80, dy: -80).contains(view.center)
+            view.center = snapped(CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y))
+            guard bounds.insetBy(dx: -80, dy: -80).contains(view.center) else { view.isHidden = true; continue }
             let frame = view.frame.insetBy(dx: 6, dy: 3)
             let selected = area.id == selectedAreaID
-            let collides = !selected && placed.contains { $0.intersects(frame) }
-            view.isHidden = !visible || collides
-            if !view.isHidden { placed.append(frame) }
-            view.layer.zPosition = (selected ? 20_000 : 10_000) - CGFloat(projected.depth)
+            if !selected, let index = groups.firstIndex(where: { !$0.isSelected && $0.frame.intersects(frame) }) {
+                groups[index].members.append(area)
+            } else if !selected, groups.contains(where: { $0.isSelected && $0.frame.intersects(frame) }) {
+                view.isHidden = true
+            } else {
+                groups.append(Group(members: [area], anchor: projected.point, frame: frame, depth: projected.depth, isSelected: selected))
+            }
         }
+
+        var used = 0
+        for group in groups {
+            guard let lead = group.members.first, let leadView = markers[lead.id] else { continue }
+            if group.members.count == 1 {
+                leadView.isHidden = false
+                leadView.layer.zPosition = (group.isSelected ? 20_000 : 10_000) - CGFloat(group.depth)
+                continue
+            }
+            for member in group.members { markers[member.id]?.isHidden = true }
+            let cluster = clusterView(at: used)
+            let ids = group.members.map(\.id)
+            if clusterMembers[used] != ids {
+                clusterMembers[used] = ids
+                cluster.configure(members: group.members) { [levels] in levels[$0] }
+            }
+            cluster.center = snapped(CGPoint(x: group.anchor.x + cluster.centerOffset.x, y: group.anchor.y + cluster.centerOffset.y))
+            cluster.isHidden = false
+            cluster.layer.zPosition = 15_000 - CGFloat(group.depth)
+            used += 1
+        }
+        for index in used..<clusterViews.count { clusterViews[index].isHidden = true }
 
         if let userLocation {
             let mapPoint = MKMapPoint(userLocation)
@@ -863,6 +932,18 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         } else {
             userDot.isHidden = true
         }
+    }
+
+    private func clusterView(at index: Int) -> ClusterAnnotationView {
+        while clusterViews.count <= index {
+            let view = ClusterAnnotationView(annotation: nil, reuseIdentifier: nil)
+            view.isUserInteractionEnabled = true
+            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(clusterTapped(_:))))
+            overlay.insertSubview(view, belowSubview: userDot)
+            clusterViews.append(view)
+            clusterMembers.append([])
+        }
+        return clusterViews[index]
     }
 
     // MARK: Your location
