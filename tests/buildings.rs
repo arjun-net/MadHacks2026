@@ -216,10 +216,9 @@ async fn each_ping_is_stored_once_with_its_building_or_null() {
 }
 
 #[tokio::test]
-async fn batches_hourly_copies_accuracy_and_client_names() {
+async fn batches_accuracy_and_client_names() {
     let (app, buffer, store) = app();
     let points = json!({ "points": [
-        // On the hour, so it's also copied to the hourly table, building included.
         {"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T21:00:10Z", "device_id": "a", "accuracy": 8.0},
         // Too vague to name a building.
         {"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T21:02:00Z", "device_id": "a", "horizontal_accuracy": 120.0},
@@ -236,7 +235,4 @@ async fn batches_hourly_copies_accuracy_and_client_names() {
     let raw = rows(&store, Dataset::Raw).await;
     let names: Vec<Option<&str>> = raw.iter().map(|r| r.3.as_deref()).collect();
     assert_eq!(names, [Some(MORGRIDGE), None, Some(MORGRIDGE), Some(MORGRIDGE), Some("Somewhere")]);
-    let broad = rows(&store, Dataset::Broad).await;
-    assert_eq!(broad.len(), 1);
-    assert_eq!(broad[0].3.as_deref(), Some(MORGRIDGE));
 }

@@ -32,6 +32,7 @@ pub fn router(state: AppState) -> Router {
         .route("/locations/batch", post(ingest_batch))
         .route("/heatmap", get(heatmap))
         .route("/heatmap/broad", get(heatmap_broad))
+        .route("/buildings/counts", get(building_counts))
         .route("/health", get(health))
         .route("/buildings/{building}/story", get(crate::story::story_handler))
         .route("/buildings/{building}/prediction", get(crate::prediction::prediction_handler));
@@ -149,6 +150,31 @@ async fn heatmap_for(
         data.entry(iso(t)).or_default().push(LatLng { lat, lng, building });
     }
     Json(HeatmapOut { start: iso(start), end: iso(end), count, data }).into_response()
+}
+
+/// People per building. Every device reports on the even minute, so each point in the
+/// last 2 minutes is one person.
+async fn building_counts(State(s): State<AppState>) -> Response {
+    let window = 2;
+    let since = Utc::now() - chrono::Duration::minutes(window);
+    let rows = match s.store.building_counts(since).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("building counts query failed: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "detail": "database error" })),
+            ).into_response();
+        }
+    };
+    let mut counts: BTreeMap<&str, i64> = s.buildings.meta().buildings.iter().map(|b| (b.name.as_str(), 0)).collect();
+    for (name, n) in &rows {
+        if let Some(slot) = counts.get_mut(name.as_str()) {
+            *slot = *n;
+        }
+    }
+    let total: i64 = counts.values().sum();
+    Json(json!({ "window_minutes": window, "total": total, "counts": counts })).into_response()
 }
 
 async fn health(State(s): State<AppState>) -> Json<serde_json::Value> {

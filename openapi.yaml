@@ -1,0 +1,225 @@
+openapi: 3.0.3
+info:
+  title: MadHacks 2026 Location API
+  version: 1.1.0
+  description: >
+    Phones POST their location; the server resolves the UW-Madison building from
+    lat/lng (grid built from assets/buildings.json) and stores it. Writes are
+    buffered and flushed every 5s or 100 points.
+servers:
+  - url: http://localhost:8000/api/v1
+  - url: https://{tunnel}.trycloudflare.com/api/v1
+    variables:
+      tunnel: { default: example }
+
+paths:
+  /locations:
+    post:
+      summary: Submit one location point
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocationIn' }
+      responses:
+        '202': { description: Accepted (buffered), content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /locations/batch:
+    post:
+      summary: Submit 1-500 location points
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BatchIn' }
+      responses:
+        '202': { description: Accepted (buffered), content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+
+  /buildings/counts:
+    get:
+      summary: People per building
+      description: >
+        Counts points from the last 2 minutes (every device reports on the even
+        minute, so one point = one person), grouped by building. Every building
+        is listed, with 0 when empty. Points outside all building polygons are
+        not counted.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuildingCounts' }
+        '500': { $ref: '#/components/responses/DatabaseError' }
+
+  /buildings/{building}/story:
+    get:
+      summary: Activity story for one building (Databricks-backed)
+      description: >
+        Compares current activity at a building with earlier same-weekday/time
+        activity. Needs the Databricks story configuration; see story.rs.
+      parameters:
+        - name: building
+          in: path
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 256 }
+          description: Building name, URL-encoded
+        - name: weekday
+          in: query
+          schema: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+        - name: time
+          in: query
+          schema: { type: string, example: "14:30" }
+      responses:
+        '200': { description: Story with current vs. comparison activity, content: { application/json: { schema: { type: object } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '502': { description: Databricks query failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '503': { description: Databricks not configured, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+
+  /heatmap:
+    get:
+      summary: Raw location points in [start, end)
+      parameters:
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/end'
+        - $ref: '#/components/parameters/bbox'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HeatmapOut' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/DatabaseError' }
+
+  /heatmap/broad:
+    get:
+      summary: Broad (hourly) dataset in [start, end)
+      parameters:
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/end'
+        - $ref: '#/components/parameters/bbox'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HeatmapOut' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/DatabaseError' }
+
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:   { type: string, example: ok }
+                  store_ok: { type: boolean }
+
+components:
+  parameters:
+    start:
+      name: start
+      in: query
+      required: true
+      schema: { type: string, format: date-time }
+      description: ISO-8601 with timezone (inclusive)
+    end:
+      name: end
+      in: query
+      required: true
+      schema: { type: string, format: date-time }
+      description: ISO-8601 with timezone (exclusive); must be after start
+    bbox:
+      name: bbox
+      in: query
+      schema: { type: string, example: "-89.5,43.0,-89.3,43.2" }
+      description: minLng,minLat,maxLng,maxLat (min <= max, valid lat/lng ranges)
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200000, default: 50000 }
+
+  responses:
+    Unprocessable:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    DatabaseError:
+      description: Database error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    LocationIn:
+      type: object
+      required: [lat, lng, timestamp]
+      properties:
+        lat: { type: number, minimum: -90,  maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO-8601 with explicit timezone (Z or offset). Naive timestamps are rejected.
+          example: "2026-11-14T22:34:00Z"
+        device_id:
+          type: string
+          maxLength: 128
+          description: Optional. Trimmed; defaults to "unknown".
+        accuracy:
+          type: number
+          description: Optional horizontal GPS accuracy in meters (alias horizontal_accuracy). Too vague a fix gets no building.
+        building:
+          type: string
+          maxLength: 256
+          description: >
+            Optional. The server's grid lookup from lat/lng wins; a client-sent
+            name is kept only when the grid finds no building.
+    BatchIn:
+      type: object
+      required: [points]
+      properties:
+        points:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: '#/components/schemas/LocationIn' }
+    Accepted:
+      type: object
+      properties:
+        accepted: { type: integer }
+    LatLng:
+      type: object
+      properties:
+        lat:      { type: number }
+        lng:      { type: number }
+        building: { type: string, nullable: true }
+    HeatmapOut:
+      type: object
+      properties:
+        start: { type: string, format: date-time }
+        end:   { type: string, format: date-time }
+        count: { type: integer }
+        data:
+          type: object
+          description: Keys are UTC ISO-8601 timestamps in ascending order
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/LatLng' }
+    BuildingCounts:
+      type: object
+      properties:
+        window_minutes: { type: integer, example: 2 }
+        total:          { type: integer }
+        counts:
+          type: object
+          description: Building name -> number of people
+          additionalProperties: { type: integer }
+          example: { "Memorial Union": 12, "Bascom Hall": 4 }
+    Error:
+      type: object
+      properties:
+        detail: { type: string }

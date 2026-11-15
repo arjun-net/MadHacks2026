@@ -106,3 +106,24 @@ async fn health() {
     let (app, _) = app();
     assert_eq!(send(&app, get("/api/v1/health")).await.1, json!({"status": "ok", "store_ok": true}));
 }
+
+#[tokio::test]
+async fn building_counts_last_two_minutes() {
+    let (app, buffer) = app();
+    let now = chrono::Utc::now();
+    let ts = |secs: i64| (now - chrono::Duration::seconds(secs)).to_rfc3339();
+    let pts = json!({"points": [
+        {"lat": 43.07287, "lng": -89.40664, "timestamp": ts(30)},
+        {"lat": 43.07287, "lng": -89.40664, "timestamp": ts(20)},
+        {"lat": 43.07390, "lng": -89.39874, "timestamp": ts(10)},
+        {"lat": 43.07390, "lng": -89.39874, "timestamp": ts(600)}, // too old
+        {"lat": 43.0, "lng": -89.0, "timestamp": ts(5)},           // off campus
+    ]});
+    assert_eq!(send(&app, post("/api/v1/locations/batch", pts)).await.0, StatusCode::ACCEPTED);
+    buffer.flush().await;
+    let (st, body) = send(&app, get("/api/v1/buildings/counts")).await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(body["counts"]["Morgridge Hall (College of Computing & AI)"], 2);
+    assert_eq!(body["counts"]["Chazen Museum of Art"], 1);
+    assert_eq!(body["total"], 3);
+}
