@@ -53,12 +53,23 @@ final class HeatmapAnimator: NSObject {
 
     private var currentAlpha: CGFloat = 1
     private var targetAlpha: CGFloat = 1
+    /// Which heat ramp to color with; follows the map's appearance.
+    private var style: UIUserInterfaceStyle = .light
 
     func attach(_ renderer: HeatmapOverlayRenderer) {
         self.renderer = renderer
         renderer.alpha = currentAlpha
-        renderer.image = currentGrid?.makeImage()
+        renderer.image = currentGrid?.makeImage(style: style)
         renderer.setNeedsDisplay()
+    }
+
+    /// Re-colors the current heat field when the appearance changes.
+    func setStyle(_ newStyle: UIUserInterfaceStyle) {
+        let resolved: UIUserInterfaceStyle = newStyle == .dark ? .dark : .light
+        guard resolved != style else { return }
+        style = resolved
+        renderer?.image = currentGrid?.makeImage(style: style)
+        renderer?.setNeedsDisplay()
     }
 
     func reset() {
@@ -111,7 +122,7 @@ final class HeatmapAnimator: NSObject {
             let grid = from.blended(with: to, fraction: Float(eased))
             currentGrid = grid
             // Cheaper frames mid-transition; full detail once it settles.
-            renderer?.image = grid.makeImage(scale: progress >= 1 ? 2 : 1)
+            renderer?.image = grid.makeImage(scale: progress >= 1 ? 2 : 1, style: style)
             needsRedraw = true
             if progress >= 1 {
                 fromGrid = nil

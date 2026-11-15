@@ -38,6 +38,12 @@ struct CampusMapView: UIViewRepresentable {
         mapView.register(AreaAnnotationView.self, forAnnotationViewWithReuseIdentifier: AreaAnnotationView.reuseIdentifier)
 
         context.coordinator.configure(mapView, for: campus)
+        context.coordinator.animator.setStyle(mapView.traitCollection.userInterfaceStyle)
+        // Re-color the heat overlay and labels live when the appearance changes.
+        mapView.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak coordinator = context.coordinator] (view: MKMapView, _: UITraitCollection) in
+            coordinator?.animator.setStyle(view.traitCollection.userInterfaceStyle)
+            coordinator?.refreshAnnotationStyles(in: view)
+        }
         return mapView
     }
 

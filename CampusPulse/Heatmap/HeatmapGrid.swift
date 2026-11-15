@@ -1,5 +1,6 @@
 import CoreGraphics
 import MapKit
+import UIKit
 
 /// A normalized (0…1) density field covering a map rect, produced by splatting
 /// aggregated density cells with a Gaussian kernel. Rendering is pure and runs off the main thread.
@@ -87,8 +88,8 @@ struct HeatmapGrid: Sendable {
 
     /// Colors the field into an image `scale`× larger than the grid. Density values are
     /// interpolated *before* coloring, so edges stay smooth instead of showing blocky color steps.
-    func makeImage(scale: Int = 2) -> CGImage? {
-        let lut = HeatPalette.lookupTable
+    func makeImage(scale: Int = 2, style: UIUserInterfaceStyle = .light) -> CGImage? {
+        let lut = HeatPalette.lookupTable(for: style)
         let levels = Float(HeatPalette.lookupLevels - 1)
         let outWidth = width * scale
         let outHeight = height * scale
