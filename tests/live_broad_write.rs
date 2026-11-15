@@ -52,6 +52,22 @@ async fn api_request(
     Ok((status, parsed))
 }
 
+// Read all records created by this test, including duplicates at the same hour.
+async fn broad_rows(
+    pool: &sqlx::PgPool,
+    device_id: &str,
+    hour: DateTime<Utc>,
+) -> Result<Vec<(i64, f64, f64)>, sqlx::Error> {
+    sqlx::query_as::<_, (i64, f64, f64)>(
+        "SELECT id::bigint, latitude, longitude FROM public.location_events_broad \
+         WHERE device_id = $1 AND \"time\" = $2 ORDER BY id"
+    )
+    .bind(device_id)
+    .bind(hour)
+    .fetch_all(pool)
+    .await
+}
+
 #[tokio::test]
 #[ignore = "Writes a real location row to the configured PostgreSQL database"]
 async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn Error>> {
@@ -74,7 +90,8 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
         .unwrap();
     let next_hour = hour + chrono::Duration::hours(1);
 
-    // Unique ID avoids collisions with existing broad-table records.
+    // A unique device name scopes this test's reads without relying on a
+    // uniqueness constraint for device/hour rows.
     let device_id = format!("hourly-api-test-{}-{}", std::process::id(), now.timestamp_micros());
     let lat = 43.0731;
     let lng = -89.4012;
@@ -102,32 +119,51 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
     assert_eq!(accepted["accepted"], 1);
     println!("POST accepted: device_id={device_id}, timestamp={hour}");
 
-    // The API buffers writes; poll PostgreSQL until the hourly point is flushed.
+    // The API buffers writes; poll PostgreSQL until the first row is persisted.
     let store = Store::postgres(&settings);
     let Store::Postgres(pool) = store else {
         unreachable!("Store::postgres must return Store::Postgres")
     };
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
-    loop {
-        let result: Option<(f64, f64)> = sqlx::query_as(
-            "SELECT latitude, longitude FROM public.location_events_broad \
-             WHERE device_id = $1 AND \"time\" = $2",
-        )
-        .bind(&device_id)
-        .bind(hour)
-        .fetch_optional(&pool)
-        .await?;
-
-        if let Some((db_lat, db_lng)) = result {
+    let first_id = loop {
+        let rows = broad_rows(&pool, &device_id, hour).await?;
+        if let Some(&(id, db_lat, db_lng)) = rows.first() {
             assert_eq!((db_lat, db_lng), (lat, lng));
-            println!("PostgreSQL row confirmed in location_events_broad at {hour}");
+            println!("First PostgreSQL row confirmed: id={id} at {hour}");
+            break id;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "First broad row not found within 20s. Check API logs and SQL migration."
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    };
+
+    // Append ANOTHER point with the exact same device and hour.
+    // It must not be deduplicated, and it must get a new, larger id.
+    let (status, accepted) = api_request(
+        settings.port,
+        "POST",
+        "/api/v1/locations",
+        Some(&payload.to_string()),
+    )
+    .await?;
+    assert_eq!(status, 202, "Second location POST failed: {accepted}");
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        let rows = broad_rows(&pool, &device_id, hour).await?;
+        if rows.len() >= 2 {
+            assert!(rows[0].0 > 0, "Broad id must be positive, never null");
+            assert!(rows[1].0 > first_id, "Second broad id must increase");
+            assert_eq!((rows[1].1, rows[1].2), (lat, lng));
+            println!("Duplicate-hour append verified: ids={} and {}", rows[0].0, rows[1].0);
             break;
         }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "Hourly row was not found in PostgreSQL within 20 seconds. \
-             Confirm the running API uses STORE_BACKEND=postgres and the same PG_* credentials."
+            "Second broad row not found within 20s: duplicate event must be appended"
         );
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
@@ -149,10 +185,11 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
         .get(&key)
         .and_then(Value::as_array)
         .ok_or("Broad heatmap did not contain the expected hourly timestamp")?;
+    let matching = rows.iter().filter(|p| p["lat"] == lat && p["lng"] == lng).count();
     assert!(
-        rows.iter().any(|p| p["lat"] == lat && p["lng"] == lng),
-        "Broad heatmap is missing the test point: {heatmap}"
+        matching >= 2,
+        "Broad heatmap must contain both appended points; found {matching}: {heatmap}"
     );
-    println!("GET /api/v1/heatmap/broad returned the inserted point. Test passed.");
+    println!("GET /api/v1/heatmap/broad returned the inserted points. Test passed.");
     Ok(())
 }

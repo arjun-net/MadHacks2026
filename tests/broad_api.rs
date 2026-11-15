@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use tower::ServiceExt;
 
 #[tokio::test]
-async fn existing_ingest_automatically_writes_hourly_and_broad_query_reads_it() {
+async fn existing_ingest_appends_all_zero_minute_locations() {
     let store = Arc::new(Store::memory());
     let buffer = WriteBuffer::new(store.clone(), 100);
     let app = router(AppState { store, buffer: buffer.clone() });
@@ -34,7 +34,7 @@ async fn existing_ingest_automatically_writes_hourly_and_broad_query_reads_it() 
 
     for (path, expected_count) in [
         ("/api/v1/heatmap", 4),
-        ("/api/v1/heatmap/broad", 2),
+        ("/api/v1/heatmap/broad", 3),
     ] {
         let uri = format!("{path}?start=2026-11-14T07:00:00Z&end=2026-11-14T08:00:00Z");
         let req = Request::builder().uri(uri).body(Body::empty()).unwrap();

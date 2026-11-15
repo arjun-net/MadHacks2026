@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -14,11 +13,11 @@ const INSERT_RAW: &str = r#"
     SELECT * FROM UNNEST($1::text[], $2::float8[], $3::float8[], $4::timestamptz[])
 "#;
 
+// Deliberately omit id: the database's sequence/default generates a non-null,
+// unique, monotonically increasing id even for concurrent API requests.
 const INSERT_BROAD: &str = r#"
     INSERT INTO public.location_events_broad (device_id, latitude, longitude, "time")
     SELECT * FROM UNNEST($1::text[], $2::float8[], $3::float8[], $4::timestamptz[])
-    WHERE TRUE  -- disambiguates ON CONFLICT from a potential SELECT JOIN clause
-    ON CONFLICT (device_id, "time") DO NOTHING
 "#;
 
 const QUERY_RAW: &str = r#"
@@ -47,7 +46,6 @@ pub enum Dataset {
 pub struct MemoryStore {
     raw: Vec<Row>,
     broad: Vec<Row>,
-    broad_keys: HashSet<(String, DateTime<Utc>)>,
 }
 
 /// Lakebase/PostgreSQL or an equivalent in-memory store for development.
@@ -56,29 +54,22 @@ pub enum Store {
     Postgres(PgPool),
 }
 
-/// Keep only points whose UTC timestamp falls within minute 00.
-/// Normalize their stored time to the start of that hour and keep at most
-/// the first point seen for each (device_id, hour) in the current batch.
+/// Return EVERY incoming point with UTC minute 00 (seconds 00-59).
+/// Store its timestamp at the start of that hour. Duplicates are intentionally
+/// retained: multiple points from the same device/hour all become broad rows.
+/// PostgreSQL assigns a distinct, increasing BIGINT id to each inserted row.
 fn hourly_candidates(points: &[Point]) -> Vec<Point> {
-    let mut seen: HashSet<(String, DateTime<Utc>)> = HashSet::new();
-    let mut output = Vec::new();
-
-    for point in points {
-        if point.time.minute() != 0 {
-            continue;
-        }
-        // Minute is already 00; remove seconds and fractional seconds.
-        let hour = point.time
-            .with_second(0).expect("zero is a valid second")
-            .with_nanosecond(0).expect("zero is a valid nanosecond");
-
-        if seen.insert((point.device_id.clone(), hour)) {
+    points
+        .iter()
+        .filter(|point| point.time.minute() == 0)
+        .map(|point| {
             let mut snapshot = point.clone();
-            snapshot.time = hour;
-            output.push(snapshot);
-        }
-    }
-    output
+            snapshot.time = snapshot.time
+                .with_second(0).expect("zero is a valid second")
+                .with_nanosecond(0).expect("zero is a valid nanosecond");
+            snapshot
+        })
+        .collect()
 }
 
 impl Store {
@@ -114,12 +105,9 @@ impl Store {
             Store::Memory(mutex) => {
                 let mut memory = mutex.lock().unwrap();
                 memory.raw.extend(points.iter().map(|p| (p.time, p.lat, p.lng)));
-                for point in broad {
-                    let key = (point.device_id, point.time);
-                    if memory.broad_keys.insert(key) {
-                        memory.broad.push((point.time, point.lat, point.lng));
-                    }
-                }
+                memory.broad.extend(broad.iter().map(|point| {
+                    (point.time, point.lat, point.lng)
+                }));
                 Ok(())
             }
             Store::Postgres(pool) => {
@@ -247,7 +235,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stores_raw_and_at_most_one_hourly_point_per_device() {
+    async fn stores_all_zero_minute_points_including_duplicate_device_hours() {
         let store = Store::memory();
         store.add_many(&[
             p(7, 0, 15, "device-a"),
@@ -256,7 +244,7 @@ mod tests {
             p(7, 0, 59, "device-b"),
             p(8, 0, 3, "device-a"),
         ]).await.unwrap();
-        // A second batch at 07:00 should not create a duplicate broad entry.
+        // Another batch at 07:00 must append another broad entry.
         store.add_many(&[p(7, 0, 55, "device-a")]).await.unwrap();
 
         let start = Utc.with_ymd_and_hms(2026, 11, 14, 7, 0, 0).unwrap();
@@ -264,8 +252,8 @@ mod tests {
         let raw = store.query(start, end, None, 100).await.unwrap();
         let broad = store.query_broad(start, end, None, 100).await.unwrap();
         assert_eq!(raw.len(), 6);
-        assert_eq!(broad.len(), 3);
-        assert_eq!(broad.iter().filter(|row| row.0 == start).count(), 2);
+        assert_eq!(broad.len(), 5);
+        assert_eq!(broad.iter().filter(|row| row.0 == start).count(), 4);
         assert!(broad.iter().all(|(t, _, _)| t.minute() == 0 && t.second() == 0));
     }
 
