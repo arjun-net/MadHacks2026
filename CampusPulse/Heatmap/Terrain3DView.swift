@@ -512,9 +512,40 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         }
         material.blendMode = .alpha
         material.isDoubleSided = true
+        // Contour lines over the stepped tints: a relief map rather than smooth plastic.
+        material.shaderModifiers = [.surface: Self.contourShader]
+        material.setValue(
+            style == .dark ? UIColor(red: 0.05, green: 0.02, blue: 0.02, alpha: 0.75) : UIColor(red: 0.18, green: 0.06, blue: 0.04, alpha: 0.55),
+            forKey: "contourInk"
+        )
         terrainMaterials[style] = material
         return material
     }
+
+    /// How many height steps (tint layers and contour intervals) the mountains are cut into.
+    private static let contourSteps = 10
+
+    /// Topographic contour lines, drawn per pixel from the density the texture coordinate
+    /// already carries: a thin ink line at each step edge and a bolder index line every fifth,
+    /// like a survey map. Widths are in screen pixels (via `fwidth`), so lines stay crisp at
+    /// any zoom and on any slope. A few arithmetic ops per pixel; no extra geometry or passes.
+    private static let contourShader = """
+    #pragma arguments
+    float4 contourInk;
+    #pragma body
+    float steps = \(Double(contourSteps));
+    float f = _surface.diffuseTexcoord.x * steps;
+    float distanceToLine = abs(fract(f + 0.5) - 0.5);
+    float pixelsPerStep = max(fwidth(f), 1e-4);
+    bool isIndex = fmod(round(f), 5.0) < 0.5;
+    float halfWidth = isIndex ? 0.9 : 0.45;
+    float line = 1.0 - smoothstep(halfWidth, halfWidth + 0.9, distanceToLine / pixelsPerStep);
+    // None on the flat floor around the mountains.
+    line *= smoothstep(0.6, 1.2, f);
+    float ink = line * contourInk.a;
+    _surface.diffuse.rgb = mix(_surface.diffuse.rgb, contourInk.rgb * _surface.diffuse.a, ink);
+    _surface.emission.rgb *= (1.0 - ink);
+    """
 
     private static func rampStops(style: UIUserInterfaceStyle) -> [HeatPalette.Stop] {
         style == .dark
@@ -540,16 +571,19 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         var pixels = [UInt8](repeating: 0, count: width * 4)
         for i in 0..<width {
             let t = Double(i) / Double(width - 1)
-            let upper = stops.firstIndex { $0.location >= t } ?? stops.count - 1
+            // Colors come in flat steps (layers of a relief model); the fade-in edge stays smooth.
+            let steps = Double(contourSteps)
+            let tint = min(1, (floor(t * steps) + 0.5) / steps)
+            let upper = stops.firstIndex { $0.location >= tint } ?? stops.count - 1
             let lower = max(0, upper - 1)
             let a = stops[lower], b = stops[upper]
-            let f = b.location > a.location ? (t - a.location) / (b.location - a.location) : 0
+            let f = b.location > a.location ? (tint - a.location) / (b.location - a.location) : 0
             let rgb = (a.red + (b.red - a.red) * f, a.green + (b.green - a.green) * f, a.blue + (b.blue - a.blue) * f)
             // Invisible at zero, solid from about a fifth of the way up.
             let edge = min(1, max(0, (t - 0.015) / 0.2))
             var alpha = edge * edge * (3 - 2 * edge) * (style == .dark ? 0.97 : 0.94)
             var gain = 1.0
-            if glow { gain = 0.06 + 0.16 * t; alpha = 1 }
+            if glow { gain = 0.06 + 0.16 * tint; alpha = 1 }
             pixels[i * 4 + 0] = UInt8(min(255, rgb.0 * gain * alpha * 255))
             pixels[i * 4 + 1] = UInt8(min(255, rgb.1 * gain * alpha * 255))
             pixels[i * 4 + 2] = UInt8(min(255, rgb.2 * gain * alpha * 255))
