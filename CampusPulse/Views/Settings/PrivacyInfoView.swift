@@ -26,11 +26,10 @@ struct PrivacyInfoView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     SectionHeader(title: "What we store")
-                    bullet("Rounded grid cell and timestamp for each check-in, kept only long enough to compute the live map.")
+                    bullet("Your location and a timestamp for each check-in, sent every 2 minutes while sharing is on, with a random ID for this install.")
                     bullet("Your campus selection and app preferences, on this device.")
                     SectionHeader(title: "What we never store").padding(.top, 8)
-                    bullet("Your exact coordinates, movement trails, or location history.")
-                    bullet("Your name, contacts, or anything that links check-ins to you.")
+                                        bullet("Your name, email, contacts, or account. Check-ins carry only the random install ID.")
                 }
                 .padding(18)
                 .card(cornerRadius: Theme.Radius.sm)

@@ -136,7 +136,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "CampusPulse-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Campus Pulse";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "While sharing is on, Campus Pulse sends your rounded location every 2 minutes to the anonymous campus heatmap.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Campus Pulse sends your location every 2 minutes to build the anonymous campus heatmap. You can turn sharing off anytime.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -166,7 +166,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "CampusPulse-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Campus Pulse";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "While sharing is on, Campus Pulse sends your rounded location every 2 minutes to the anonymous campus heatmap.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Campus Pulse sends your location every 2 minutes to build the anonymous campus heatmap. You can turn sharing off anytime.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

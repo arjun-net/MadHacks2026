@@ -141,7 +141,7 @@ struct LocationSharingScreen: View {
             SectionHeader(title: "How it works")
 
             HowItWorksStep(number: 1, symbol: "iphone.radiowaves.left.and.right", title: "Your phone checks in",
-                           detail: "About every 2 minutes, while sharing is on, the app sends a rounded location, never your exact position.")
+                           detail: "Every 2 minutes, while sharing is on, the app sends your current location with a random ID for this install.")
             HowItWorksStep(number: 2, symbol: "square.grid.3x3.fill", title: "Combined with everyone else",
                            detail: "Check-ins are grouped into ~\(Int(AppConfig.aggregationCellMeters)) m cells and counted together.")
             HowItWorksStep(number: 3, symbol: "map.fill", title: "Only crowds appear",

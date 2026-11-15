@@ -8,7 +8,10 @@ final class LocationProvider: NSObject {
     /// Called on the main actor whenever the authorization status changes.
     var onAuthorizationChange: ((CLAuthorizationStatus) -> Void)?
 
-    private(set) var latest: CLLocation?
+    private(set) var latest: CLLocation? {
+        didSet { if usableLocation != nil { resumeWaiters() } }
+    }
+    private var waiters: [CheckedContinuation<Void, Never>] = []
     private let manager = CLLocationManager()
     private var isUpdating = false
     private nonisolated static let log = Logger(subsystem: "CampusPulse", category: "Location")
@@ -49,10 +52,30 @@ final class LocationProvider: NSObject {
         latest = nil
     }
 
+    /// The usable fix, waiting up to `timeout` for one if there isn't one yet
+    /// (GPS warming up, or just back from the background).
+    func currentLocation(timeout: Duration = .seconds(15)) async -> CLLocation? {
+        if let usableLocation { return usableLocation }
+        manager.requestLocation()
+        let timer = Task { [weak self] in
+            try? await Task.sleep(for: timeout)
+            self?.resumeWaiters()
+        }
+        await withCheckedContinuation { waiters.append($0) }
+        timer.cancel()
+        return usableLocation
+    }
+
+    private func resumeWaiters() {
+        let pending = waiters
+        waiters.removeAll()
+        pending.forEach { $0.resume() }
+    }
+
     /// The latest fix if it's accurate enough to place someone in a building.
     /// Updates only arrive after 10 m of movement, so an older fix still means "still here".
     var usableLocation: CLLocation? {
-        guard let latest, latest.horizontalAccuracy >= 0, latest.horizontalAccuracy <= 100,
+        guard let latest, latest.horizontalAccuracy >= 0, latest.horizontalAccuracy <= 150,
               -latest.timestamp.timeIntervalSinceNow < 30 * 60 else { return nil }
         return latest
     }

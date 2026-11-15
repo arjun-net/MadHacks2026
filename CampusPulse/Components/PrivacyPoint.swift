@@ -40,13 +40,13 @@ enum PrivacyContent {
     static let principles: [Item] = [
         Item(symbol: "person.crop.circle.badge.xmark", title: "You're never a dot on the map",
              detail: "The heatmap shows combined density only. No one, including us, sees an individual student."),
-        Item(symbol: "square.grid.3x3.fill", title: "Rounded before it leaves your phone",
-             detail: "Your location is snapped to a ~\(Int(AppConfig.aggregationCellMeters)) m grid cell on device before it's sent."),
+        Item(symbol: "person.crop.circle.badge.questionmark", title: "No name attached",
+             detail: "Check-ins carry a random ID for this install, never your name, email or account."),
         Item(symbol: "eye.slash.fill", title: "Small groups stay hidden",
              detail: "Any spot with fewer than \(AppConfig.privacyThreshold) students is removed from the map entirely, and small counts are never shown."),
         Item(symbol: "clock.arrow.circlepath", title: "No location history",
              detail: "The app never displays where anyone has been. Only the current, combined picture is shown."),
-        Item(symbol: "hand.raised.fill", title: "Opt-in, off anytime",
-             detail: "Sharing is off until you turn it on, and pauses the moment you switch it off."),
+        Item(symbol: "hand.raised.fill", title: "Off anytime",
+             detail: "Sharing starts once you allow location access, and stops the moment you switch it off."),
     ]
 }

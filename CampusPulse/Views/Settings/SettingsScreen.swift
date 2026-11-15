@@ -63,7 +63,7 @@ struct SettingsScreen: View {
                 } header: {
                     Text("Location").sectionLabelStyle()
                 } footer: {
-                    Text("While sharing is on, your rounded location is sent about every 2 minutes. Sharing pauses automatically off campus and between midnight and 6 AM if enabled.")
+                    Text("While sharing is on, your location is sent every 2 minutes. Sharing pauses automatically off campus and between midnight and 6 AM if enabled.")
                         .typeStyle(.caption)
                         .foregroundStyle(Theme.Colors.textTertiary)
                 }

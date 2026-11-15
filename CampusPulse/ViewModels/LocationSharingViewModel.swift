@@ -36,7 +36,7 @@ final class LocationSharingViewModel {
     var statusSubtitle: String {
         switch status {
         case .off: "Turn on sharing to help \(campusName) see where campus is busy. You can still view the heatmap either way."
-        case .active: "Your rounded location joins the anonymous heatmap about every 2 minutes."
+        case .active: "Your location joins the anonymous heatmap every 2 minutes."
         case .permissionDenied: "Campus Pulse can't use your location. Enable it in Settings to contribute."
         }
     }

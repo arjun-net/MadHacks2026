@@ -86,7 +86,14 @@ final class SharingState {
         provider.onAuthorizationChange = { [weak self] status in
             self?.authorizationDidChange(status)
         }
-        if isEnabled, self.permission == .allowed { startReporting() }
+        // Sharing is on by default: ask for permission on first launch, then start sending.
+        if isEnabled {
+            switch self.permission {
+            case .allowed: startReporting()
+            case .notRequested where !isSimulated: provider.requestAuthorization()
+            default: break
+            }
+        }
     }
 
     var isEnabled: Bool { preferences.sharingEnabled }
@@ -179,7 +186,7 @@ final class SharingState {
         if preferences.pauseOvernight, (0..<6).contains(Calendar.current.component(.hour, from: slot)) {
             return
         }
-        guard let location = provider.usableLocation else {
+        guard let location = await provider.currentLocation() else {
             Self.log.info("No usable location fix for \(LocationAPI.timestampString(slot), privacy: .public); skipping")
             return
         }
@@ -189,8 +196,8 @@ final class SharingState {
         }
 
         let point = LocationPoint(
-            lat: Self.rounded(coordinate.latitude),
-            lng: Self.rounded(coordinate.longitude),
+            lat: coordinate.latitude,
+            lng: coordinate.longitude,
             timestamp: slot,
             deviceID: DeviceIdentity.id
         )
@@ -211,11 +218,6 @@ final class SharingState {
             queue.save([])
             pendingCount = 0
         }
-    }
-
-    /// ~11 m precision: enough to place a reading in a building, never an exact position.
-    private static func rounded(_ degrees: Double) -> Double {
-        (degrees * 10_000).rounded() / 10_000
     }
 
     /// Ray-casting point-in-polygon test against the campus outline.

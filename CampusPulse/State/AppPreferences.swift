@@ -44,7 +44,7 @@ final class AppPreferences {
         self.defaults = defaults
         defaults.register(defaults: [
             Keys.campus: CampusCatalog.madison.id,
-            Keys.sharing: false,
+            Keys.sharing: true,
             Keys.onCampusOnly: true,
             Keys.pauseOvernight: true,
             Keys.busyAlerts: false,
