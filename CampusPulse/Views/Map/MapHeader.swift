@@ -102,9 +102,10 @@ extension MapHeader {
             }
         }
         .typeStyle(.caption)
-        .padding(.top, 2)
+        // Mirrors the dateline above: 8 pt from the title row to the rule, 7 pt from the rule to the text.
+        .padding(.top, 7)
         .overlay(alignment: .top) {
-            Rectangle().fill(Theme.Colors.rule).frame(height: Theme.Stroke.hairline).offset(y: -4)
+            Rectangle().fill(Theme.Colors.rule).frame(height: Theme.Stroke.hairline)
         }
     }
 }
@@ -148,13 +149,18 @@ struct SharingStatusPill: View {
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, 14)
-            .frame(minHeight: 44)
+            // Drawn shorter than the title so the masthead row keeps even space above and below.
+            .frame(minHeight: 34)
             .background(status == .off ? Theme.Colors.accentFill : Theme.Colors.paper, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
             .overlay {
                 if status != .off {
                     RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(foreground, lineWidth: Theme.Stroke.hairline)
                 }
             }
+            // Still a 44 pt tap target, reaching past the drawn edges without taking up room.
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .padding(.vertical, -5)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Location sharing: \(label)")
