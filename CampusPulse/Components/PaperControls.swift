@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Newsprint switch: a squared track with an ink border and a paper knob; filled red when on.
+/// Switch: a squared track with a quiet border and a paper knob; filled red when on.
 struct PaperToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 12) {
@@ -27,10 +27,10 @@ private struct PaperSwitch: View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             shape
                 .fill(isOn ? Theme.Colors.accentFill : Theme.Colors.surfaceStrong)
-                .overlay(shape.strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                .overlay(shape.strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
             RoundedRectangle(cornerRadius: Theme.Radius.sm - 1, style: .continuous)
                 .fill(Theme.Colors.paper)
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm - 1, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm - 1, style: .continuous).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
                 .frame(width: 24, height: 24)
                 .padding(3)
         }
@@ -43,7 +43,7 @@ extension ToggleStyle where Self == PaperToggleStyle {
     static var paper: PaperToggleStyle { PaperToggleStyle() }
 }
 
-/// Segmented control drawn as joined ink-bordered chips; the selected one is filled with ink.
+/// Segmented control drawn as joined chips; the selected one is filled (ink by day, red by night).
 struct PaperSegmentedPicker<Value: Hashable>: View {
     let title: String
     let options: [Value]
@@ -60,22 +60,22 @@ struct PaperSegmentedPicker<Value: Hashable>: View {
                 } label: {
                     Text(label(option))
                         .typeStyle(.button)
-                        .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
+                        .foregroundStyle(selected ? Theme.Colors.onSelection : Theme.Colors.ink)
                         .frame(maxWidth: .infinity, minHeight: height)
-                        .background(selected ? Theme.Colors.ink : Color.clear)
+                        .background(selected ? Theme.Colors.selectionFill : Color.clear)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(label(option))
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 if index < options.count - 1 {
-                    Rectangle().fill(Theme.Colors.ink).frame(width: Theme.Stroke.hairline)
+                    Rectangle().fill(Theme.Colors.borderStrong).frame(width: Theme.Stroke.hairline)
                 }
             }
         }
         .background(Theme.Colors.paper)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
         .frame(minHeight: height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)

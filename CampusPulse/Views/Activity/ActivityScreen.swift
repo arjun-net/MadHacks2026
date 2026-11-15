@@ -73,7 +73,7 @@ struct ActivityScreen: View {
                 .foregroundStyle(Theme.Colors.textTertiary)
             }
             Rectangle()
-                .fill(Theme.Colors.ink)
+                .fill(Theme.Colors.sectionRule)
                 .frame(height: Theme.Stroke.sectionRule)
         }
         .padding(.top, 8)
@@ -242,7 +242,7 @@ struct ActivityScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(spacing: 0) {
                 Rectangle()
-                    .fill(Theme.Colors.ink)
+                    .fill(Theme.Colors.sectionRule)
                     .frame(height: Theme.Stroke.sectionRule)
                 HStack {
                     Text(title).sectionLabelStyle()

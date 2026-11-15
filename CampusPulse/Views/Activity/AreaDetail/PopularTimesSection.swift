@@ -70,13 +70,13 @@ struct PopularTimesSection: View {
                         .typeStyle(.button)
                         .frame(maxWidth: .infinity)
                         .frame(height: 32)
-                        .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
+                        .foregroundStyle(selected ? Theme.Colors.onSelection : Theme.Colors.ink)
                         .background {
                             RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-                                .fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
+                                .fill(selected ? Theme.Colors.selectionFill : Theme.Colors.paper)
                         }
                         .overlay {
-                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline)
                         }
                         .overlay(alignment: .bottom) {
                             if day == insights.todayWeekday, !selected {

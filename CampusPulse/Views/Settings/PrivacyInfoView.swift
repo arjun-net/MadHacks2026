@@ -116,27 +116,19 @@ struct AboutView: View {
     }
 }
 
-/// App mark: a pulse line on a red press block.
+/// The app icon, with iOS's rounded-corner shape.
 struct AppGlyph: View {
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
-            ZStack {
-                RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
-                    .fill(Theme.Colors.hardShadow)
-                    .offset(Theme.Shadow.offset)
-                RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
-                    .fill(Theme.Colors.accentFill)
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
-                Image(systemName: "waveform.path.ecg")
-                    .resizable()
-                    .scaledToFit()
-                    .fontWeight(.bold)
-                    .frame(width: size * 0.5)
-                    .foregroundStyle(Theme.Colors.onAccent)
-            }
+            Image("AppMark")
+                .resizable()
+                .scaledToFit()
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous))
+                .shadow(color: Theme.Colors.softShadow, radius: 10, x: 0, y: 4)
         }
         .aspectRatio(1, contentMode: .fit)
+        .accessibilityHidden(true)
     }
 }
 

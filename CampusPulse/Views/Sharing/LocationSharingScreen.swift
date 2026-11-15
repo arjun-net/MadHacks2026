@@ -93,7 +93,7 @@ struct LocationSharingScreen: View {
                 .accessibilityLabel("Share my location")
         }
         .padding(16)
-        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .paper(cornerRadius: Theme.Radius.sm, elevated: true)
         .sensoryFeedback(.success, trigger: viewModel.isSharingOn) { _, new in new }
         .sensoryFeedback(.impact(weight: .light), trigger: viewModel.isSharingOn) { _, new in !new }
     }
@@ -203,7 +203,7 @@ struct LocationSharingScreen: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(spacing: 0) {
                 Rectangle()
-                    .fill(Theme.Colors.ink)
+                    .fill(Theme.Colors.sectionRule)
                     .frame(height: Theme.Stroke.sectionRule)
                 HStack {
                     Text("Your privacy").sectionLabelStyle()
@@ -256,7 +256,7 @@ struct SharingBeacon: View {
             Circle()
                 .fill(isActive ? Theme.Colors.accentFill : Theme.Colors.surfaceStrong)
                 .frame(width: 84, height: 84)
-                .overlay(Circle().strokeBorder(Theme.Colors.ink, lineWidth: 2))
+                .overlay(Circle().strokeBorder(Theme.Colors.borderStrong, lineWidth: 2))
 
             Image(systemName: isActive ? "location.fill" : "location.slash.fill")
                 .font(.cpTitle)

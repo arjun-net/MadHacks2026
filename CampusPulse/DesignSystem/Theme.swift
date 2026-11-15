@@ -85,6 +85,17 @@ enum Theme {
         static let stroke = ink
         static let rule = Color(light: Hex(0xDDD2BE), dark: night(0x3A332B, 0x3F2626, 0x343A42))
 
+        // Lines. Surfaces separate by fill and shadow; outlines stay quiet so screens don't read as a grid of boxes.
+        /// Card and panel outlines.
+        static let border = Color(light: Hex(0xE4DACA), dark: night(0x2E2822, 0x301C1C, 0x2B2F35))
+        /// Edges of interactive controls (chips, switches, segmented pickers, small buttons).
+        static let borderStrong = Color(light: Hex(0xC4B7A1), dark: night(0x4A4137, 0x4E3030, 0x464D56))
+        /// Section and masthead rules: ink in Day for the newspaper feel, softened in Night.
+        static let sectionRule = Color(light: Hex(0x1F1B16), dark: night(0x5A5045, 0x5E3B39, 0x535A64))
+        /// Selected chip, segment and tab: ink in Day, press red in Night (a cream block glares on dark).
+        static let selectionFill = Color(light: Hex(0x1F1B16), dark: night(0x9B0000, 0xC5050C, 0xA80F14))
+        static let onSelection = Color(light: Hex(0xFFFDF8), dark: night(0xFFFDF8, 0xFFFFFF, 0xFFFFFF))
+
         static let textPrimary = ink
         static let textSecondary = Color(light: Hex(0x5E554A), dark: night(0xBDB2A2, 0xC9AFAB, 0xAEB5BE))
         static let textTertiary = Color(light: Hex(0x6E6357), dark: night(0xA39886, 0xB0928D, 0x949CA6))
@@ -106,10 +117,6 @@ enum Theme {
         static let graphite = textSecondary
 
         // Shadows
-        static let hardShadow = Color(
-            light: Hex(0x1F1B16),
-            dark: night(Hex(0x000000, alpha: 0.6), Hex(0xC5050C), Hex(0x000000, alpha: 0.7))
-        )
         static let softShadow = Color(
             light: Hex(0x503C1E, alpha: 0.10),
             dark: night(Hex(0x000000, alpha: 0.4), Hex(0x000000, alpha: 0.5), Hex(0x000000, alpha: 0.45))
@@ -136,10 +143,6 @@ enum Theme {
     enum Stroke {
         static let hairline: CGFloat = 1
         static let sectionRule: CGFloat = 2
-    }
-
-    enum Shadow {
-        static let offset = CGSize(width: 4, height: 4)
     }
 
     enum Motion {

@@ -40,7 +40,7 @@ struct OnboardingView: View {
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Rectangle()
-                .fill(Theme.Colors.ink)
+                .fill(Theme.Colors.sectionRule)
                 .frame(height: Theme.Stroke.sectionRule)
             Text("Know how busy campus is, before you go.")
                 .typeStyle(.title3)

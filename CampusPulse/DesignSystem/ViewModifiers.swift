@@ -1,23 +1,22 @@
 import SwiftUI
 
-/// Opaque newsprint card with an ink hairline. Replaces glass everywhere.
-/// `hardShadow` draws a solid, unblurred block offset behind the card (masthead, tab bar).
+/// Opaque paper card with a quiet hairline. Replaces glass everywhere.
+/// `elevated` marks floating chrome (masthead, tab bar): it gets a deeper soft shadow.
 struct PaperBackground<S: InsettableShape>: ViewModifier {
     var shape: S
-    var hardShadow: Bool = false
+    var elevated: Bool = false
     var softShadow: Bool = true
 
     func body(content: Content) -> some View {
         content
             .background(shape.fill(Theme.Colors.paper))
-            .overlay(shape.strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
-            .background {
-                if hardShadow {
-                    // A filled offset shape, not `.shadow(radius: 0)`, which renders soft on some devices.
-                    shape.fill(Theme.Colors.hardShadow).offset(Theme.Shadow.offset)
-                }
-            }
-            .shadow(color: hardShadow || !softShadow ? .clear : Theme.Colors.softShadow, radius: 12, x: 0, y: -4)
+            .overlay(shape.strokeBorder(Theme.Colors.border, lineWidth: Theme.Stroke.hairline))
+            .shadow(
+                color: elevated || softShadow ? Theme.Colors.softShadow : .clear,
+                radius: elevated ? 16 : 12,
+                x: 0,
+                y: elevated ? 6 : -4
+            )
     }
 }
 
@@ -46,9 +45,9 @@ struct Shimmer: ViewModifier {
 }
 
 extension View {
-    /// Newsprint card: paper fill, 1pt ink border, square corners.
-    func paper(cornerRadius: CGFloat = Theme.Radius.sm, hardShadow: Bool = false) -> some View {
-        modifier(PaperBackground(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), hardShadow: hardShadow))
+    /// Paper card: paper fill, quiet hairline, small corners.
+    func paper(cornerRadius: CGFloat = Theme.Radius.sm, elevated: Bool = false) -> some View {
+        modifier(PaperBackground(shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), elevated: elevated))
     }
 
     /// Legacy name; now a paper surface. `tint` is ignored.
@@ -86,7 +85,7 @@ extension View {
     }
 }
 
-/// Newspaper section header: 2pt ink rule on top, tracked caps label, optional red kicker on the right.
+/// Newspaper section header: 2pt rule on top, tracked caps label, optional red kicker on the right.
 struct SectionHeader: View {
     let title: String
     var trailing: String?
@@ -95,7 +94,7 @@ struct SectionHeader: View {
     var body: some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(Theme.Colors.ink)
+                .fill(Theme.Colors.sectionRule)
                 .frame(height: Theme.Stroke.sectionRule)
             HStack(spacing: 8) {
                 Text(title).sectionLabelStyle()

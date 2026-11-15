@@ -30,7 +30,7 @@ struct AreaFocusCard: View {
                             .foregroundStyle(isFavorite ? Theme.Colors.accent : Theme.Colors.ink)
                             .contentTransition(.symbolEffect(.replace))
                             .frame(width: 44, height: 44)
-                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(RowButtonStyle())
@@ -42,7 +42,7 @@ struct AreaFocusCard: View {
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Theme.Colors.ink)
                         .frame(width: 44, height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(RowButtonStyle())
@@ -92,7 +92,7 @@ struct AreaFocusCard: View {
             }
         }
         .padding(16)
-        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .paper(cornerRadius: Theme.Radius.sm, elevated: true)
     }
 }
 

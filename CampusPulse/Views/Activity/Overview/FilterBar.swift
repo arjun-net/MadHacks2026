@@ -25,14 +25,14 @@ struct FilterBar: View {
                             }
                         }
                         .typeStyle(.button)
-                        .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
+                        .foregroundStyle(selected ? Theme.Colors.onSelection : Theme.Colors.ink)
                         .padding(.horizontal, 12)
                         .frame(height: 34)
                         .background {
-                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).fill(selected ? Theme.Colors.ink : Theme.Colors.paper)
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).fill(selected ? Theme.Colors.selectionFill : Theme.Colors.paper)
                         }
                         .overlay {
-                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline)
+                            RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline)
                         }
                         .padding(.vertical, 5)
                         .contentShape(Rectangle())

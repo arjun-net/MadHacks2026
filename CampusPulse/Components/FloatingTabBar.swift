@@ -22,22 +22,21 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Newspaper tab bar: flush square segments with ink dividers and a hard offset shadow.
+/// Tab bar: flush segments with quiet dividers, floating on a soft shadow.
 /// The selected segment is filled ink (Day) or press red (Night) and slides between tabs.
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
     @Namespace private var namespace
-    @Environment(\.colorScheme) private var colorScheme
 
-    private var selectedFill: Color { colorScheme == .dark ? Theme.Colors.accentFill : Theme.Colors.ink }
-    private var selectedText: Color { colorScheme == .dark ? Theme.Colors.onAccent : Theme.Colors.paper }
+    private var selectedFill: Color { Theme.Colors.selectionFill }
+    private var selectedText: Color { Theme.Colors.onSelection }
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, tab in
                 if index > 0 {
                     Rectangle()
-                        .fill(Theme.Colors.ink)
+                        .fill(Theme.Colors.border)
                         .frame(width: Theme.Stroke.hairline)
                 }
                 let isSelected = tab == selection
@@ -71,7 +70,7 @@ struct FloatingTabBar: View {
         }
         .frame(height: 56)
         .clipShape(Rectangle())
-        .paper(cornerRadius: 0, hardShadow: true)
+        .paper(cornerRadius: 0, elevated: true)
         .frame(maxWidth: 320)
         .padding(.horizontal, 40)
         .sensoryFeedback(.selection, trigger: selection)

@@ -201,7 +201,7 @@ struct SettingsScreen: View {
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Rectangle()
-                .fill(Theme.Colors.ink)
+                .fill(Theme.Colors.sectionRule)
                 .frame(height: Theme.Stroke.sectionRule)
         }
         .padding(.top, 8)
@@ -289,9 +289,7 @@ private struct CampusBanner: View {
             Spacer(minLength: 0)
         }
         .padding(16)
-        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
-        .padding(.trailing, Theme.Shadow.offset.width)
-        .padding(.bottom, Theme.Shadow.offset.height)
+        .paper(cornerRadius: Theme.Radius.sm, elevated: true)
     }
 }
 

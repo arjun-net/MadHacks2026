@@ -15,7 +15,7 @@ struct StatusMessageView<Actions: View>: View {
                 .foregroundStyle(tint)
                 .frame(width: 60, height: 60)
                 .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
             VStack(spacing: 6) {
                 Text(title)
                     .typeStyle(.title3)
@@ -110,7 +110,7 @@ struct PermissionDeniedView: View {
                     .padding(.horizontal, 20)
                     .frame(minHeight: 44)
                     .background(Theme.Colors.paper, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
                     .foregroundStyle(Theme.Colors.ink)
             }
             .buttonStyle(.plain)

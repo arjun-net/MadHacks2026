@@ -32,7 +32,7 @@ struct MapHeader: View {
             .foregroundStyle(Theme.Colors.textSecondary)
             .padding(.bottom, 7)
             .overlay(alignment: .bottom) {
-                Rectangle().fill(Theme.Colors.ink).frame(height: Theme.Stroke.hairline)
+                Rectangle().fill(Theme.Colors.border).frame(height: Theme.Stroke.hairline)
             }
 
             HStack(alignment: .center, spacing: 12) {
@@ -53,7 +53,7 @@ struct MapHeader: View {
         }
         .animation(Theme.Motion.smooth, value: snapshot?.isEmpty)
         .padding(EdgeInsets(top: 12, leading: 16, bottom: 14, trailing: 14))
-        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .paper(cornerRadius: Theme.Radius.sm, elevated: true)
     }
 }
 
@@ -181,7 +181,7 @@ struct MapControlStack: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(Theme.Colors.ink)
+            .fill(Theme.Colors.border)
             .frame(width: 46, height: Theme.Stroke.hairline)
     }
 }

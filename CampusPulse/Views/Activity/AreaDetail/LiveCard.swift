@@ -42,7 +42,7 @@ struct LiveCard: View {
             .foregroundStyle(Theme.Colors.ink)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous).strokeBorder(Theme.Colors.borderStrong, lineWidth: Theme.Stroke.hairline))
 
             Rectangle().fill(Theme.Colors.rule).frame(height: 1)
 

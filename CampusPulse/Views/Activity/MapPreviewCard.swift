@@ -15,7 +15,7 @@ struct MapPreviewCard: View {
         VStack(spacing: 0) {
             mapLayer
                 .frame(height: 110)
-            Rectangle().fill(Theme.Colors.ink).frame(height: Theme.Stroke.hairline)
+            Rectangle().fill(Theme.Colors.border).frame(height: Theme.Stroke.hairline)
             HStack(spacing: 8) {
                 Image(systemName: "map.fill")
                     .imageScale(.small)
@@ -31,7 +31,7 @@ struct MapPreviewCard: View {
             .background(Theme.Colors.paper)
         }
         .clipShape(Rectangle())
-        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+        .paper(cornerRadius: Theme.Radius.sm, elevated: true)
         .contentShape(Rectangle())
     }
 

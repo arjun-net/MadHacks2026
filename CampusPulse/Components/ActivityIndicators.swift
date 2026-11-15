@@ -184,7 +184,7 @@ struct ActivityGauge: View {
                 .foregroundStyle(Theme.Colors.textSecondary)
         }
         .frame(width: 60, height: 60)
-        .overlay(Circle().strokeBorder(Theme.Colors.ink, lineWidth: 2))
+        .overlay(Circle().strokeBorder(Theme.Colors.borderStrong, lineWidth: 2))
         .animation(Theme.Motion.smooth, value: intensity)
         .accessibilityHidden(true)
     }

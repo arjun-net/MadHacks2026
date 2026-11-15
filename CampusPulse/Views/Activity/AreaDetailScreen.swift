@@ -74,7 +74,7 @@ struct AreaDetailScreen: View {
         VStack(alignment: .leading, spacing: 12) {
             headerTitle(activity)
             Rectangle()
-                .fill(Theme.Colors.ink)
+                .fill(Theme.Colors.sectionRule)
                 .frame(height: Theme.Stroke.sectionRule)
         }
     }
