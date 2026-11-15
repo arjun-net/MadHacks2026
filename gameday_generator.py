@@ -17,7 +17,7 @@ with a football crowd modeled at Camp Randall:
 - Sunday:   late starts, brunch spike, heavy library time, early home
             return — the campus winds down.
 
-Schema: same lat,long,timestamp,building apicalls shape as the main sim,
+Schema: same lat,long,timestamp,device_id apicalls shape as the main sim,
 plus a gameday_schedules.json "gameday" block for all parameters.
 
 Usage:
@@ -449,7 +449,7 @@ def simulate_gameday(schedules, buildings_by_id, pools, _end_day=None, _rng=None
             stamp_i = stamp[:-1] + ".000Z"
             rows.append({
                 "lat": f"{lat:.6f}", "long": f"{lng:.6f}",
-                "timestamp": stamp_i, "building": target,
+                "timestamp": stamp_i, "device_id": i,
             })
             history_rows.append({
                 "agent_id": i,
@@ -468,7 +468,7 @@ def simulate_gameday(schedules, buildings_by_id, pools, _end_day=None, _rng=None
                 "%Y-%m-%dT%H:%M:%SZ")
             rows.append({
                 "lat": f"{lat:.6f}", "long": f"{lng:.6f}",
-                "timestamp": corner_stamp, "building": target,
+                "timestamp": corner_stamp, "device_id": ci,
             })
             history_rows.append({
                 "agent_id": ci,
@@ -519,7 +519,7 @@ def main():
     rows, history_rows = simulate_gameday(schedules, buildings_by_id, pools)
     out = schedules["simulation"]["output_coords"]
     hist_out = schedules["simulation"]["output"]
-    write_csv(rows, out, fieldnames=["lat", "long", "timestamp", "building"])
+    write_csv(rows, out, fieldnames=["lat", "long", "timestamp", "device_id"])
     write_csv(history_rows, hist_out)
     print(f"Wrote {len(rows):,} gameday-weekend rows → {out}")
     print(f"Wrote {len(history_rows):,} history rows → {hist_out}")

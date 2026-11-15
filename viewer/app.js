@@ -372,7 +372,9 @@ function ingestRows(rows, opts = {}) {
     if (!byStep.has(step)) byStep.set(step, []);
     byStep.get(step).push(f);
 
-    if (agentId) {
+    // No device_id → can't tell people apart, so don't stitch these pings
+    // into one fake "unknown" path (heat/dots above still render).
+    if (agentId && agentId !== "unknown") {
       let trail = byAgent.get(agentId);
       if (!trail) {
         trail = [];

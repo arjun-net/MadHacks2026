@@ -207,6 +207,98 @@ const LIVE = (() => {
     }
   }
 
+  /* --- replay: load an arbitrary [start, end) window ---------------
+   * Fetched in 6 h chunks so a long range never hits the API's per-call
+   * limit (oldest-first truncation would silently drop the window's end).
+   * Stops live polling — the scrubber then replays the loaded window. */
+  const REPLAY_CHUNK_MS = 6 * 3600000;
+  const REPLAY_LIMIT = 200000;       // API max per call
+  const REPLAY_MAX_MS = 72 * 3600000;
+
+  const isoMs = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+
+  async function loadRange(startMs, endMs, onProgress) {
+    if (!(endMs > startMs)) throw new Error("end must be after start");
+    if (endMs - startMs > REPLAY_MAX_MS) throw new Error("range too long (max 72 h)");
+    stopPolling();
+    const b = $btn();
+    if (b) { b.classList.remove("active", "error"); b.title = "Live feed off — click to connect"; }
+    readBase();
+    let rows = [];
+    for (let s = startMs; s < endMs; s += REPLAY_CHUNK_MS) {
+      const e = Math.min(s + REPLAY_CHUNK_MS, endMs);
+      if (onProgress) onProgress(s - startMs, endMs - startMs);
+      const url = `${base}/heatmap?start=${encodeURIComponent(isoMs(s))}`
+        + `&end=${encodeURIComponent(isoMs(e))}&limit=${REPLAY_LIMIT}`;
+      const r = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!r.ok) {
+        let detail = `${r.status}`;
+        try { detail = (await r.json()).detail || detail; } catch (_) { /* plain status */ }
+        throw new Error(`heatmap ${detail}`);
+      }
+      const j = await r.json();
+      if (j.count >= REPLAY_LIMIT) throw new Error("too many points in a 6 h chunk");
+      rows = rows.concat(heatmapToRows(j));
+    }
+    if (!rows.length) throw new Error("no pings in that time frame");
+    ingestRows(rows, { quiet: true });
+    slider.max = timeMax;
+    setStep(timeMin);
+    lastCount = null;
+    window.dispatchEvent(new CustomEvent("cp:replay-loaded", { detail: { count: rows.length } }));
+    return rows.length;
+  }
+
+  function initReplay() {
+    const btn = document.getElementById("replay-btn");
+    const panel = document.getElementById("replay-panel");
+    if (!btn || !panel) return;
+    const $s = document.getElementById("replay-start");
+    const $e = document.getElementById("replay-end");
+    const $go = document.getElementById("replay-go");
+    const $msg = document.getElementById("replay-msg");
+    const say = (t, err) => { $msg.textContent = t; $msg.classList.toggle("err", !!err); };
+    // datetime-local value <-> UTC ms
+    const toInput = (ms) => new Date(ms).toISOString().slice(0, 16);
+    const fromInput = (v) => Date.parse(v + ":00Z");
+    const setRange = (a, z) => { $s.value = toInput(a); $e.value = toInput(z); };
+    const DAY = 86400000;
+
+    const presets = {
+      "6h": () => { const n = Date.now(); return [n - 6 * 3600000, n]; },
+      "24h": () => { const n = Date.now(); return [n - DAY, n]; },
+      today: () => { const d = Math.floor(Date.now() / DAY) * DAY; return [d, d + DAY]; },
+      yesterday: () => { const d = Math.floor(Date.now() / DAY) * DAY; return [d - DAY, d]; },
+      "3d": () => { const n = Date.now(); return [n - 3 * DAY, n]; },
+    };
+    panel.querySelectorAll("[data-preset]").forEach((el) =>
+      el.addEventListener("click", () => setRange(...presets[el.dataset.preset]())));
+
+    btn.addEventListener("click", () => {
+      panel.hidden = !panel.hidden;
+      btn.classList.toggle("active", !panel.hidden);
+      if (!panel.hidden && !$s.value) setRange(...presets["6h"]());
+    });
+
+    $go.addEventListener("click", async () => {
+      const a = fromInput($s.value), z = fromInput($e.value);
+      if (!Number.isFinite(a) || !Number.isFinite(z)) return say("Pick a start and end.", true);
+      $go.disabled = true;
+      try {
+        say("Loading…");
+        const n = await loadRange(a, z, (done, total) =>
+          say(`Loading… ${Math.round((done / total) * 100)}%`));
+        say(`Loaded ${n.toLocaleString()} pings — press ▶ to replay.`);
+        toast(`Replay: ${n.toLocaleString()} pings`);
+      } catch (err) {
+        console.error("[replay]", err);
+        say(err instanceof TypeError ? "Network error — is the server up?" : err.message, true);
+      } finally {
+        $go.disabled = false;
+      }
+    });
+  }
+
   function startPolling() {
     stopPolling();
     timer = setInterval(() => {
@@ -280,9 +372,11 @@ const LIVE = (() => {
   });
 
   document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("DOMContentLoaded", initReplay);
 
   return {
     pull,
+    loadRange,
     startPolling,
     stopPolling,
     get base() { return base; },

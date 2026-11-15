@@ -38,11 +38,30 @@
     <button id="live-btn" class="tool-btn" title="Pull live data from the Campus Location API">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
     </button>
+    <button id="replay-btn" class="tool-btn" title="Replay any time frame from the API">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>
+    </button>
     <span class="adock-sep"></span>
     <label class="tool-btn" for="csv-input" title="Load simulation CSV">
       <input type="file" id="csv-input" accept=".csv" hidden />
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
     </label>
+  </section>
+
+  <!-- Replay: pick any start/end (UTC) and load that window from the API -->
+  <section id="replay-panel" class="glass replay-panel" hidden>
+    <div class="replay-title">Replay a time frame <span class="replay-tz">UTC</span></div>
+    <div class="replay-presets">
+      <button type="button" data-preset="6h">Last 6h</button>
+      <button type="button" data-preset="24h">Last 24h</button>
+      <button type="button" data-preset="today">Today</button>
+      <button type="button" data-preset="yesterday">Yesterday</button>
+      <button type="button" data-preset="3d">Last 3 days</button>
+    </div>
+    <label>From <input id="replay-start" type="datetime-local" step="60" /></label>
+    <label>To <input id="replay-end" type="datetime-local" step="60" /></label>
+    <button id="replay-go" type="button" class="replay-go">Load &amp; replay</button>
+    <div id="replay-msg" class="replay-msg">Up to 72 h per load.</div>
   </section>
 
   <!-- Toast (load status / messages) -->

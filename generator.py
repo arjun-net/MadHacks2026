@@ -145,7 +145,7 @@ def seg(state, target, kind, p0, p1, start, end, waypoints=None):
 ROUTER = None
 
 
-def build_agent_day(arch, pools, behavior, rng, commuter, home_id=None):
+def build_agent_day(arch, pools, behavior, rng, commuter, home_id=None, home_pt=None):
     """Return (segments, home_id). Segments are chronological; both
     residents and commuters start asleep at home (residents in a dorm,
     commuters in their off-campus apartment) and return home at night."""
@@ -157,12 +157,9 @@ def build_agent_day(arch, pools, behavior, rng, commuter, home_id=None):
     p_dinner = behavior["resident_dinner_probability"]
     transit_rng = behavior["transit_minutes_gate"] if commuter else behavior["transit_minutes_dorm"]
 
-    if commuter:
-        home_id = rng.choice(pools["housing"])
-        home_pt = random_point_in_polygon(BY_ID[home_id]["perimeter_polygon"], rng)
-    else:
-        if home_id is None:
-            home_id = rng.choice(pools["dorm"])
+    if home_id is None:
+        home_id = rng.choice(pools["housing"] if commuter else pools["dorm"])
+    if home_pt is None:
         home_pt = random_point_in_polygon(BY_ID[home_id]["perimeter_polygon"], rng)
 
     # ── Classes per archetype pattern ──
@@ -290,6 +287,37 @@ def build_agent_day(arch, pools, behavior, rng, commuter, home_id=None):
     return segments, home_id
 
 
+# ── Per-day variation ───────────────────────────────────────────────────
+# Weekends: later starts, 0-1 classes, more gym/club, most commuters stay
+# home. Every day also gets a random attendance factor so building counts
+# differ day to day.
+WEEKDAY_COMMUTER_PRESENT = 0.92
+WEEKEND_COMMUTER_PRESENT = 0.25
+WEEKDAY_RESIDENT_STAYS_IN = 0.05
+
+
+def day_segments(agent, day_idx, is_weekend, attendance, behavior, pools, seed):
+    """Build one agent's schedule for one calendar day (deterministic)."""
+    rng = random.Random(seed * 1_000_003 + agent["id"] * 1_009 + day_idx)
+    commuter = agent["commuter"]
+    if commuter:
+        present = (WEEKEND_COMMUTER_PRESENT if is_weekend
+                   else WEEKDAY_COMMUTER_PRESENT) * attendance
+        if rng.random() >= present:
+            return []  # off campus all day
+    elif not is_weekend and rng.random() < WEEKDAY_RESIDENT_STAYS_IN:
+        return [seg("SLEEP", agent["home"], "point", agent["home_pt"], None,
+                    0, DAY_MINUTES)]
+    arch, beh = agent["arch"], behavior
+    if is_weekend:
+        arch = dict(arch, n_classes=[0, 1])
+        beh = dict(behavior, depart_window_minutes=[570, 840],
+                   gym_probability=0.5, club_meeting_probability=0.5)
+    segments, _ = build_agent_day(arch, pools, beh, rng, commuter,
+                                  home_id=agent["home"], home_pt=agent["home_pt"])
+    return segments
+
+
 # ── Simulation ──────────────────────────────────────────────────────────
 
 def simulate(schedules, buildings_by_id, pools, _force_end=None, _rng=None):
@@ -336,11 +364,10 @@ def simulate(schedules, buildings_by_id, pools, _force_end=None, _rng=None):
     for agent_id in range(n_agents):
         commuter = statuses[agent_id]
         arch = archetypes[rng.choices(names, weights=weights, k=1)[0]]
-        segments, home = build_agent_day(
-            arch, pools, behavior, rng, commuter,
-            home_id=homes.get(agent_id),
-        )
-        agents.append({"id": agent_id, "segments": segments})
+        home = homes[agent_id]
+        home_pt = random_point_in_polygon(BY_ID[home]["perimeter_polygon"], rng)
+        agents.append({"id": agent_id, "arch": arch, "commuter": commuter,
+                       "home": home, "home_pt": home_pt, "segments": []})
 
     global PING_JITTER_M
     PING_JITTER_M = float(sim.get("ping_jitter_meters", PING_JITTER_M))
@@ -353,11 +380,23 @@ def simulate(schedules, buildings_by_id, pools, _force_end=None, _rng=None):
     rng = _rng or random.Random(sim["seed"])
     start = end - timedelta(days=n_days)
     rows, coord_rows = [], []
+    cur_day = -1
+    rng_day = random.Random(int(sim["seed"]) + 77)
     t = 0
     total_min = DAY_MINUTES * n_days
     while t <= total_min:
         stamp = (start + timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%SZ")
         day_t = t % DAY_MINUTES
+        day_idx = min(t // DAY_MINUTES, n_days - 1)
+        if day_idx != cur_day:
+            cur_day = day_idx
+            # Day 0 begins at `start` (= 23:58 the evening before the first date).
+            weekday = (start + timedelta(days=day_idx, minutes=5)).weekday()
+            attendance = rng_day.uniform(0.85, 1.0)
+            for agent in agents:
+                agent["segments"] = day_segments(
+                    agent, day_idx, weekday >= 5, attendance, behavior, pools,
+                    int(sim["seed"]))
         for agent in agents:
             pos = locate(agent, day_t)
             if pos is None:
@@ -377,7 +416,7 @@ def simulate(schedules, buildings_by_id, pools, _force_end=None, _rng=None):
                 "lat": f"{lat:.6f}",
                 "long": f"{lng:.6f}",
                 "timestamp": stamp,
-                "building": target,
+                "device_id": agent["id"],
             })
         t += ping
     return rows, coord_rows
@@ -524,7 +563,7 @@ def main():
     )
     rows, coord_rows = simulate(schedules, buildings_by_id, pools)
     write_csv(rows, out)
-    write_csv(coord_rows, out_coords, fieldnames=["lat", "long", "timestamp", "building"])
+    write_csv(coord_rows, out_coords, fieldnames=["lat", "long", "timestamp", "device_id"])
     print(f"Wrote {len(rows):,} pings for "
           f"{schedules['simulation']['agents']} agents → {out}")
     print(f"Wrote {len(coord_rows):,} coordinate rows → {out_coords}")
@@ -542,7 +581,7 @@ def main():
     fut_path = os.path.join(os.path.dirname(out_coords) or ".",
                             "1_day_future_apicalls.csv")
     write_csv(coords2, fut_path,
-              fieldnames=["lat", "long", "timestamp", "building"])
+              fieldnames=["lat", "long", "timestamp", "device_id"])
     print(f"Wrote {len(coords2):,} future-day rows → {fut_path}")
 
 
