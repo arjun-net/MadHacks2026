@@ -50,7 +50,31 @@ struct BuildingStory: Sendable, Equatable {
     var moment: Date { current.date.addingTimeInterval(Double(minuteOfDay) * 60) }
 }
 
+/// A count against what's usual for that weekday and time.
+enum BusyComparison: Sendable, Equatable {
+    /// At least a quarter more than usual.
+    case busier
+    /// Under 80% of usual.
+    case quieter
+    case usual
+    /// A count, but no past same weekdays to compare it with.
+    case noHistory
+    /// No count for the day.
+    case noData
+
+    init(devices: Int?, usual: Double?) {
+        guard let devices else { self = .noData; return }
+        guard let usual else { self = .noHistory; return }
+        guard usual > 0 else { self = devices > 0 ? .busier : .usual; return }
+        let ratio = Double(devices) / usual
+        self = ratio >= 1.25 ? .busier : ratio < 0.8 ? .quieter : .usual
+    }
+}
+
 extension BuildingStory {
+    /// The story's day (`current`) against the usual for its weekday.
+    var comparison: BusyComparison { BusyComparison(devices: current.devices, usual: usualDevices) }
+
     /// A calendar in the story's time zone, for formatting its dates.
     var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)

@@ -83,6 +83,14 @@ enum BuildingStoryState: Equatable {
     case failed(String)
 }
 
+/// Loading a building's past days: one story per day, newest first. Each day's `current` is
+/// that day's count at this time of day; its `sameWeekday` gives what's usual for that weekday.
+enum PastDaysState: Equatable {
+    case loading
+    case loaded([BuildingStory])
+    case failed(String)
+}
+
 @Observable
 @MainActor
 final class ActivityViewModel {
@@ -93,6 +101,13 @@ final class ActivityViewModel {
     @ObservationIgnored private let storyProvider = BuildingStoryProvider()
     /// A loaded story is reused for this long before it's fetched again.
     private static let storyLifetime: TimeInterval = 5 * 60
+
+    /// Past days by area ID, with when they were fetched.
+    private(set) var pastDays: [String: (state: PastDaysState, fetchedAt: Date)] = [:]
+    /// How many days back the past-days section goes.
+    static let pastDayCount = 7
+    /// Past days don't change, but "this time of day" moves on, so they're refetched this often.
+    private static let pastDaysLifetime: TimeInterval = 15 * 60
 
     init(store: CampusStore) {
         self.store = store
@@ -210,6 +225,54 @@ final class ActivityViewModel {
             if let previous, case .loaded = previous.state { return }
             stories[areaID] = (.failed(error.localizedDescription), .now)
         }
+    }
+
+    func pastDaysState(for areaID: String) -> PastDaysState {
+        pastDays[areaID]?.state ?? .loading
+    }
+
+    /// Loads the building's last `pastDayCount` days at the current time of day, in parallel.
+    /// A day that fails to load is left out; only if every day fails is the section an error.
+    func loadPastDays(for areaID: String, force: Bool = false) async {
+        guard let area = campus.area(withID: areaID) else { return }
+        if !force, let cached = pastDays[areaID], case .loaded = cached.state,
+           Date.now.timeIntervalSince(cached.fetchedAt) < Self.pastDaysLifetime {
+            return
+        }
+        let previous = pastDays[areaID]
+        if previous == nil { pastDays[areaID] = (.loading, .now) }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = AppConfig.campusTimeZone
+        let now = Date.now
+        // Same wall-clock time on each earlier day (calendar math keeps it right across DST).
+        let moments = (1...Self.pastDayCount).compactMap { calendar.date(byAdding: .day, value: -$0, to: now) }
+        let provider = storyProvider
+        let campus = campus
+
+        var days: [BuildingStory] = []
+        var firstError: Error?
+        await withTaskGroup(of: Result<BuildingStory, Error>.self) { group in
+            for moment in moments {
+                group.addTask {
+                    do { return .success(try await provider.story(for: area, campus: campus, live: nil, at: moment)) }
+                    catch { return .failure(error) }
+                }
+            }
+            for await result in group {
+                switch result {
+                case .success(let story): days.append(story)
+                case .failure(let error): firstError = firstError ?? error
+                }
+            }
+        }
+
+        if days.isEmpty, let firstError {
+            if let previous, case .loaded = previous.state { return }
+            pastDays[areaID] = (.failed(firstError.localizedDescription), .now)
+            return
+        }
+        pastDays[areaID] = (.loaded(days.sorted { $0.current.date > $1.current.date }), .now)
     }
 
     func refresh() async {

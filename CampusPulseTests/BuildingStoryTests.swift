@@ -77,3 +77,33 @@ struct BuildingStoryTests {
         #expect(story == SampleActivityData.story(for: area, campus: campus, at: thursday, currentDevices: 33, weeks: 8))
     }
 }
+
+/// Busier or quieter than usual, shared by the "this time" and "past days" sections.
+struct BusyComparisonTests {
+    @Test(arguments: [
+        (13, 10.0, BusyComparison.busier),
+        (12, 10.0, .usual),
+        (8, 10.0, .usual),
+        (7, 10.0, .quieter),
+        (3, 0.0, .busier),
+        (0, 0.0, .usual),
+    ] as [(Int, Double, BusyComparison)])
+    func comparesWithUsual(devices: Int, usual: Double, expected: BusyComparison) {
+        #expect(BusyComparison(devices: devices, usual: usual) == expected)
+    }
+
+    @Test func missingDataOrHistory() {
+        #expect(BusyComparison(devices: nil, usual: 10) == .noData)
+        #expect(BusyComparison(devices: 5, usual: nil) == .noHistory)
+    }
+
+    @Test func fakePastDayComparesWithItsOwnWeekday() throws {
+        let campus = try #require(CampusCatalog.all.first { $0.isAvailable })
+        let area = try #require(campus.areas.first)
+        let saturday = ISO8601DateFormatter().date(from: "2026-11-14T20:30:00Z")!
+        let story = SampleActivityData.story(for: area, campus: campus, at: saturday)
+        #expect(story.current.hasData)
+        #expect(story.usualDevices != nil)
+        #expect(story.comparison != .noData)
+    }
+}

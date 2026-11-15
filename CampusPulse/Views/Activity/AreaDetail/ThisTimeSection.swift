@@ -216,15 +216,15 @@ private struct StoryCard: View {
 // MARK: - Formatting
 
 /// Counts under the app's display minimum aren't shown exactly, as elsewhere in the app.
-private func countText(_ devices: Int?) -> String {
+func countText(_ devices: Int?) -> String {
     guard let devices else { return "–" }
     return devices < AppConfig.minimumDisplayedCount ? "<\(AppConfig.minimumDisplayedCount)" : "\(devices)"
 }
 
-private func timeText(_ story: BuildingStory) -> String {
+func timeText(_ story: BuildingStory) -> String {
     story.moment.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: story.timeZone))
 }
 
-private func weekdayText(_ date: Date, _ story: BuildingStory, style: Date.FormatStyle.Symbol.Weekday) -> String {
+func weekdayText(_ date: Date, _ story: BuildingStory, style: Date.FormatStyle.Symbol.Weekday) -> String {
     date.formatted(Date.FormatStyle(timeZone: story.timeZone).weekday(style))
 }

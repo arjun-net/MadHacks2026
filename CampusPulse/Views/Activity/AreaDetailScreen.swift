@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Detail for one hall or building: live reading, usual busy times by weekday,
-/// today compared with a normal day, and the past week.
+/// today compared with a normal day, and each of the past days against its usual.
 struct AreaDetailScreen: View {
     let areaID: String
     @Bindable var viewModel: ActivityViewModel
@@ -56,7 +56,9 @@ struct AreaDetailScreen: View {
                 ThisTimeSection(state: viewModel.storyState(for: areaID)) {
                     Task { await viewModel.loadStory(for: areaID, force: true) }
                 }
-                PastWeekSection(insights: insights)
+                PastDaysSection(state: viewModel.pastDaysState(for: areaID)) {
+                    Task { await viewModel.loadPastDays(for: areaID, force: true) }
+                }
 
                 Text("History and usual times are estimates built from anonymous, aggregated activity.")
                     .typeStyle(.caption)
@@ -73,8 +75,10 @@ struct AreaDetailScreen: View {
         .refreshable {
             await viewModel.refresh()
             await viewModel.loadStory(for: areaID, force: true)
+            await viewModel.loadPastDays(for: areaID, force: true)
         }
         .task(id: areaID) { await viewModel.loadStory(for: areaID) }
+        .task(id: areaID) { await viewModel.loadPastDays(for: areaID) }
     }
 
     private func header(_ activity: AreaActivity) -> some View {
