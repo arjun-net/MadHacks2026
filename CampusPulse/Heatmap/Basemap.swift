@@ -177,23 +177,28 @@ enum BasemapPalette {
     static let major = color(0xFFFDF8, 0x433B32, 0x422828, 0x3A4048)
 }
 
-/// The campus basemap served to MapKit as tiles that replace Apple's map entirely.
+/// The campus basemap as 256-point square tiles (the usual web map grid), drawn by the app
+/// and shown by `MapCanvasView`.
 ///
-/// A tile overlay with `canReplaceMapContent` stops MapKit from loading its own imagery,
-/// so Apple's map (blue water, its labels) never shows through while tiles are drawing.
-/// While zooming, MapKit keeps showing the previous zoom level's tiles until new ones are ready.
-///
-/// Any tile MapKit asks for before it's drawn shows as MapKit's grey loading grid, so the area
-/// around campus is drawn ahead of time (`prefetch`) at every zoom level people use, and tiles
-/// are kept in memory and saved to the Caches folder. After the first launch the whole map
-/// comes straight from storage, so zooming and panning never wait on drawing.
-final class BasemapTileOverlay: MKTileOverlay, @unchecked Sendable {
+/// Drawing a tile takes milliseconds, so the area around campus is drawn ahead of time
+/// (`prefetch`) at every zoom level people use, and tiles are kept in memory and saved to the
+/// Caches folder. After the first launch the whole map comes straight from storage.
+final class BasemapTiles: @unchecked Sendable {
+    static let tileSize: CGFloat = 256
+
     let basemap: Basemap
     private let lock = NSLock()
     private var _style: UIUserInterfaceStyle
+    /// Encoded tiles, as saved on disk.
     private let tiles: NSCache<NSString, NSData> = {
         let cache = NSCache<NSString, NSData>()
-        cache.totalCostLimit = 96 * 1024 * 1024
+        cache.totalCostLimit = 64 * 1024 * 1024
+        return cache
+    }()
+    /// Decoded tiles, ready to put on screen without any work.
+    private let images: NSCache<NSString, CGImage> = {
+        let cache = NSCache<NSString, CGImage>()
+        cache.totalCostLimit = 160 * 1024 * 1024
         return cache
     }()
     private var prefetchTask: Task<Void, Never>?
@@ -206,33 +211,55 @@ final class BasemapTileOverlay: MKTileOverlay, @unchecked Sendable {
         self._style = style == .dark ? .dark : .light
         self.directory = URL.cachesDirectory.appending(path: "basemap-tiles/\(campusID)-v\(Self.version)", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        super.init(urlTemplate: nil)
-        canReplaceMapContent = true
-        tileSize = CGSize(width: 256, height: 256)
-        minimumZ = 1
-        maximumZ = 22
     }
 
     /// Appearance to draw in. Tiles load on background threads, so it's lock-guarded.
-    /// After changing it, call `reloadData()` on the renderer to redraw.
     var style: UIUserInterfaceStyle {
         get { lock.withLock { _style } }
         set { lock.withLock { _style = newValue == .dark ? .dark : .light } }
     }
 
-    override func loadTile(at path: MKTileOverlayPath, result: @escaping (Data?, Error?) -> Void) {
-        result(tileData(z: path.z, x: path.x, y: path.y, scale: path.contentScaleFactor, style: style), nil)
+    static func tileWidth(z: Int) -> Double {
+        MKMapSize.world.width / pow(2, Double(z))
+    }
+
+    /// A decoded tile if it's already in memory; never does any work.
+    func cachedImage(z: Int, x: Int, y: Int, scale: CGFloat, style: UIUserInterfaceStyle) -> CGImage? {
+        images.object(forKey: key(z: z, x: x, y: y, scale: scale, style: style))
+    }
+
+    /// A decoded tile: from memory, the saved copy, or drawn now. Call off the main thread.
+    func image(z: Int, x: Int, y: Int, scale: CGFloat, style: UIUserInterfaceStyle) -> CGImage? {
+        let key = key(z: z, x: x, y: y, scale: scale, style: style)
+        if let image = images.object(forKey: key) { return image }
+        let data = tileData(z: z, x: x, y: y, scale: scale, style: style)
+        guard let image = Self.decode(data) else { return nil }
+        images.setObject(image, forKey: key, cost: image.bytesPerRow * image.height)
+        return image
+    }
+
+    /// One low-detail picture of a whole area, shown under the tiles so the map is never empty.
+    func overview(of rect: MKMapRect, style: UIUserInterfaceStyle) -> CGImage? {
+        let file = directory.appending(path: "overview-\(style == .dark ? "d" : "l")-\(Int(rect.minX))-\(Int(rect.minY))-\(Int(rect.width)).jpg")
+        if let saved = try? Data(contentsOf: file), let image = Self.decode(saved) { return image }
+
+        let longSide: CGFloat = 2048
+        let zoomScale = longSide / max(rect.width, rect.height)
+        let size = CGSize(width: (rect.width * zoomScale).rounded(), height: (rect.height * zoomScale).rounded())
+        let data = render(rect, size: size, zoomScale: zoomScale, scale: 1, style: style)
+        try? data.write(to: file, options: .atomic)
+        return Self.decode(data)
     }
 
     /// Draws every tile covering each area at its zoom levels in the background, so they're
-    /// ready before MapKit asks. Restarting (new style) cancels the previous run.
+    /// ready before the map needs them. Restarting (new style) cancels the previous run.
     func prefetch(_ jobs: [(area: MKMapRect, zooms: ClosedRange<Int>)], scale: CGFloat) {
         let style = self.style
         prefetchTask?.cancel()
         prefetchTask = Task.detached(priority: .utility) { [weak self] in
             for (rect, zooms) in jobs {
                 for z in zooms {
-                    let tileWidth = MKMapSize.world.width / pow(2, Double(z))
+                    let tileWidth = Self.tileWidth(z: z)
                     let xs = Int(rect.minX / tileWidth)...Int(rect.maxX / tileWidth)
                     let ys = Int(rect.minY / tileWidth)...Int(rect.maxY / tileWidth)
                     let paths = xs.flatMap { x in ys.map { (x, $0) } }
@@ -242,7 +269,7 @@ final class BasemapTileOverlay: MKTileOverlay, @unchecked Sendable {
                         let slice = paths[chunk..<min(chunk + 16, paths.count)]
                         DispatchQueue.concurrentPerform(iterations: slice.count) { i in
                             let (x, y) = slice[slice.startIndex + i]
-                            // Already saved: nothing to do (MapKit reads it from disk in about a millisecond).
+                            // Already saved: nothing to do (it reads from disk in well under a millisecond).
                             guard !FileManager.default.fileExists(atPath: self.fileURL(z: z, x: x, y: y, scale: scale, style: style).path) else { return }
                             _ = self.tileData(z: z, x: x, y: y, scale: scale, style: style)
                         }
@@ -252,13 +279,17 @@ final class BasemapTileOverlay: MKTileOverlay, @unchecked Sendable {
         }
     }
 
+    private func key(z: Int, x: Int, y: Int, scale: CGFloat, style: UIUserInterfaceStyle) -> NSString {
+        "\(style == .dark ? "d" : "l")/\(z)/\(x)/\(y)@\(scale)" as NSString
+    }
+
     private func fileURL(z: Int, x: Int, y: Int, scale: CGFloat, style: UIUserInterfaceStyle) -> URL {
         directory.appending(path: "\(style == .dark ? "d" : "l")-\(z)-\(x)-\(y)@\(Int(scale))x.jpg")
     }
 
-    /// A tile's image: from memory, else from the saved copy, else drawn now (and saved).
+    /// A tile's encoded image: from memory, else from the saved copy, else drawn now (and saved).
     private func tileData(z: Int, x: Int, y: Int, scale: CGFloat, style: UIUserInterfaceStyle) -> Data {
-        let key = "\(style == .dark ? "d" : "l")/\(z)/\(x)/\(y)@\(scale)" as NSString
+        let key = key(z: z, x: x, y: y, scale: scale, style: style)
         if let cached = tiles.object(forKey: key) { return cached as Data }
         let file = fileURL(z: z, x: x, y: y, scale: scale, style: style)
         if let saved = try? Data(contentsOf: file) {
@@ -266,24 +297,32 @@ final class BasemapTileOverlay: MKTileOverlay, @unchecked Sendable {
             return saved
         }
 
-        let tileWidth = MKMapSize.world.width / pow(2, Double(z))
+        let tileWidth = Self.tileWidth(z: z)
         let mapRect = MKMapRect(x: Double(x) * tileWidth, y: Double(y) * tileWidth, width: tileWidth, height: tileWidth)
-        let zoomScale = tileSize.width / tileWidth
+        let size = CGSize(width: Self.tileSize, height: Self.tileSize)
+        let data = render(mapRect, size: size, zoomScale: Self.tileSize / tileWidth, scale: scale, style: style)
+        tiles.setObject(data as NSData, forKey: key, cost: data.count)
+        try? data.write(to: file, options: .atomic)
+        return data
+    }
 
+    private func render(_ mapRect: MKMapRect, size: CGSize, zoomScale: Double, scale: CGFloat, style: UIUserInterfaceStyle) -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         format.opaque = true
         // JPEG: tiles are opaque, and it encodes and decodes several times faster than PNG.
-        let data = UIGraphicsImageRenderer(size: tileSize, format: format).jpegData(withCompressionQuality: 0.9) { context in
+        return UIGraphicsImageRenderer(size: size, format: format).jpegData(withCompressionQuality: 0.9) { context in
             let cg = context.cgContext
-            // Draw in map points: scale tile points to map points and move the tile's origin to 0,0.
+            // Draw in map points: scale points to map points and move the rect's origin to 0,0.
             cg.scaleBy(x: zoomScale, y: zoomScale)
             cg.translateBy(x: -mapRect.origin.x, y: -mapRect.origin.y)
             BasemapPainter.draw(basemap, in: mapRect, zoomScale: zoomScale, style: style, context: cg)
         }
-        tiles.setObject(data as NSData, forKey: key, cost: data.count)
-        try? data.write(to: file, options: .atomic)
-        return data
+    }
+
+    /// Decodes now, so putting the image on screen later costs nothing.
+    private static func decode(_ data: Data) -> CGImage? {
+        UIImage(data: data)?.preparingForDisplay()?.cgImage
     }
 
     deinit { prefetchTask?.cancel() }

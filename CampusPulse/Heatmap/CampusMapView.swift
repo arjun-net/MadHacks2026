@@ -1,8 +1,8 @@
 import MapKit
 import SwiftUI
 
-/// MKMapView bridge. SwiftUI's `Map` can't host a custom raster overlay renderer,
-/// which is what gives the heatmap its smooth, blended look, so we drop to UIKit here.
+/// MKMapView bridge. MapKit handles gestures, the camera and the markers; the map itself and
+/// the heat layer are drawn by `MapCanvasView`, which SwiftUI's `Map` couldn't host.
 struct CampusMapView: UIViewRepresentable {
     let campus: Campus
     let snapshot: CampusSnapshot?
@@ -89,10 +89,10 @@ struct CampusMapView: UIViewRepresentable {
         var selectedAreaID: String?
         var recenterToken: Int
 
-        private var overlay: HeatmapOverlay?
-        private var basemapOverlay: BasemapTileOverlay?
+        private var heatBounds: MKMapRect?
+        private var basemapTiles: BasemapTiles?
+        private var canvas: MapCanvasView?
         private var prefetchJobs: [(area: MKMapRect, zooms: ClosedRange<Int>)] = []
-        private weak var basemapRenderer: MKTileOverlayRenderer?
         private var annotations: [String: AreaAnnotation] = [:]
         private var gridTask: Task<Void, Never>?
 
@@ -112,31 +112,30 @@ struct CampusMapView: UIViewRepresentable {
             mapView.removeAnnotations(mapView.annotations.filter { $0 is AreaAnnotation })
 
             let campusRect = campus.boundaryRect
+            let focusArea = campus.focusRect
+            let boundary = campusRect.union(focusArea).insetBy(dx: -focusArea.width, dy: -focusArea.height * 1.5)
+            // The camera center stays inside `boundary`, so zoomed out the screen can show well beyond it.
+            let reachable = boundary.insetBy(dx: -boundary.width * 0.5, dy: -boundary.height * 0.5)
 
-            if let basemap = Basemap.forCampus(campus) {
-                let basemapOverlay = BasemapTileOverlay(basemap: basemap, campusID: campus.id, style: mapView.traitCollection.userInterfaceStyle)
-                self.basemapOverlay = basemapOverlay
-                mapView.addOverlay(basemapOverlay, level: .aboveLabels)
-            } else {
-                basemapOverlay = nil
+            basemapTiles = Basemap.forCampus(campus).map {
+                BasemapTiles(basemap: $0, campusID: campus.id, style: mapView.traitCollection.userInterfaceStyle)
             }
-
-            let overlay = HeatmapOverlay(bounds: campus.heatmapBounds)
-            self.overlay = overlay
-            mapView.addOverlay(overlay, level: .aboveLabels)
+            heatBounds = campus.heatmapBounds
+            canvas?.removeFromSuperview()
+            let canvas = MapCanvasView(mapView: mapView, tiles: basemapTiles, overviewRect: reachable, heatBounds: campus.heatmapBounds)
+            mapView.installCanvas(canvas)
+            self.canvas = canvas
+            animator.attach(canvas.heatLayer)
 
             annotations = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, AreaAnnotation(area: $0)) })
             mapView.addAnnotations(Array(annotations.values))
 
             // Keep the camera on campus: limited panning and zoom-out.
-            let focusArea = campus.focusRect
-            let boundary = campusRect.union(focusArea).insetBy(dx: -focusArea.width, dy: -focusArea.height * 1.5)
             mapView.setCameraBoundary(MKMapView.CameraBoundary(mapRect: boundary), animated: false)
-            // Draw ahead of time what the camera can reach. The camera center stays inside
-            // `boundary`, so zoomed out the screen can show well beyond it; zoomed in, people
-            // stay around campus. Wider areas at coarse zooms keep the count near 1,000 tiles.
+            // Draw ahead of time what the camera can reach; zoomed in, people stay around
+            // campus. Wider areas at coarse zooms keep the count near 1,000 tiles.
             prefetchJobs = [
-                (boundary.insetBy(dx: -boundary.width * 0.5, dy: -boundary.height * 0.5), 12...15),
+                (reachable, 12...15),
                 (boundary, 16...16),
                 (focusArea.insetBy(dx: -focusArea.width * 0.5, dy: -focusArea.height * 0.5), 17...17),
                 // Street level around the buildings; closer zooms enlarge these while drawing.
@@ -160,7 +159,7 @@ struct CampusMapView: UIViewRepresentable {
             }
             refreshAnnotationStyles(in: mapView)
 
-            guard let bounds = overlay?.boundingMapRect else { return }
+            guard let bounds = heatBounds else { return }
             let cells = snapshot.cells
             gridTask?.cancel()
             gridTask = Task { [weak self] in
@@ -192,35 +191,33 @@ struct CampusMapView: UIViewRepresentable {
             mapView.setVisibleMapRect(rect, edgePadding: insets, animated: true)
         }
 
-        /// Redraws the basemap tiles in the new appearance.
+        /// Redraws the basemap in the new appearance.
         func setBasemapStyle(_ style: UIUserInterfaceStyle, scale: CGFloat) {
-            guard let basemapOverlay, basemapOverlay.style != (style == .dark ? .dark : .light) else { return }
-            basemapOverlay.style = style
-            basemapRenderer?.reloadData()
+            canvas?.setStyle(style)
+            guard let basemapTiles, basemapTiles.style != (style == .dark ? .dark : .light) else { return }
+            basemapTiles.style = style
             prefetchBasemap(scale: scale)
         }
 
         /// Zoom levels from fully zoomed out (~20 km camera) to a building's block; closer
         /// tiles draw on demand while MapKit shows these scaled up.
         private func prefetchBasemap(scale: CGFloat) {
-            guard let basemapOverlay, !prefetchJobs.isEmpty else { return }
-            basemapOverlay.prefetch(prefetchJobs, scale: max(scale, 1))
+            guard let basemapTiles, !prefetchJobs.isEmpty else { return }
+            basemapTiles.prefetch(prefetchJobs, scale: max(scale, 1))
         }
 
         // MARK: MKMapViewDelegate
 
-        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            if let overlay = overlay as? BasemapTileOverlay {
-                let renderer = MKTileOverlayRenderer(tileOverlay: overlay)
-                basemapRenderer = renderer
-                return renderer
-            }
-            if let overlay = overlay as? HeatmapOverlay {
-                let renderer = HeatmapOverlayRenderer(overlay: overlay)
-                animator.attach(renderer)
-                return renderer
-            }
-            return MKOverlayRenderer(overlay: overlay)
+        func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            canvas?.cameraWillMove()
+        }
+
+        func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
+            canvas?.sync()
+        }
+
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            canvas?.cameraDidStop()
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
@@ -242,12 +239,17 @@ struct CampusMapView: UIViewRepresentable {
     }
 }
 
-/// Reports its first real layout so the initial camera can account for the floating chrome.
+/// Reports its first real layout so the initial camera can account for the floating chrome,
+/// and keeps the canvas sized to the map (MapKit doesn't resize views added inside it).
 final class LayoutAwareMapView: MKMapView {
     var onFirstLayout: (() -> Void)?
+    weak var canvas: MapCanvasView?
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        if let canvas, let host = canvas.superview, canvas.frame != host.bounds {
+            canvas.frame = host.bounds
+        }
         guard bounds.width > 0, let callback = onFirstLayout else { return }
         onFirstLayout = nil
         callback()

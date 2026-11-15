@@ -1,48 +1,12 @@
-import MapKit
 import QuartzCore
-
-/// Map overlay spanning the campus heatmap bounds.
-final class HeatmapOverlay: NSObject, MKOverlay {
-    let boundingMapRect: MKMapRect
-
-    init(bounds: MKMapRect) {
-        self.boundingMapRect = bounds
-    }
-
-    var coordinate: CLLocationCoordinate2D {
-        MKMapPoint(x: boundingMapRect.midX, y: boundingMapRect.midY).coordinate
-    }
-}
-
-/// Draws a pre-rendered heat image stretched over the overlay. MapKit calls `draw` on
-/// background threads, so the image is guarded by a lock.
-final class HeatmapOverlayRenderer: MKOverlayRenderer {
-    private let lock = NSLock()
-    private var _image: CGImage?
-
-    var image: CGImage? {
-        get { lock.withLock { _image } }
-        set { lock.withLock { _image = newValue } }
-    }
-
-    override func draw(_ mapRect: MKMapRect, zoomScale: MKZoomScale, in context: CGContext) {
-        guard let image else { return }
-        let rect = self.rect(for: overlay.boundingMapRect)
-        context.saveGState()
-        context.interpolationQuality = .high
-        // Map coordinates grow downward; flip so image row 0 lands at the top (north).
-        context.translateBy(x: rect.minX, y: rect.maxY)
-        context.scaleBy(x: 1, y: -1)
-        context.draw(image, in: CGRect(origin: .zero, size: rect.size))
-        context.restoreGState()
-    }
-}
+import UIKit
 
 /// Drives smooth transitions between heat grids (cross-fading density as data updates)
 /// and fades the whole layer in and out when it's toggled.
 @MainActor
 final class HeatmapAnimator: NSObject {
-    private weak var renderer: HeatmapOverlayRenderer?
+    /// The canvas's heat layer; the image stretches over the campus heat bounds.
+    private weak var layer: CALayer?
     private var displayLink: CADisplayLink?
 
     private var fromGrid: HeatmapGrid?
@@ -56,11 +20,24 @@ final class HeatmapAnimator: NSObject {
     /// Which heat ramp to color with; follows the map's appearance.
     private var style: UIUserInterfaceStyle = .light
 
-    func attach(_ renderer: HeatmapOverlayRenderer) {
-        self.renderer = renderer
-        renderer.alpha = currentAlpha
-        renderer.image = currentGrid?.makeImage(style: style)
-        renderer.setNeedsDisplay()
+    func attach(_ layer: CALayer) {
+        self.layer = layer
+        show(currentGrid?.makeImage(style: style))
+        setOpacity(currentAlpha)
+    }
+
+    private func show(_ image: CGImage?) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.contents = image
+        CATransaction.commit()
+    }
+
+    private func setOpacity(_ alpha: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.opacity = Float(alpha)
+        CATransaction.commit()
     }
 
     /// Re-colors the current heat field when the appearance changes.
@@ -68,8 +45,7 @@ final class HeatmapAnimator: NSObject {
         let resolved: UIUserInterfaceStyle = newStyle == .dark ? .dark : .light
         guard resolved != style else { return }
         style = resolved
-        renderer?.image = currentGrid?.makeImage(style: style)
-        renderer?.setNeedsDisplay()
+        show(currentGrid?.makeImage(style: style))
     }
 
     func reset() {
@@ -112,7 +88,6 @@ final class HeatmapAnimator: NSObject {
 
     @objc private func step(_ link: CADisplayLink) {
         var needsMoreFrames = false
-        var needsRedraw = false
 
         if let from = fromGrid, let to = toGrid {
             let progress = min(1, (CACurrentMediaTime() - transitionStart) / transitionDuration)
@@ -122,8 +97,7 @@ final class HeatmapAnimator: NSObject {
             let grid = from.blended(with: to, fraction: Float(eased))
             currentGrid = grid
             // Cheaper frames mid-transition; full detail once it settles.
-            renderer?.image = grid.makeImage(scale: progress >= 1 ? 2 : 1, style: style)
-            needsRedraw = true
+            show(grid.makeImage(scale: progress >= 1 ? 2 : 1, style: style))
             if progress >= 1 {
                 fromGrid = nil
                 toGrid = nil
@@ -135,12 +109,10 @@ final class HeatmapAnimator: NSObject {
         if currentAlpha != targetAlpha {
             let delta = targetAlpha - currentAlpha
             currentAlpha = abs(delta) < 0.02 ? targetAlpha : currentAlpha + delta * 0.2
-            renderer?.alpha = currentAlpha
-            needsRedraw = true
+            setOpacity(currentAlpha)
             needsMoreFrames = needsMoreFrames || currentAlpha != targetAlpha
         }
 
-        if needsRedraw { renderer?.setNeedsDisplay() }
         if !needsMoreFrames { stop() }
     }
 }
