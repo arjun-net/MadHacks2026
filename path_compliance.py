@@ -114,9 +114,10 @@ class PathChecker:
                                 dest_poly=None, tol_m=5.0):
         """Like _inside_footprint but with a penetration tolerance: samples
         up to tol_m deep inside a non-o/d footprint pass. This absorbs the
-        corner-cut of straight chords between pings on a verified polyline
-        (measured max ~5m at 2-min ping spacing); anything deeper means the
-        path actually crosses a building."""
+        corner-cut of straight chords between pings (which carry ±2m jitter
+        and can be 2 min apart) on a verified polyline; measured worst case
+        is ~7m. Anything deeper means the path actually crosses a
+        building."""
         for idx, poly in enumerate(self.polys):
             if not point_in_polygon(lat, lng, poly):
                 continue
@@ -177,7 +178,8 @@ class PathChecker:
             # footprint of a non-o/d (non-overlapping) building is a real
             # violation.
             if not self._inside_footprint_depth(p[0], p[1], origin_poly,
-                                                dest_poly, tol_m=5.0):
+                                                dest_poly, tol_m=7.5):
+                continue
                 continue
             return False, p
         return True, None

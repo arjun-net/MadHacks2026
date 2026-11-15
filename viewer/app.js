@@ -9,6 +9,13 @@
 const MAPBOX_TOKEN = "pk.eyJ1Ijoiam9zaGNvbGNvcmQiLCJhIjoiY213Z3k4ajMyMDJ1cTJ4cGw5OHR5eW5vayJ9.dO1J5qNiwkkYCwTC3UBEwg";
 
 const MAP_CENTER = [-89.4005, 43.0765]; // UW-Madison [lng, lat]
+/* Navigation limits: user can pan freely inside this box, but once a
+ * campus edge would become a thin sliver at the screen edge, panning
+ * stops (maxBounds pins the map edge). Zooming out beyond the box is
+ * clamped too (world copies + infinite gray avoided). */
+const CAMPUS_MAX_BOUNDS = mapboxgl.LngLatBounds
+  ? new mapboxgl.LngLatBounds([-89.4295, 43.0660], [-89.3875, 43.0815])
+  : null;
 const PING_INTERVAL_MIN = 2;            // must match generator ping_interval
 const DEFAULT_STEPS = 288;              // 24h at 2-min pings (fallback)
 
@@ -23,7 +30,32 @@ const map = new mapboxgl.Map({
   zoom: 14.2,
   pitch: 0,
   accessToken: MAPBOX_TOKEN,
+  maxBounds: CAMPUS_MAX_BOUNDS || undefined,
+  maxZoom: 17.5,
 });
+
+/* Trackpad-over-UI zoom: mapbox listens for wheel on the map container,
+ * but glass cards (docks/chat) float above it — a two-finger scroll over
+ * them bubbles to the map and zooms while the user is just scrolling a
+ * panel. Fix: overlays live OUTSIDE #map and Mapbox already ignores
+ * wheel on them; the reverse problem is wheel targets INSIDE the map
+ * (pin layer). Route wheel events on overlay cards manually into the
+ * map only when the card has no scrollable overflow (i.e., ignore zoom
+ * and let the map handle it as if hovering the map itself). */
+for (const card of document.querySelectorAll(".glass.dock, .glass.adock, .agent-panel, #chat, .toast")) {
+  card.addEventListener("wheel", (e) => {
+    // Only forward when the card itself can't scroll (no inner overflow)
+    const scrollable = card.scrollHeight > card.clientHeight + 2;
+    if (scrollable) return; // card scrolls normally; don't zoom the map
+    e.preventDefault();
+    e.stopPropagation();
+    const delta = e.deltaY;
+    // Match Mapbox's own scrollZoom feel (~0.01/tick plain wheel,
+    // finer steps while pinch-zooming with ctrlKey)
+    const zoomDelta = -delta * (e.ctrlKey ? 0.01 : 0.008);
+    map.easeTo({ zoom: Math.max(12, Math.min(17.5, map.getZoom() + zoomDelta)), duration: 0 });
+  }, { passive: false });
+}
 
 map.on("load", () => {
   document.body.classList.add("heat-on");
@@ -63,7 +95,8 @@ map.on("load", () => {
     },
   });
 
-  // Faint trails for every agent (toggleable, data filled by setStep)
+  // Fading comet trails for every agent (default on): segments from the
+  // last TRAIL_FADE_MIN of movement, opacity decaying with age.
   map.addSource("all-paths", { type: "geojson", data: emptyFC() });
   map.addLayer({
     id: "all-paths-line",
@@ -71,8 +104,9 @@ map.on("load", () => {
     source: "all-paths",
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
-      "line-color": "rgba(226, 232, 240, 0.22)",
-      "line-width": 1.4,
+      "line-color": ["get", "color"],
+      "line-opacity": ["get", "alpha"],
+      "line-width": ["interpolate", ["linear"], ["zoom"], 12, 2.2, 16, 4.5],
     },
   });
 
@@ -99,7 +133,8 @@ map.on("load", () => {
     },
   });
 
-  // One dot per agent at the current time step — clickable
+  // One dot per agent at the current time step — only while the agent
+  // is outdoors (TRANSIT); interior agents feed building heat instead.
   map.addSource("agents", { type: "geojson", data: emptyFC() });
   map.addLayer({
     id: "agent-dots",
@@ -113,6 +148,19 @@ map.on("load", () => {
       "circle-stroke-width": 1,
     },
   });
+
+  // Building heat: interior agents live as pulses inside building
+  // footprints instead of dots — lines = movement, fills = presence.
+  map.addSource("building-heat", { type: "geojson", data: emptyFC() });
+  map.addLayer({
+    id: "building-heat-fill",
+    type: "fill",
+    source: "building-heat",
+    paint: {
+      "fill-color": ["get", "color"],
+      "fill-opacity": ["get", "alpha"],
+    },
+  }, "agent-dots");
 
   map.on("click", "agent-dots", (e) => {
     const f = e.features && e.features[0];
@@ -142,7 +190,7 @@ let speedMs = 100;
 let selectedAgent = null;
 let agentPopup = null;
 let heatOn = true;
-let pathsOn = false;
+let pathsOn = true; // comet trails on by default — they replace the dot swarm
 
 const STATE_COLORS = {
   SLEEP: "#60a5fa",
@@ -179,17 +227,8 @@ fileInput.addEventListener("change", (e) => {
   if (e.target.files.length) loadCSVFile(e.target.files[0]);
 });
 
-/* Mock analysis tools — placeholders for the Databricks-backed analytics */
-const MOCK_TOOLS = [
-  ["tool-congestion", "Congestion analysis", "coming soon — Databricks-backed"],
-  ["tool-peaks", "Peak times by place", "coming soon — Databricks-backed"],
-  ["tool-hotspots", "Busiest places", "coming soon — Databricks-backed"],
-];
-for (const [id, label, note] of MOCK_TOOLS) {
-  document.getElementById(id).addEventListener("click", () => {
-    toast(`${label} · ${note}`);
-  });
-}
+/* Analysis tools are wired in analytics.js (client-side stand-ins for
+ * Databricks-backed views — see ANALYTICS.md for the swap-in guide). */
 
 /* Drag-and-drop anywhere on the page */
 document.addEventListener("dragover", (e) => {
@@ -257,7 +296,7 @@ function ingestRows(rows) {
 
     const f = {
       type: "Feature",
-      properties: { agent_id: r.agent_id, state: r.state, step },
+      properties: { agent_id: r.agent_id, state: r.state, building_id: r.building_id, minute_of_day: Number(r.minute_of_day), step },
       geometry: { type: "Point", coordinates: [lng, lat] },
     };
     allFeatures.push(f);
@@ -292,6 +331,9 @@ function ingestRows(rows) {
 
   const nAgents = new Set(allFeatures.map((f) => f.properties.agent_id)).size;
   toast(`Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents · ${stepToClock(timeMin)}–${stepToClock(timeMax)}`);
+
+  // Notify analytics/agent layers that fresh data is available
+  window.dispatchEvent(new CustomEvent("cp:ingest"));
 
   slider.min = timeMin;
   slider.max = timeMax;
@@ -378,6 +420,7 @@ function applyLayerVisibility() {
   if (!map.getSource("pings")) return; // map not loaded yet
   for (const [layer, visible] of [
     ["density", heatOn],
+    ["building-heat-fill", heatOn],
     ["all-paths-line", pathsOn],
     ["selected-path-line", selectedAgent !== null],
     ["agent-dots", true],
@@ -395,7 +438,6 @@ function toggleHeatmap() {
 function togglePaths() {
   pathsOn = !pathsOn;
   document.getElementById("toggle-paths").classList.toggle("active", pathsOn);
-  if (pathsOn) rebuildAllPaths();
   applyLayerVisibility();
 }
 
@@ -446,6 +488,33 @@ function smoothCoords(coords, iterations = 2) {
 }
 
 /* ── Timeline ── */
+const TRAIL_FADE_MIN = 30;   // trail age at full fade
+const TRAIL_SEG_MIN = 4;     // one trail segment spans this many steps (8 min)
+let buildingShapes = null;   // id → [polygon ring (lng/lat), area] loaded from configs
+
+/* Load building footprints (perimeter_polygon) once for the heat layer */
+async function ensureBuildingShapes() {
+  if (buildingShapes) return buildingShapes;
+  buildingShapes = new Map();
+  try {
+    const r = await fetch("/configs/buildings.json");
+    const j = await r.json();
+    for (const b of j.buildings) {
+      if (!b.perimeter_polygon || b.perimeter_polygon.length < 3) continue;
+      const ring = b.perimeter_polygon.map(([lat, lng]) => [lng, lat]);
+      // shoelace area in deg² (all campus footprints similar scale)
+      let a = 0;
+      for (let i = 0; i < ring.length; i++) {
+        const [x1, y1] = ring[i];
+        const [x2, y2] = ring[(i + 1) % ring.length];
+        a += x1 * y2 - x2 * y1;
+      }
+      buildingShapes.set(b.id, { ring: ring.concat([ring[0]]), area: Math.abs(a / 2) });
+    }
+  } catch (_) { /* heat stays dot-free, trails still work */ }
+  return buildingShapes;
+}
+
 function setStep(step) {
   currentStep = step;
   const feats = byStep.get(step) || [];
@@ -456,27 +525,110 @@ function setStep(step) {
     map.getSource("pings").setData({ type: "FeatureCollection", features: feats });
   }
 
-  // Agent dots: one per agent at this step
+  // Outdoor agents get a dot (the trail head); interior agents are
+  // folded into building heat instead.
   if (map.getSource("agents")) {
-    map.getSource("agents").setData({ type: "FeatureCollection", features: feats.map(cloneDotFeature) });
+    map.getSource("agents").setData({
+      type: "FeatureCollection",
+      features: feats
+        .filter((f) => f.properties.state === "TRANSIT")
+        .map(cloneDotFeature),
+    });
   }
+
+  // Building heat: count interior agents per building this step →
+  // footprint fill whose opacity scales with occupancy.
+  updateBuildingHeat(feats);
 
   // Selected agent's traced path up to the current step (head follows time)
   if (selectedAgent !== null && map.getSource("selected-path")) {
     map.getSource("selected-path").setData(selectedPathToStep(selectedAgent, step));
   }
 
-  // All-agent trails (only rebuilt while the toggle is on)
-  if (pathsOn && map.getSource("all-paths")) {
-    map.getSource("all-paths").setData(allPathsToStep(step));
+  // Comet trails: last 30 min of movement for every agent
+  if (map.getSource("all-paths")) {
+    map.getSource("all-paths").setData(cometTrails(step));
   }
 
   updateAgentPanel();
 }
 
+/* Interior agents → building footprint fill. Occupancy bins: 1+, 4+,
+ * 10+ agents ramp opacity 0.12 → 0.42 so dense buildings glow harder. */
+function updateBuildingHeat(feats) {
+  if (!map.getSource("building-heat")) return;
+  if (!buildingShapes) {
+    ensureBuildingShapes().then(() => updateBuildingHeat(feats));
+    return;
+  }
+  const occ = new Map(); // building_id → count
+  for (const f of feats) {
+    if (f.properties.state === "TRANSIT" || f.properties.state === "SLEEP") continue;
+    const b = f.properties.building_id;
+    if (b && buildingShapes.has(b)) occ.set(b, (occ.get(b) || 0) + 1);
+  }
+  const features = [];
+  for (const [id, n] of occ) {
+    const shape = buildingShapes.get(id);
+    if (!shape) continue;
+    const t = Math.min(1, Math.log2(1 + n) / Math.log2(1 + 12));
+    features.push({
+      type: "Feature",
+      properties: { alpha: 0.1 + 0.34 * t },
+      geometry: { type: "Polygon", coordinates: [shape.ring] },
+    });
+  }
+  map.getSource("building-heat").setData({ type: "FeatureCollection", features });
+}
+
+/* Per-agent comet trail: segments over the last TRAIL_FADE_MIN,
+ * alpha decaying linearly with age. Each TRAIL_SEG_MIN-chunk of the
+ * recent path is one feature (sub-sampled for render cost). */
+function cometTrails(step) {
+  const features = [];
+  const cutoff = step - TRAIL_FADE_MIN / PING_INTERVAL_MIN;
+  for (const [, trail] of byAgent) {
+    // collect recent waypoints (TRANSIT only — indoors there's no trail)
+    const recent = [];
+    for (let i = trail.length - 1; i >= 0; i--) {
+      const p = trail[i];
+      if (p.step > step) continue;
+      if (p.step < cutoff) break;
+      if (p.state === "TRANSIT") recent.push(p);
+      if (recent.length >= 40) break; // safety cap
+    }
+    if (recent.length < 2) continue;
+    recent.reverse();
+    // bucket consecutive pings into ~TRAIL_SEG_MIN chunks, one fading seg each
+    let seg = [recent[0]];
+    const segs = [];
+    for (let i = 1; i < recent.length; i++) {
+      const p = recent[i];
+      if (p.step - seg[0].step >= TRAIL_SEG_MIN / PING_INTERVAL_MIN) {
+        segs.push(seg);
+        seg = [p];
+      } else {
+        seg.push(p);
+      }
+    }
+    segs.push(seg);
+    for (const s of segs) {
+      if (s.length < 2) continue;
+      const age = step - s[s.length - 1].step; // steps behind the head
+      const alpha = Math.max(0.06, 0.55 * (1 - (age * PING_INTERVAL_MIN) / TRAIL_FADE_MIN));
+      features.push({
+        type: "Feature",
+        properties: { alpha, color: "rgba(167, 139, 250, 1)" }, // TRANSIT violet
+        geometry: { type: "LineString", coordinates: s.map((p) => [p.lng, p.lat]) },
+      });
+    }
+  }
+  return { type: "FeatureCollection", features };
+}
+
 function rebuildAllPaths() {
   if (map.getSource("all-paths")) {
-    map.getSource("all-paths").setData(pathsOn ? allPathsToStep(currentStep) : emptyFC());
+    map.getSource("all-paths").setData(cometTrails(currentStep));
   }
 }
 
@@ -505,21 +657,8 @@ function selectedPathToStep(agentId, step) {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: smoothCoords(coords) } };
 }
 
-/* All agents' full-day trails, trimmed to steps <= current */
-function allPathsToStep(step) {
-  const features = [];
-  for (const [, trail] of byAgent) {
-    const coords = [];
-    for (const p of trail) {
-      if (p.step > step) break;
-      coords.push([p.lng, p.lat]);
-    }
-    if (coords.length >= 2) {
-      features.push({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: smoothCoords(coords) } });
-    }
-  }
-  return { type: "FeatureCollection", features };
-}
+/* (allPathsToStep removed — replaced by cometTrails: fading 30-min
+ * windows instead of full-day polylines.) */
 
 function stepToClock(step) {
   // Display anchor = wall clock of the data's first timestamp

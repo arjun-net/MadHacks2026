@@ -27,6 +27,7 @@ Usage:
 
 import argparse
 import collections
+import heapq
 import json
 import os
 import random
@@ -328,7 +329,8 @@ def simulate_gameday(schedules, buildings_by_id, pools, _end_day=None, _rng=None
     # NOTE: when run as a script this file's globals live in __main__, while
     # helpers do `import gameday_generator` (a second module object). Set the
     # attribute on the imported module so _entrance/_route see the real map.
-    from path_compliance import PathChecker
+    from path_compliance import PathChecker, dist_m as _pc_dist_m
+    globals()["dist_m"] = _pc_dist_m
     import gameday_generator as _self_mod
     import generator as G
     _self_mod.BY_ID = buildings_by_id
@@ -395,6 +397,37 @@ def simulate_gameday(schedules, buildings_by_id, pools, _end_day=None, _rng=None
     G.PING_JITTER_M = float(sim.get("ping_jitter_meters", 2.0))
 
     ping = sim["ping_interval_minutes"]
+    # Route waypoints double as movement pings: emitting one ping at each
+    # validated polyline corner keeps rendered ping-to-ping chords on the
+    # route (sparse 2-min pings alone would cut corners across buildings).
+    # Corner pings get state/target/minute aligned to the interval that
+    # contains them, with 1s timestamps to keep rows ordered.
+    corner_rows = []  # (t_float, agent_idx, state, target, lat, lng)
+    for i, agent in enumerate(days):
+        for day_idx in range(3):
+            base = day_idx * DAY_MINUTES
+            for s in agent[day_idx]:
+                if s["kind"] != "transit" or not s.get("waypoints") \
+                        or len(s["waypoints"]) < 3:
+                    continue
+                wpts = s["waypoints"]
+                total = sum(dist_m(wpts[k], wpts[k + 1])
+                            for k in range(len(wpts) - 1))
+                if total < 1e-9:
+                    continue
+                acc = 0.0
+                for k in range(1, len(wpts) - 1):  # interior corners only
+                    acc += dist_m(wpts[k - 1], wpts[k])
+                    frac = acc / total
+                    ct = base + s["start"] + frac * (s["end"] - s["start"])
+                    corner_rows.append((i, ct, s["state"], s["target"],
+                                        wpts[k][0], wpts[k][1]))
+    corner_rows.sort(key=lambda x: (x[1], x[0]))
+    corner_q = [(ct, ci) for ci, ct, *_ in corner_rows]
+    heapq.heapify(corner_q)
+    corner_by_key = {}
+    for ci, ct, state, target, lat, lng in corner_rows:
+        corner_by_key[(ct, ci)] = (state, target, lat, lng)
     end = _end_day or datetime.now().replace(hour=23, minute=58, second=0,
                                              microsecond=0)
     # Anchor: end_day = Sunday 23:58 → Friday 00:00 start
@@ -413,14 +446,34 @@ def simulate_gameday(schedules, buildings_by_id, pools, _end_day=None, _rng=None
                 continue
             state, target, lat, lng = pos
             lat, lng = jitter(rng, lat, lng)
+            stamp_i = stamp[:-1] + ".000Z"
             rows.append({
                 "lat": f"{lat:.6f}", "long": f"{lng:.6f}",
-                "timestamp": stamp, "building": target,
+                "timestamp": stamp_i, "building": target,
             })
             history_rows.append({
                 "agent_id": i,
-                "timestamp": stamp,
+                "timestamp": stamp_i,
                 "minute_of_day": t,
+                "state": state,
+                "building_id": target,
+                "lat": f"{lat:.6f}",
+                "lng": f"{lng:.6f}",
+            })
+        # emit any waypoint-corner pings scheduled in this minute
+        while corner_q and corner_q[0][0] < t + 1:
+            ct, ci = heapq.heappop(corner_q)
+            state, target, lat, lng = corner_by_key[(ct, ci)]
+            corner_stamp = (start + timedelta(minutes=ct)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ")
+            rows.append({
+                "lat": f"{lat:.6f}", "long": f"{lng:.6f}",
+                "timestamp": corner_stamp, "building": target,
+            })
+            history_rows.append({
+                "agent_id": ci,
+                "timestamp": corner_stamp,
+                "minute_of_day": int(ct),
                 "state": state,
                 "building_id": target,
                 "lat": f"{lat:.6f}",
