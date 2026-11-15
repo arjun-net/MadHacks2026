@@ -10,146 +10,150 @@ struct SettingsScreen: View {
         @Bindable var preferences = viewModel.preferences
 
         NavigationStack {
-            List {
-                Section {
-                } header: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    header
+
                     CampusBanner(campus: viewModel.selectedCampus)
-                        .textCase(nil)
-                        .padding(.horizontal, -16)
-                        .padding(.bottom, 8)
-                }
 
-                Section {
-                    NavigationLink {
-                        UniversityPickerView(viewModel: viewModel)
-                    } label: {
-                        SettingsRow(symbol: "building.columns.fill", color: Theme.Colors.accent, title: "University", value: viewModel.selectedCampus.shortName)
+                    SettingsSection(title: "Campus") {
+                        NavigationLink {
+                            UniversityPickerView(viewModel: viewModel)
+                        } label: {
+                            SettingsRow(symbol: "building.columns.fill", color: Theme.Colors.accent, title: "University", value: viewModel.selectedCampus.shortName)
+                        }
+                        .buttonStyle(RowButtonStyle())
                     }
-                } header: {
-                    Text("Campus").sectionLabelStyle()
-                }
-                .listRowBackground(Theme.Colors.paper)
 
-                Section {
-                    NavigationLink {
-                        LocationSharingScreen(viewModel: sharingViewModel)
-                    } label: {
-                        SettingsRow(
-                            symbol: "location.fill",
-                            color: Theme.Colors.accent,
-                            title: "Location Sharing",
-                            value: viewModel.sharingStatusLabel
+                    SettingsSection(
+                        title: "Location",
+                        footer: "While sharing is on, your location is sent every 2 minutes. Sharing pauses automatically off campus and between midnight and 6 AM if enabled."
+                    ) {
+                        NavigationLink {
+                            LocationSharingScreen(viewModel: sharingViewModel)
+                        } label: {
+                            SettingsRow(
+                                symbol: "location.fill",
+                                color: Theme.Colors.accent,
+                                title: "Location Sharing",
+                                value: viewModel.sharingStatusLabel
+                            )
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        RowRule()
+
+                        HStack {
+                            SettingsLabel(symbol: "location.circle.fill", color: Theme.Colors.graphite, title: "Location Access")
+                            Spacer()
+                            HStack(spacing: 6) {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(viewModel.permission.tint)
+                                    .frame(width: 7, height: 7)
+                                Text(viewModel.permission.displayName)
+                                    .typeStyle(.subheadline)
+                                    .foregroundStyle(Theme.Colors.textSecondary)
+                            }
+                        }
+                        .settingsRow()
+                        .accessibilityElement(children: .combine)
+                        RowRule()
+
+                        Toggle(isOn: $preferences.shareOnlyOnCampus) {
+                            SettingsLabel(symbol: "mappin.and.ellipse", color: Theme.Colors.graphite, title: "Only Share on Campus")
+                        }
+                        .settingsRow()
+                        RowRule()
+                        Toggle(isOn: $preferences.pauseOvernight) {
+                            SettingsLabel(symbol: "moon.zzz.fill", color: Theme.Colors.graphite, title: "Pause Overnight")
+                        }
+                        .settingsRow()
+                    }
+
+                    SettingsSection(
+                        title: "Display",
+                        footer: "Day Edition is the default. Night Edition is easier on the eyes after dark."
+                    ) {
+                        PaperSegmentedPicker(
+                            title: "Appearance",
+                            options: Appearance.allCases,
+                            selection: $preferences.appearance,
+                            label: \.title
                         )
+                        .padding(.vertical, 4)
+                        .settingsRow()
                     }
 
-                    HStack {
-                        SettingsLabel(symbol: "location.circle.fill", color: Theme.Colors.graphite, title: "Location Access")
-                        Spacer()
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(viewModel.permission.tint)
-                                .frame(width: 7, height: 7)
-                            Text(viewModel.permission.displayName)
+                    SettingsSection(
+                        title: "Notifications",
+                        footer: "Get a heads-up when your favorite places get busy or quiet down."
+                    ) {
+                        Toggle(isOn: $preferences.busyAreaAlerts) {
+                            SettingsLabel(symbol: "flame.fill", color: Theme.Colors.accent, title: "Busy Area Alerts")
+                        }
+                        .settingsRow()
+                        RowRule()
+                        Toggle(isOn: $preferences.quietSpotAlerts) {
+                            SettingsLabel(symbol: "leaf.fill", color: Theme.Colors.graphite, title: "Quiet Study Spots")
+                        }
+                        .settingsRow()
+                        RowRule()
+                        Toggle(isOn: $preferences.weeklyRecap) {
+                            SettingsLabel(symbol: "calendar", color: Theme.Colors.graphite, title: "Weekly Campus Recap")
+                        }
+                        .settingsRow()
+                    }
+
+                    SettingsSection(title: "Privacy") {
+                        NavigationLink {
+                            PrivacyInfoView()
+                        } label: {
+                            SettingsRow(symbol: "hand.raised.fill", color: Theme.Colors.graphite, title: "How Your Data Is Protected")
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        RowRule()
+                        Button(role: .destructive) {
+                            isConfirmingDelete = true
+                        } label: {
+                            HStack {
+                                SettingsLabel(symbol: "trash.fill", color: Theme.Colors.danger, title: "Delete My Shared Data", titleColor: Theme.Colors.danger)
+                                Spacer()
+                                if viewModel.isDeletingData { ProgressView().tint(Theme.Colors.ink) }
+                            }
+                            .settingsRow()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        .disabled(viewModel.isDeletingData)
+                    }
+
+                    SettingsSection(title: "About") {
+                        NavigationLink {
+                            AboutView(version: viewModel.appVersion)
+                        } label: {
+                            SettingsRow(symbol: "info.circle.fill", color: Theme.Colors.graphite, title: "About Campus Pulse")
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        RowRule()
+                        HStack {
+                            SettingsLabel(symbol: "number", color: Theme.Colors.graphite, title: "Version")
+                            Spacer()
+                            Text(viewModel.appVersion)
+                                .typeStyle(.subheadline)
+                                .monospacedDigit()
                                 .foregroundStyle(Theme.Colors.textSecondary)
                         }
+                        .settingsRow()
+                        .accessibilityElement(children: .combine)
                     }
-
-                    Toggle(isOn: $preferences.shareOnlyOnCampus) {
-                        SettingsLabel(symbol: "mappin.and.ellipse", color: Theme.Colors.graphite, title: "Only Share on Campus")
-                    }
-                    Toggle(isOn: $preferences.pauseOvernight) {
-                        SettingsLabel(symbol: "moon.zzz.fill", color: Theme.Colors.graphite, title: "Pause Overnight")
-                    }
-                } header: {
-                    Text("Location").sectionLabelStyle()
-                } footer: {
-                    Text("While sharing is on, your location is sent every 2 minutes. Sharing pauses automatically off campus and between midnight and 6 AM if enabled.")
-                        .typeStyle(.caption)
-                        .foregroundStyle(Theme.Colors.textTertiary)
                 }
-                .listRowBackground(Theme.Colors.paper)
-
-                Section {
-                    Picker("Appearance", selection: $preferences.appearance) {
-                        ForEach(Appearance.allCases) { appearance in
-                            Text(appearance.title).tag(appearance)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text("Display").sectionLabelStyle()
-                } footer: {
-                    Text("Day Edition is the default. Night Edition is easier on the eyes after dark.")
-                        .typeStyle(.caption)
-                        .foregroundStyle(Theme.Colors.textTertiary)
-                }
-                .listRowBackground(Theme.Colors.paper)
-
-                Section {
-                    Toggle(isOn: $preferences.busyAreaAlerts) {
-                        SettingsLabel(symbol: "flame.fill", color: Theme.Colors.accent, title: "Busy Area Alerts")
-                    }
-                    Toggle(isOn: $preferences.quietSpotAlerts) {
-                        SettingsLabel(symbol: "leaf.fill", color: Theme.Colors.graphite, title: "Quiet Study Spots")
-                    }
-                    Toggle(isOn: $preferences.weeklyRecap) {
-                        SettingsLabel(symbol: "calendar", color: Theme.Colors.graphite, title: "Weekly Campus Recap")
-                    }
-                } header: {
-                    Text("Notifications").sectionLabelStyle()
-                } footer: {
-                    Text("Get a heads-up when your favorite places get busy or quiet down.")
-                        .typeStyle(.caption)
-                        .foregroundStyle(Theme.Colors.textTertiary)
-                }
-                .listRowBackground(Theme.Colors.paper)
-
-                Section {
-                    NavigationLink {
-                        PrivacyInfoView()
-                    } label: {
-                        SettingsLabel(symbol: "hand.raised.fill", color: Theme.Colors.graphite, title: "How Your Data Is Protected")
-                    }
-                    Button(role: .destructive) {
-                        isConfirmingDelete = true
-                    } label: {
-                        HStack {
-                            SettingsLabel(symbol: "trash.fill", color: Theme.Colors.danger, title: "Delete My Shared Data")
-                            Spacer()
-                            if viewModel.isDeletingData { ProgressView() }
-                        }
-                    }
-                    .tint(Theme.Colors.danger)
-                    .disabled(viewModel.isDeletingData)
-                } header: {
-                    Text("Privacy").sectionLabelStyle()
-                }
-                .listRowBackground(Theme.Colors.paper)
-
-                Section {
-                    NavigationLink {
-                        AboutView(version: viewModel.appVersion)
-                    } label: {
-                        SettingsLabel(symbol: "info.circle.fill", color: Theme.Colors.graphite, title: "About Campus Pulse")
-                    }
-                    LabeledContent {
-                        Text(viewModel.appVersion).monospacedDigit()
-                    } label: {
-                        SettingsLabel(symbol: "number", color: Theme.Colors.graphite, title: "Version")
-                    }
-                } header: {
-                    Text("About").sectionLabelStyle()
-                }
-                .listRowBackground(Theme.Colors.paper)
+                .toggleStyle(.paper)
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.top, 8)
+                .padding(.bottom, Theme.tabBarClearance + 20)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .listRowSeparatorTint(Theme.Colors.rule)
-            .font(.cpBody)
-            .tint(Theme.Colors.accentFill)
+            .scrollIndicators(.hidden)
             .background(ScreenBackground())
-            .navigationTitle("Settings")
-            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: Theme.tabBarClearance - 10) }
+            .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog(
                 "Delete your shared data?",
                 isPresented: $isConfirmingDelete,
@@ -171,6 +175,20 @@ struct SettingsScreen: View {
                 Button("OK", role: .cancel) {}
             }
         }
+    }
+
+    /// Masthead title with a 2pt rule, matching the Activity tab.
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Settings")
+                .typeStyle(.largeTitle)
+                .foregroundStyle(Theme.Colors.textPrimary)
+                .accessibilityAddTraits(.isHeader)
+            Rectangle()
+                .fill(Theme.Colors.ink)
+                .frame(height: Theme.Stroke.sectionRule)
+        }
+        .padding(.top, 8)
     }
 }
 
@@ -194,29 +212,42 @@ struct SettingsLabel: View {
     let symbol: String
     let color: Color
     let title: String
+    var titleColor: Color = Theme.Colors.textPrimary
 
     var body: some View {
         HStack(spacing: 12) {
             SettingsIcon(symbol: symbol, color: color)
             Text(title)
-                .foregroundStyle(Theme.Colors.textPrimary)
+                .typeStyle(.body)
+                .foregroundStyle(titleColor)
+                .multilineTextAlignment(.leading)
         }
     }
 }
 
+/// A tappable row that opens another screen: icon, title, optional value, chevron.
 struct SettingsRow: View {
     let symbol: String
     let color: Color
     let title: String
-    let value: String
+    var value: String?
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             SettingsLabel(symbol: symbol, color: color, title: title)
-            Spacer()
-            Text(value)
-                .foregroundStyle(Theme.Colors.textSecondary)
+            Spacer(minLength: 8)
+            if let value {
+                Text(value)
+                    .typeStyle(.subheadline)
+                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .lineLimit(1)
+            }
+            Image(systemName: "chevron.right")
+                .imageScale(.small)
+                .foregroundStyle(Theme.Colors.textTertiary)
         }
+        .settingsRow()
+        .contentShape(Rectangle())
     }
 }
 

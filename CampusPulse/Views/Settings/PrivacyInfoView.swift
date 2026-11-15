@@ -41,6 +41,7 @@ struct PrivacyInfoView: View {
         .background(ScreenBackground())
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     private func bullet(_ text: String) -> some View {
@@ -111,6 +112,7 @@ struct AboutView: View {
         .background(ScreenBackground())
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 }
 

@@ -31,6 +31,7 @@ struct LocationSharingScreen: View {
         .background(ScreenBackground())
         .navigationTitle("Location Sharing")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
     }
 
     // MARK: Hero
@@ -79,9 +80,11 @@ struct LocationSharingScreen: View {
 
             Spacer()
 
-            Toggle("Share my location", isOn: $viewModel.isSharingOn)
-                .labelsHidden()
-                .tint(Theme.Colors.accentFill)
+            // The title beside it is the visible label; the custom style draws whatever label it's given.
+            Toggle(isOn: $viewModel.isSharingOn) { EmptyView() }
+                .toggleStyle(.paper)
+                .fixedSize()
+                .accessibilityLabel("Share my location")
         }
         .padding(16)
         .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
