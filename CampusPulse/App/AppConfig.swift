@@ -2,7 +2,11 @@ import Foundation
 
 /// Values shown in UI copy and used to shape the sample data.
 enum AppConfig {
-    /// The "~2 minutes" update cadence described in the sharing UI.
+    /// Location API. Temporary Cloudflare tunnel: it changes whenever the server or tunnel restarts.
+    /// Docs at the same host under /docs.
+    static let apiBaseURL = URL(string: "https://rings-bob-persistent-lowest.trycloudflare.com/api/v1")!
+
+    /// Location readings are sent on every even minute (10:38, 10:40, 10:42…).
     static let updateInterval: TimeInterval = 120
 
     /// How often the sample heatmap changes, so the UI visibly animates during demos.
