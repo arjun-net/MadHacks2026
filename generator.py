@@ -292,7 +292,7 @@ def build_agent_day(arch, pools, behavior, rng, commuter, home_id=None):
 
 # ── Simulation ──────────────────────────────────────────────────────────
 
-def simulate(schedules, buildings_by_id, pools):
+def simulate(schedules, buildings_by_id, pools, _force_end=None, _rng=None):
     global BY_ID, ROUTER
     BY_ID = buildings_by_id
 
@@ -305,7 +305,7 @@ def simulate(schedules, buildings_by_id, pools):
     n_agents = sim["agents"]
     ping = sim["ping_interval_minutes"]
     commuter_share = behavior["commuter_share"]
-    rng = random.Random(sim["seed"])
+    rng = _rng or random.Random(sim["seed"])
 
     # Decide commuter status for every agent up front, then assign homes to
     # exactly the residents. Least-filled dorm wins each pick, so all 21
@@ -348,7 +348,9 @@ def simulate(schedules, buildings_by_id, pools):
     n_days = int(sim.get("days", 1))
     # End at 11:58pm LOCAL today; start n_days × 24h earlier. Timestamps are
     # written in local wall time (Z suffix kept for API compatibility).
-    end = datetime.now().replace(hour=23, minute=58, second=0, microsecond=0)
+    end = _force_end or datetime.now().replace(hour=23, minute=58, second=0,
+                                               microsecond=0)
+    rng = _rng or random.Random(sim["seed"])
     start = end - timedelta(days=n_days)
     rows, coord_rows = [], []
     t = 0
@@ -526,6 +528,22 @@ def main():
     print(f"Wrote {len(rows):,} pings for "
           f"{schedules['simulation']['agents']} agents → {out}")
     print(f"Wrote {len(coord_rows):,} coordinate rows → {out_coords}")
+
+    # ── Bonus: a 1-day "future" apicalls slice, today 00:00 → 23:58. ──
+    # Same deterministic day repeated at today's date; independent seed so
+    # jitter/commute noise differs from the historical window.
+    one_day = {k: v for k, v in schedules.items()}
+    one_day["simulation"] = dict(schedules["simulation"], days=1)
+    rng2 = random.Random(int(schedules["simulation"]["seed"]) + 1)
+    rows2, coords2 = simulate(one_day, buildings_by_id, pools,
+                              _force_end=datetime.now().replace(
+                                  hour=23, minute=58, second=0, microsecond=0),
+                              _rng=rng2)
+    fut_path = os.path.join(os.path.dirname(out_coords) or ".",
+                            "1_day_future_apicalls.csv")
+    write_csv(coords2, fut_path,
+              fieldnames=["lat", "long", "timestamp", "building"])
+    print(f"Wrote {len(coords2):,} future-day rows → {fut_path}")
 
 
 if __name__ == "__main__":
