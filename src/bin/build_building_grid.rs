@@ -29,7 +29,7 @@ fn main() {
     println!("buildings:   {} in the grid, {} left out", meta.buildings.len(), meta.skipped.len());
     println!("grid:        {} cols × {} rows at {} m ({} cells, {:.1}% on a building)",
         meta.cols, meta.rows, meta.resolution_m, cells.len(), 100.0 * filled as f64 / cells.len() as f64);
-    println!("bounds:      lat {:.6}…{:.6}, lng {:.6}…{:.6} (margin {} m)", meta.min_lat, meta.max_lat, meta.min_lng, meta.max_lng, meta.margin_m);
+    println!("bounds:      lat {:.6}…{:.6}, lng {:.6}…{:.6} (margin {} m, buildings reach {} m past their walls)", meta.min_lat, meta.max_lat, meta.min_lng, meta.max_lng, meta.margin_m, meta.buffer_m);
     println!("memory:      {:.2} MB of u16 cells", (cells.len() * 2) as f64 / 1_048_576.0);
     println!("built in:    {elapsed:?}");
     println!("checksum:    {}", meta.source_checksum);

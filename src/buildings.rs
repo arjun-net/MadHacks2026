@@ -10,10 +10,14 @@
 //! one array read gives the building id, one more gives the name. No loops over buildings,
 //! no polygon tests, no database or network calls.
 //!
-//! This is an approximation: a 2 m cell is "in" a building when the cell's center is inside the
-//! building's outline, and phone GPS is often off by 5–30 m (worse indoors). A building name
-//! means "the reported position falls on that building's footprint", not "the student is
-//! indoors there". Pings whose reported accuracy is worse than a threshold get no building.
+//! The grid is square (N × N cells). Each building also claims a buffer around its outline
+//! (`buffer_m`, 15 m by default), because phone GPS indoors is often off by 10–50 m and tends to
+//! put someone inside a building just outside its walls. A cell inside a real outline always
+//! belongs to that building; a cell only in buffers goes to the nearest building.
+//!
+//! This is an approximation. A building name means "the reported position is on or near that
+//! building's footprint", not "the student is indoors there". Pings whose reported accuracy is
+//! worse than a threshold get no building.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -24,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// Bump when the grid file layout or rasterization rules change.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 /// Settings for building and using the grid. Read from the environment by `from_env`.
 #[derive(Clone, Debug)]
@@ -37,6 +41,8 @@ pub struct BuildingsConfig {
     pub resolution_m: f64,
     /// Empty border around the outermost building, in meters.
     pub margin_m: f64,
+    /// How far outside its outline a building still claims cells, in meters (GPS slack).
+    pub buffer_m: f64,
     /// Pings reporting a horizontal accuracy worse than this get no building. `None` = no limit.
     pub max_accuracy_m: Option<f64>,
     /// Rebuild (and save) the grid at startup when it's missing or out of date.
@@ -51,6 +57,7 @@ impl Default for BuildingsConfig {
             grid_dir: assets,
             resolution_m: 2.0,
             margin_m: 10.0,
+            buffer_m: 15.0,
             max_accuracy_m: Some(30.0),
             rebuild_if_stale: true,
         }
@@ -72,6 +79,9 @@ impl BuildingsConfig {
         }
         if let Some(v) = env_f64("BUILDING_GRID_MARGIN_M") {
             config.margin_m = v;
+        }
+        if let Some(v) = env_f64("BUILDING_BUFFER_M") {
+            config.buffer_m = v;
         }
         match std::env::var("BUILDING_MAX_ACCURACY_M").as_deref() {
             Ok("" | "off" | "none") => config.max_accuracy_m = None,
@@ -136,6 +146,8 @@ pub struct GridMeta {
     pub campus: String,
     pub resolution_m: f64,
     pub margin_m: f64,
+    #[serde(default)]
+    pub buffer_m: f64,
     /// Grid edges in degrees. Row 0 is the northern edge (`max_lat`), column 0 the western edge.
     pub min_lat: f64,
     pub max_lat: f64,
@@ -240,6 +252,7 @@ impl BuildingIndex {
             campus: String::new(),
             resolution_m: 1.0,
             margin_m: 0.0,
+            buffer_m: 0.0,
             min_lat: 0.0,
             max_lat: 0.0,
             min_lng: 0.0,
@@ -313,8 +326,8 @@ impl BuildingIndex {
         if meta.source_checksum != checksum(source) {
             return Err("buildings.json changed since the grid was made".into());
         }
-        if meta.resolution_m != config.resolution_m || meta.margin_m != config.margin_m {
-            return Err("grid resolution or margin differs from the configured values".into());
+        if meta.resolution_m != config.resolution_m || meta.margin_m != config.margin_m || meta.buffer_m != config.buffer_m {
+            return Err("grid resolution, margin or buffer differs from the configured values".into());
         }
         let packed = fs::read(config.cells_path()).map_err(|e| format!("no grid cells: {e}"))?;
         let cells = decode_cells(&packed, meta.rows * meta.cols)?;
@@ -444,14 +457,29 @@ fn contains(points: &[(f64, f64)], x: f64, y: f64) -> bool {
     inside
 }
 
+/// Shortest distance from a point to a polygon's edges.
+fn edge_distance(points: &[(f64, f64)], x: f64, y: f64) -> f64 {
+    let mut best = f64::MAX;
+    let mut j = points.len() - 1;
+    for i in 0..points.len() {
+        let ((ax, ay), (bx, by)) = (points[j], points[i]);
+        let (dx, dy) = (bx - ax, by - ay);
+        let length2 = dx * dx + dy * dy;
+        let t = if length2 > 0.0 { (((x - ax) * dx + (y - ay) * dy) / length2).clamp(0.0, 1.0) } else { 0.0 };
+        best = best.min((x - ax - t * dx).hypot(y - ay - t * dy));
+        j = i;
+    }
+    best
+}
+
 /// Builds the grid and its metadata from the bytes of buildings.json.
 pub fn build(source: &[u8], config: &BuildingsConfig) -> Result<(GridMeta, Vec<u16>), String> {
-    if !(config.resolution_m > 0.0) || !(config.margin_m >= 0.0) {
-        return Err("grid resolution must be positive and margin non-negative".into());
+    if !(config.resolution_m > 0.0) || !(config.margin_m >= 0.0) || !(config.buffer_m >= 0.0) {
+        return Err("grid resolution must be positive, margin and buffer non-negative".into());
     }
     let (campus, candidates, mut skipped) = parse_buildings(source)?;
 
-    // Extent of every polygon, padded by the margin.
+    // Extent of every polygon, padded by the buffer and the margin.
     let (mut min_lat, mut max_lat, mut min_lng, mut max_lng) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
     for c in &candidates {
         for &(lat, lng) in &c.ring {
@@ -465,15 +493,22 @@ pub fn build(source: &[u8], config: &BuildingsConfig) -> Result<(GridMeta, Vec<u
         return Err("buildings.json has no valid buildings".into());
     }
     let (m_lat, m_lng) = meters_per_degree((min_lat + max_lat) / 2.0);
-    min_lat -= config.margin_m / m_lat;
-    max_lat += config.margin_m / m_lat;
-    min_lng -= config.margin_m / m_lng;
-    max_lng += config.margin_m / m_lng;
-    let cols = (((max_lng - min_lng) * m_lng) / config.resolution_m).ceil() as usize;
-    let rows = (((max_lat - min_lat) * m_lat) / config.resolution_m).ceil() as usize;
+    let pad = config.margin_m + config.buffer_m;
+    min_lat -= pad / m_lat;
+    max_lat += pad / m_lat;
+    min_lng -= pad / m_lng;
+    max_lng += pad / m_lng;
+    let res = config.resolution_m;
+    let cols = (((max_lng - min_lng) * m_lng) / res).ceil() as usize;
+    let rows = (((max_lat - min_lat) * m_lat) / res).ceil() as usize;
+    // A square N × N grid with the buildings centered in it.
+    let n = cols.max(rows);
+    min_lng -= ((n - cols) / 2) as f64 * res / m_lng;
+    max_lat += ((n - rows) / 2) as f64 * res / m_lat;
+    let (rows, cols) = (n, n);
     // Snap the far edges to whole cells, anchored at the north-west corner.
-    max_lng = min_lng + cols as f64 * config.resolution_m / m_lng;
-    min_lat = max_lat - rows as f64 * config.resolution_m / m_lat;
+    max_lng = min_lng + cols as f64 * res / m_lng;
+    min_lat = max_lat - rows as f64 * res / m_lat;
 
     // Polygons in grid meters: x east from the west edge, y south from the north edge.
     struct Shape {
@@ -502,7 +537,6 @@ pub fn build(source: &[u8], config: &BuildingsConfig) -> Result<(GridMeta, Vec<u
     // draw the higher id first so the lower id ends up on top. Order never depends on hashing.
     shapes.sort_by(|a, b| b.area.total_cmp(&a.area).then(b.id.cmp(&a.id)));
 
-    let res = config.resolution_m;
     let mut cells = vec![0u16; rows * cols];
     let mut overlaps: BTreeMap<(u16, u16), (usize, u16)> = BTreeMap::new();
     for shape in &shapes {
@@ -537,6 +571,52 @@ pub fn build(source: &[u8], config: &BuildingsConfig) -> Result<(GridMeta, Vec<u
         }
     }
 
+    // Buffers: cells outside every outline but within `buffer_m` of one go to the nearest
+    // building (ties to the lower id: ids are visited in order and only a strictly closer
+    // building replaces one already chosen).
+    if config.buffer_m > 0.0 {
+        let buffer = config.buffer_m;
+        let mut claimed: BTreeMap<usize, (f64, u16)> = BTreeMap::new();
+        let mut by_id: Vec<&Shape> = shapes.iter().collect();
+        by_id.sort_by_key(|s| s.id);
+        for shape in by_id {
+            let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+            for &(x, y) in &shape.points {
+                x0 = x0.min(x - buffer);
+                y0 = y0.min(y - buffer);
+                x1 = x1.max(x + buffer);
+                y1 = y1.max(y + buffer);
+            }
+            let c0 = ((x0 / res - 0.5).floor().max(0.0)) as usize;
+            let c1 = ((x1 / res - 0.5).ceil().max(0.0) as usize).min(cols - 1);
+            let r0 = ((y0 / res - 0.5).floor().max(0.0)) as usize;
+            let r1 = ((y1 / res - 0.5).ceil().max(0.0) as usize).min(rows - 1);
+            for row in r0..=r1 {
+                let cy = (row as f64 + 0.5) * res;
+                for col in c0..=c1 {
+                    let index = row * cols + col;
+                    if cells[index] != 0 {
+                        continue;
+                    }
+                    let cx = (col as f64 + 0.5) * res;
+                    let distance = edge_distance(&shape.points, cx, cy);
+                    if distance > buffer {
+                        continue;
+                    }
+                    match claimed.get(&index) {
+                        Some(&(best, _)) if best <= distance => {}
+                        _ => {
+                            claimed.insert(index, (distance, shape.id));
+                        }
+                    }
+                }
+            }
+        }
+        for (index, (_, id)) in claimed {
+            cells[index] = id;
+        }
+    }
+
     let key_of = |id: u16| entries[id as usize - 1].key.clone();
     let overlaps = overlaps
         .into_iter()
@@ -549,6 +629,7 @@ pub fn build(source: &[u8], config: &BuildingsConfig) -> Result<(GridMeta, Vec<u
         campus,
         resolution_m: config.resolution_m,
         margin_m: config.margin_m,
+        buffer_m: config.buffer_m,
         min_lat,
         max_lat,
         min_lng,
@@ -558,7 +639,9 @@ pub fn build(source: &[u8], config: &BuildingsConfig) -> Result<(GridMeta, Vec<u
         rows,
         cols,
         buildings: entries,
-        overlap_policy: "smaller polygon area wins; equal areas go to the lower id".into(),
+        overlap_policy: "inside overlapping outlines the smaller polygon area wins (equal areas: lower id); \
+                         a real outline always beats another building's buffer; in buffers only, the nearest outline wins (ties: lower id)"
+            .into(),
         overlaps,
         skipped,
     };
@@ -629,6 +712,7 @@ mod tests {
             grid_dir: dir.to_path_buf(),
             resolution_m: 2.0,
             margin_m: 10.0,
+            buffer_m: 0.0,
             max_accuracy_m: Some(30.0),
             rebuild_if_stale: true,
         }
@@ -675,6 +759,52 @@ mod tests {
         assert_eq!(index.building_name(f64::NAN, -89.40), None);
         assert_eq!(index.building_name(43.07, f64::INFINITY), None);
         assert_eq!(index.building_name(91.0, 200.0), None);
+    }
+
+    fn index_with_buffer(buildings: Vec<Value>, buffer_m: f64) -> BuildingIndex {
+        let source = serde_json::to_vec(&json!({ "campus": "Test", "buildings": buildings })).unwrap();
+        let config = BuildingsConfig { buffer_m, ..config(Path::new("/nonexistent")) };
+        let (meta, cells) = build(&source, &config).unwrap();
+        BuildingIndex::from_parts(meta, cells, config.max_accuracy_m)
+    }
+
+    #[test]
+    fn grid_is_square() {
+        let index = index_with_buffer(vec![building("long", "Long", rect(0.0, 0.0, 400.0, 20.0))], 15.0);
+        assert_eq!(index.meta().rows, index.meta().cols);
+        // The building stays in the middle: found inside, not outside.
+        let (lat, lng) = at(200.0, 10.0);
+        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Long"));
+        let (lat, lng) = at(200.0, 150.0);
+        assert_eq!(index.building_name(lat, lng), None);
+    }
+
+    #[test]
+    fn buffer_extends_a_building_a_little() {
+        let index = index_with_buffer(vec![building("hall", "Hall", rect(0.0, 0.0, 40.0, 20.0))], 15.0);
+        for (east, north) in [(50.0, 10.0), (20.0, 32.0), (-12.0, -8.0)] {
+            let (lat, lng) = at(east, north);
+            assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Hall"), "{east},{north}");
+        }
+        for (east, north) in [(60.0, 10.0), (20.0, 40.0), (-20.0, -20.0)] {
+            let (lat, lng) = at(east, north);
+            assert_eq!(index.building_name(lat, lng), None, "{east},{north}");
+        }
+    }
+
+    #[test]
+    fn real_outline_beats_a_neighbors_buffer_and_buffers_split_by_distance() {
+        // Two halls 10 m apart: the gap goes half to each; neither eats into the other.
+        let index = index_with_buffer(vec![
+            building("west", "West", rect(0.0, 0.0, 40.0, 20.0)),
+            building("east", "East", rect(50.0, 0.0, 40.0, 20.0)),
+        ], 15.0);
+        let name = |east: f64| { let (lat, lng) = at(east, 10.0); index.building_name(lat, lng).map(|n| n.to_string()) };
+        assert_eq!(name(41.0).as_deref(), Some("West"));
+        assert_eq!(name(43.0).as_deref(), Some("West"));
+        assert_eq!(name(47.0).as_deref(), Some("East"));
+        assert_eq!(name(51.0).as_deref(), Some("East")); // inside East, 11 m from West
+        assert_eq!(name(39.0).as_deref(), Some("West"));
     }
 
     #[test]
@@ -761,8 +891,12 @@ mod tests {
         }
         // Exact edges: the north-west corner is in, the far edges are out.
         assert_eq!(index.cell_index(meta.max_lat, meta.min_lng), Some((0, 0)));
-        assert_eq!(index.cell_index(meta.min_lat, meta.min_lng), None);
-        assert_eq!(index.cell_index(meta.max_lat, meta.max_lng), None);
+        // The far edges are outside, give or take floating-point rounding onto the last cell.
+        let last = (meta.rows - 1, meta.cols - 1);
+        assert!([None, Some((last.0, 0))].contains(&index.cell_index(meta.min_lat, meta.min_lng)));
+        assert!([None, Some((0, last.1))].contains(&index.cell_index(meta.max_lat, meta.max_lng)));
+        assert_eq!(index.cell_index(meta.min_lat - 1e-6, meta.min_lng), None);
+        assert_eq!(index.cell_index(meta.max_lat, meta.max_lng + 1e-6), None);
         // A sweep well past the grid on every side never panics.
         let mut seed = 7u64;
         for _ in 0..200_000 {

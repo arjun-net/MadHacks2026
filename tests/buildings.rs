@@ -13,6 +13,8 @@ use madhacks_backend::store::{Dataset, Store};
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
+const MORGRIDGE: &str = "Morgridge Hall (College of Computing & AI)";
+
 fn source() -> Value {
     serde_json::from_slice(&std::fs::read(BuildingsConfig::default().source).unwrap()).unwrap()
 }
@@ -24,34 +26,60 @@ fn committed_index() -> BuildingIndex {
     BuildingIndex::load(&config, &bytes).expect("assets/building_grid.* is out of date: run `cargo run --release --bin build_building_grid`")
 }
 
-/// Independent reference: every polygon containing the point, smallest area wins, ties to the
-/// earlier building (the documented overlap rule). Same flat projection as the grid.
-fn brute_force(meta: &GridMeta, json: &Value, lat: f64, lng: f64) -> Option<String> {
+/// Independent reference for the documented rules, in the same flat projection as the grid:
+/// inside outlines, the smallest area wins (ties: earlier building); outside every outline,
+/// the building with the nearest edge within the buffer (ties: earlier building).
+/// Returns `None` when the point is too close to a boundary or a tie to call (float noise).
+fn reference(meta: &GridMeta, json: &Value, lat: f64, lng: f64) -> Option<Option<String>> {
     let project = |la: f64, ln: f64| ((ln - meta.min_lng) * meta.meters_per_deg_lng, (meta.max_lat - la) * meta.meters_per_deg_lat);
     let (px, py) = project(lat, lng);
-    let mut best: Option<(f64, usize, String)> = None;
+    let mut inside_best: Option<(f64, usize, String)> = None;
+    let mut near: Vec<(f64, usize, String)> = Vec::new();
     for (i, b) in json["buildings"].as_array().unwrap().iter().enumerate() {
         let points: Vec<(f64, f64)> = b["perimeter_polygon"].as_array().unwrap().iter()
             .map(|v| project(v[0].as_f64().unwrap(), v[1].as_f64().unwrap()))
             .collect();
+        let name = b["name"].as_str().unwrap().to_string();
         let mut inside = false;
+        let mut distance = f64::MAX;
         let mut j = points.len() - 1;
         for k in 0..points.len() {
             let ((xi, yi), (xj, yj)) = (points[k], points[j]);
             if (yi > py) != (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi {
                 inside = !inside;
             }
+            let (dx, dy) = (xi - xj, yi - yj);
+            let t = (((px - xj) * dx + (py - yj) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+            distance = distance.min((px - xj - t * dx).hypot(py - yj - t * dy));
             j = k;
         }
-        if !inside {
-            continue;
+        if distance < 1e-6 {
+            return None; // on an edge
         }
-        let area = meta.buildings.iter().find(|e| e.key == b["id"].as_str().unwrap()).unwrap().area_m2;
-        if best.as_ref().is_none_or(|(a, idx, _)| area < *a || (area == *a && i < *idx)) {
-            best = Some((area, i, b["name"].as_str().unwrap().to_string()));
+        if inside {
+            let area = meta.buildings.iter().find(|e| e.key == b["id"].as_str().unwrap()).unwrap().area_m2;
+            if inside_best.as_ref().is_none_or(|(a, idx, _)| area < *a || (area == *a && i < *idx)) {
+                inside_best = Some((area, i, name));
+            }
+        } else if distance <= meta.buffer_m + 1e-6 {
+            if (distance - meta.buffer_m).abs() < 1e-6 {
+                return None;
+            }
+            near.push((distance, i, name));
         }
     }
-    best.map(|(_, _, name)| name)
+    if let Some((_, _, name)) = inside_best {
+        return Some(Some(name));
+    }
+    near.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+    if near.len() > 1 && (near[1].0 - near[0].0).abs() < 1e-6 {
+        return None;
+    }
+    Some(near.into_iter().next().map(|(_, _, name)| name))
+}
+
+fn brute_force(meta: &GridMeta, json: &Value, lat: f64, lng: f64) -> Option<String> {
+    reference(meta, json, lat, lng).expect("point is on a boundary")
 }
 
 #[test]
@@ -73,7 +101,9 @@ fn committed_grid_matches_buildings_json_and_loads_every_building() {
     assert_eq!(index.name_for_id(meta.buildings.len() as u16 + 1), None);
     // ~2 m cells sized to the buildings, not a fixed square.
     assert_eq!(meta.resolution_m, 2.0);
-    assert!(meta.cols > 1000 && meta.rows > 500 && meta.cols != meta.rows);
+    // A square N × N grid of ~2 m cells sized to the buildings.
+    assert!(meta.cols > 500 && meta.cols == meta.rows);
+    assert_eq!(meta.buffer_m, 15.0);
 }
 
 #[test]
@@ -91,8 +121,7 @@ fn building_centers_find_their_building() {
         assert_eq!(index.building_name(lat, lng).map(|n| n.to_string()), expected, "{}", b["id"]);
         checked += 1;
     }
-    assert!(checked >= 80, "only {checked} centers were inside their outlines");
-    assert_eq!(index.building_name(43.07657169472751, -89.39983343128407).map(|n| n.as_ref()), Some("Memorial Union"));
+    assert!(checked >= json["buildings"].as_array().unwrap().len() - 3, "only {checked} centers were inside their outlines");
 }
 
 #[test]
@@ -106,15 +135,32 @@ fn grid_agrees_with_brute_force_at_every_sampled_cell() {
         ((seed >> 33) as usize) % n
     };
     let mut on_building = 0;
-    for _ in 0..20_000 {
+    for _ in 0..40_000 {
         let (row, col) = (next(meta.rows), next(meta.cols));
         let lat = meta.max_lat - (row as f64 + 0.5) * meta.resolution_m / meta.meters_per_deg_lat;
         let lng = meta.min_lng + (col as f64 + 0.5) * meta.resolution_m / meta.meters_per_deg_lng;
-        let expected = brute_force(&meta, &json, lat, lng);
+        let Some(expected) = reference(&meta, &json, lat, lng) else { continue };
         on_building += expected.is_some() as usize;
         assert_eq!(index.building_name(lat, lng).map(|n| n.to_string()), expected, "cell {row},{col}");
     }
     assert!(on_building > 500, "sample should hit buildings ({on_building})");
+}
+
+/// Real pings from inside Morgridge Hall (2026-11-15) that were stored with no building, and
+/// spots just outside its walls, where indoor GPS often lands.
+#[test]
+fn morgridge_hall_pings_and_a_little_outside_find_it() {
+    let index = committed_index();
+    let name = |lat: f64, lng: f64| index.building_name(lat, lng).map(|n| n.to_string());
+    let hall = Some("Morgridge Hall (College of Computing & AI)".to_string());
+    for (lat, lng) in [(43.073091, -89.406866), (43.073141, -89.407074), (43.073145, -89.407038), (43.072922, -89.407105)] {
+        assert_eq!(name(lat, lng), hall, "{lat},{lng}");
+    }
+    // ~10 m north of the north wall and ~10 m east of the east wall: still the hall.
+    assert_eq!(name(43.07328, -89.40690), hall);
+    assert_eq!(name(43.07302, -89.40597), hall);
+    // ~40 m north: not the hall.
+    assert_ne!(name(43.07355, -89.40690), hall);
 }
 
 #[test]
@@ -153,7 +199,7 @@ async fn rows(store: &Store, dataset: Dataset) -> Vec<Row> {
 #[tokio::test]
 async fn each_ping_is_stored_once_with_its_building_or_null() {
     let (app, buffer, store) = app();
-    let inside = json!({"lat": 43.07657169472751, "lng": -89.39983343128407, "timestamp": "2026-11-14T20:40:00Z", "device_id": "ios-a"});
+    let inside = json!({"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T20:40:00Z", "device_id": "ios-a"});
     let outside = json!({"lat": 43.074, "lng": -89.390, "timestamp": "2026-11-14T20:42:00Z", "device_id": "ios-b"});
     assert_eq!(post(&app, "/api/v1/locations", inside).await, StatusCode::ACCEPTED);
     assert_eq!(post(&app, "/api/v1/locations", outside).await, StatusCode::ACCEPTED);
@@ -161,10 +207,10 @@ async fn each_ping_is_stored_once_with_its_building_or_null() {
 
     let raw = rows(&store, Dataset::Raw).await;
     assert_eq!(raw.len(), 2, "one row per ping");
-    assert_eq!(raw[0].3.as_deref(), Some("Memorial Union"));
+    assert_eq!(raw[0].3.as_deref(), Some(MORGRIDGE));
     assert_eq!(raw[1].3, None, "unmapped is a real null, not a string");
     // Existing fields are untouched.
-    assert_eq!((raw[0].1, raw[0].2), (43.07657169472751, -89.39983343128407));
+    assert_eq!((raw[0].1, raw[0].2), (43.073141, -89.407074));
     assert_eq!(raw[0].0.to_rfc3339(), "2026-11-14T20:40:00+00:00");
     assert_eq!((raw[1].1, raw[1].2), (43.074, -89.390));
 }
@@ -174,13 +220,13 @@ async fn batches_hourly_copies_accuracy_and_client_names() {
     let (app, buffer, store) = app();
     let points = json!({ "points": [
         // On the hour, so it's also copied to the hourly table, building included.
-        {"lat": 43.07657169472751, "lng": -89.39983343128407, "timestamp": "2026-11-14T21:00:10Z", "device_id": "a", "accuracy": 8.0},
+        {"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T21:00:10Z", "device_id": "a", "accuracy": 8.0},
         // Too vague to name a building.
-        {"lat": 43.07657169472751, "lng": -89.39983343128407, "timestamp": "2026-11-14T21:02:00Z", "device_id": "a", "horizontal_accuracy": 120.0},
+        {"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T21:02:00Z", "device_id": "a", "horizontal_accuracy": 120.0},
         // Old clients send no accuracy at all.
-        {"lat": 43.07657169472751, "lng": -89.39983343128407, "timestamp": "2026-11-14T21:04:00Z", "device_id": "b"},
+        {"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T21:04:00Z", "device_id": "b"},
         // The grid's answer wins over the client's.
-        {"lat": 43.07657169472751, "lng": -89.39983343128407, "timestamp": "2026-11-14T21:06:00Z", "device_id": "c", "building": "College Library"},
+        {"lat": 43.073141, "lng": -89.407074, "timestamp": "2026-11-14T21:06:00Z", "device_id": "c", "building": "College Library"},
         // The client's name is kept where the grid has none.
         {"lat": 43.074, "lng": -89.390, "timestamp": "2026-11-14T21:08:00Z", "device_id": "c", "building": "Somewhere"},
     ]});
@@ -189,8 +235,8 @@ async fn batches_hourly_copies_accuracy_and_client_names() {
 
     let raw = rows(&store, Dataset::Raw).await;
     let names: Vec<Option<&str>> = raw.iter().map(|r| r.3.as_deref()).collect();
-    assert_eq!(names, [Some("Memorial Union"), None, Some("Memorial Union"), Some("Memorial Union"), Some("Somewhere")]);
+    assert_eq!(names, [Some(MORGRIDGE), None, Some(MORGRIDGE), Some(MORGRIDGE), Some("Somewhere")]);
     let broad = rows(&store, Dataset::Broad).await;
     assert_eq!(broad.len(), 1);
-    assert_eq!(broad[0].3.as_deref(), Some("Memorial Union"));
+    assert_eq!(broad[0].3.as_deref(), Some(MORGRIDGE));
 }
