@@ -237,7 +237,8 @@ final class SharingState {
             lat: coordinate.latitude,
             lng: coordinate.longitude,
             timestamp: slot,
-            deviceID: DeviceIdentity.id
+            deviceID: DeviceIdentity.id,
+            building: BuildingLocator.forCampus(campus().id)?.building(at: coordinate)
         )
         await deliver(adding: point)
     }
