@@ -69,18 +69,20 @@ struct SettingsScreen: View {
                         .settingsRow()
                     }
 
-                    SettingsSection(
-                        title: "Display",
-                        footer: "Day Edition is the default. Night Edition is easier on the eyes after dark."
-                    ) {
+                    // The picker is its own bordered box, so it isn't wrapped in a card.
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionHeader(title: "Display")
                         PaperSegmentedPicker(
                             title: "Appearance",
                             options: Appearance.allCases,
                             selection: $preferences.appearance,
                             label: \.title
                         )
-                        .padding(.vertical, 4)
-                        .settingsRow()
+                        Text("Day Edition is the default. Night Edition is easier on the eyes after dark.")
+                            .typeStyle(.caption)
+                            .foregroundStyle(Theme.Colors.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 4)
                     }
 
                     SettingsSection(

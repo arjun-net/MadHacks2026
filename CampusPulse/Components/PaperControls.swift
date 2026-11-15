@@ -60,7 +60,7 @@ struct PaperSegmentedPicker<Value: Hashable>: View {
                     Text(label(option))
                         .typeStyle(.button)
                         .foregroundStyle(selected ? Theme.Colors.paper : Theme.Colors.ink)
-                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .background(selected ? Theme.Colors.ink : Color.clear)
                         .contentShape(Rectangle())
                 }
