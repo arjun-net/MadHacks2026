@@ -73,6 +73,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private var colorTexture: MTLTexture?
     private var depthTexture: MTLTexture?
     private static let sampleCount = 4
+    private static let maxRenderScale: CGFloat = 2
     private var needsRender = true
     private let scene = SCNScene()
     private let cameraNode = SCNNode()
@@ -111,6 +112,9 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private var grid: HeatmapGrid?
     private var snapshotDate: Date?
     private var gridTask: Task<Void, Never>?
+    private var terrainMaterials: [UIUserInterfaceStyle: SCNMaterial] = [:]
+    /// Selected first, then busiest: who wins when labels overlap. Sorted once, not every frame.
+    private lazy var markerOrder: [CampusArea] = sortedMarkers()
     private var selectedAreaID: String?
     private var heatVisible = true
     /// 0 = flat, 1 = full height. Animates so mountains rise and sink.
@@ -283,7 +287,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.height > 0 else { return }
-        let scale = window?.screen.scale ?? traitCollection.displayScale
+        // At most 2x: with 4x antialiasing a 3x screen looks the same, and it's less than half the pixels.
+        let scale = min(Self.maxRenderScale, window?.screen.scale ?? traitCollection.displayScale)
         sceneView.metalLayer.contentsScale = scale
         sceneView.metalLayer.drawableSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
         updateProjection()
@@ -365,7 +370,15 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         if animated { animateCamera(to: to) } else { camera = to; applyCamera() }
     }
 
+    private func sortedMarkers() -> [CampusArea] {
+        campus.areas.sorted {
+            if ($0.id == selectedAreaID) != ($1.id == selectedAreaID) { return $0.id == selectedAreaID }
+            return $0.popularity > $1.popularity
+        }
+    }
+
     private func refreshMarkers() {
+        markerOrder = sortedMarkers()
         for area in campus.areas {
             markers[area.id]?.configure(area: area, level: levels[area.id], highlighted: area.id == selectedAreaID)
         }
@@ -431,6 +444,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
     /// Color and opacity by height: the flat base fades into the map, flanks warm up, peaks go deep red.
     private func terrainMaterial() -> SCNMaterial {
+        if let cached = terrainMaterials[style] { return cached }
         let material = SCNMaterial()
         material.lightingModel = .lambert
         material.diffuse.contents = Self.rampImage(style: style)
@@ -445,6 +459,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         }
         material.blendMode = .alpha
         material.isDoubleSided = true
+        terrainMaterials[style] = material
         return material
     }
 
@@ -824,11 +839,9 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private func updateOverlay() {
         guard bounds.width > 0 else { return }
         let lift: Float = heatVisible ? 1 : 0
-        let order = campus.areas.sorted {
-            if ($0.id == selectedAreaID) != ($1.id == selectedAreaID) { return $0.id == selectedAreaID }
-            return $0.popularity > $1.popularity
-        }
+        let order = markerOrder
         let matrix = viewProjection
+        let scale = window?.screen.scale ?? 3
         var placed: [CGRect] = []
         for area in order {
             guard let view = markers[area.id] else { continue }
@@ -837,7 +850,6 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             guard let projected else { view.isHidden = true; continue }
             // Whole points, so markers don't shimmer between pixels while moving.
             let center = CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y)
-            let scale = window?.screen.scale ?? 3
             view.center = CGPoint(x: (center.x * scale).rounded() / scale, y: (center.y * scale).rounded() / scale)
             let visible = bounds.insetBy(dx: -80, dy: -80).contains(view.center)
             let frame = view.frame.insetBy(dx: 6, dy: 3)
@@ -902,6 +914,7 @@ private final class UserDotView: UIView {
         layer.shadowOpacity = 0.3
         layer.shadowRadius = 3
         layer.shadowOffset = CGSize(width: 0, height: 1)
+        layer.shadowPath = UIBezierPath(ovalIn: bounds).cgPath
         isUserInteractionEnabled = false
     }
 

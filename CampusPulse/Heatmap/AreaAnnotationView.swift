@@ -73,6 +73,8 @@ final class AreaAnnotationView: MKAnnotationView {
         label.layer.shadowOffset = .zero
         label.layer.shadowRadius = 1.6
         label.layer.shadowOpacity = 1
+        // A text-shaped shadow is drawn offscreen; cache it so moving markers don't redraw it every frame.
+        label.layer.shouldRasterize = true
         addSubview(label)
 
         isAccessibilityElement = true
@@ -171,6 +173,7 @@ final class AreaAnnotationView: MKAnnotationView {
             .paragraphStyle: paragraph,
         ])
         label.layer.shadowColor = paper.cgColor
+        label.layer.rasterizationScale = max(traits.displayScale, 2)
     }
 
     override func prepareForReuse() {
