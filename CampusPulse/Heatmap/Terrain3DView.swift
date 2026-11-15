@@ -271,8 +271,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pan.maximumNumberOfTouches = 2
         let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
-        let rotate = UIRotationGestureRecognizer(target: self, action: #selector(handleRotate(_:)))
-        for gesture in [pan, pinch, rotate] as [UIGestureRecognizer] {
+        // No twist to turn: the map always faces north, so it can only be moved and zoomed.
+        for gesture in [pan, pinch] as [UIGestureRecognizer] {
             gesture.delegate = self
             sceneView.addGestureRecognizer(gesture)
         }
@@ -761,15 +761,6 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             camera.target += before - after
             applyCamera()
         }
-    }
-
-    @objc private func handleRotate(_ gesture: UIRotationGestureRecognizer) {
-        guard gesture.state == .changed || gesture.state == .began else { return }
-        cameraAnimation = nil
-        // A clockwise twist (positive rotation) turns the map clockwise, following the fingers.
-        camera.heading += Float(gesture.rotation)
-        gesture.rotation = 0
-        applyCamera()
     }
 
     private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4) {
