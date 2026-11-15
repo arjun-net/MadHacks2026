@@ -176,7 +176,8 @@ enum FontName {
 
 extension Font {
     // Display (Big Shoulders Display): a 1.25 step scale, 20 → 42.
-    static let cpMasthead = Font.custom(FontName.display, size: 42, relativeTo: .largeTitle)
+    /// The campus name on the map is the one big heading in the text face: bold, large, tight.
+    static let cpMasthead = Font.custom(FontName.textBold, size: 34, relativeTo: .largeTitle)
     static let cpLargeTitle = Font.custom(FontName.display, size: 40, relativeTo: .largeTitle)
     static let cpTitle = Font.custom(FontName.displayHeavy, size: 31, relativeTo: .title)
     static let cpTitle3 = Font.custom(FontName.displayHeavy, size: 24, relativeTo: .title3)
@@ -227,7 +228,8 @@ enum TypeStyle {
     /// The condensed display face opens up a touch as it gets big; text stays as drawn.
     var tracking: CGFloat {
         switch self {
-        case .masthead, .largeTitle: 0.4
+        case .masthead: -0.8
+        case .largeTitle: 0.4
         case .metric: 0.3
         case .title, .title3, .section, .rank, .metricSmall: 0.2
         default: 0
