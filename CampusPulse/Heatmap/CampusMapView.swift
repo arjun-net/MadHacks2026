@@ -286,10 +286,14 @@ struct CampusMapView: UIViewRepresentable {
             )
             mapView.camera = MKMapCamera(lookingAtCenter: center.coordinate, fromDistance: distance, pitch: 0, heading: 0)
             canvas?.sync()
-            if t >= 1 { stopGlide() }
+            if t >= 1 {
+                stopGlide()
+                canvas?.cameraDidStop()
+            }
         }
 
         private func stopGlide() {
+            guard glideLink != nil || glideState != nil else { return }
             glideLink?.invalidate()
             glideLink = nil
             glideState = nil
@@ -361,6 +365,8 @@ struct CampusMapView: UIViewRepresentable {
         // MARK: MKMapViewDelegate
 
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            // Mid-glide every frame reports a change; the glide keeps the canvas in step itself.
+            guard glideState == nil else { return }
             canvas?.cameraWillMove()
         }
 
@@ -369,6 +375,7 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            guard glideState == nil else { return }
             canvas?.cameraDidStop()
             // Not mid-glide: the glide starts far out, on its way in to the group.
             if !openedIDs.isEmpty, glideState == nil, mapView.camera.centerCoordinateDistance > openedDistance * 1.6 {

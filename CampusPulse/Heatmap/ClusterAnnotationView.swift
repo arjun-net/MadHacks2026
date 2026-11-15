@@ -94,8 +94,12 @@ final class ClusterAnnotationView: MKAnnotationView {
 
     /// `levels` looks up each member's current busyness.
     func configure(members: [CampusArea], levels: (String) -> ActivityLevel?) {
-        self.members = members.sorted { $0.popularity > $1.popularity }
-        level = self.members.compactMap { levels($0.id) }.max()
+        let sorted = members.sorted { $0.popularity > $1.popularity }
+        let level = sorted.compactMap { levels($0.id) }.max()
+        // Unchanged since last time: nothing to redraw.
+        if sorted.map(\.id) == self.members.map(\.id), level == self.level, !self.members.isEmpty { return }
+        self.members = sorted
+        self.level = level
         applyColors()
         accessibilityLabel = "\(members.count) places: " + self.members.map(\.shortName).joined(separator: ", ")
         layoutContent()
