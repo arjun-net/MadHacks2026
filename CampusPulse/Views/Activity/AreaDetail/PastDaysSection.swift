@@ -8,15 +8,19 @@ struct PastDaysSection: View {
 
     var body: some View {
         switch state {
+        case .partial(let days) where days.contains(where: { $0.current.hasData }):
+            DetailSection(title: "Past days", trailing: "Around \(timeText(days[0]))") {
+                PastDaysCard(days: days, isLoading: true)
+            }
         case .loaded(let days):
             DetailSection(title: "Past days", trailing: days.first.map { "Around \(timeText($0))" } ?? "") {
                 if days.contains(where: { $0.current.hasData }) {
-                    PastDaysCard(days: days)
+                    PastDaysCard(days: days, isLoading: false)
                 } else {
                     message("No past data for this building yet. Days will fill in as the history builds up.")
                 }
             }
-        case .loading:
+        case .loading, .partial:
             DetailSection(title: "Past days", trailing: "") {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 120)
@@ -55,6 +59,8 @@ struct PastDaysSection: View {
 
 private struct PastDaysCard: View {
     let days: [BuildingStory]
+    /// More days are still loading.
+    let isLoading: Bool
 
     /// Bars share one scale: the biggest count or usual among the days.
     private var scale: Double {
@@ -64,11 +70,23 @@ private struct PastDaysCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(summary)
-                .typeStyle(.subheadline)
-                .foregroundStyle(Theme.Colors.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.vertical, 12)
+            Group {
+                if isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading \(ActivityViewModel.pastDayCount - days.count) more days…")
+                            .typeStyle(.subheadline)
+                            .foregroundStyle(Theme.Colors.textSecondary)
+                    }
+                } else {
+                    Text(summary)
+                        .typeStyle(.subheadline)
+                        .foregroundStyle(Theme.Colors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 12)
 
             ForEach(days, id: \.current.date) { day in
                 Rectangle().fill(Theme.Colors.rule).frame(height: 1)

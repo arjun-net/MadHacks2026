@@ -7,9 +7,9 @@ import Foundation
 /// Counts are location reports (rows, `observations`) from the building in a window around the
 /// time: not distinct people. Phones report every 2 minutes, so one person in the building for the
 /// whole window adds several. Good for comparing days with each other, not as a headcount.
-struct BuildingStory: Sendable, Equatable {
+struct BuildingStory: Sendable, Equatable, Codable {
     /// One day's count at the story's time of day.
-    struct Day: Sendable, Equatable, Identifiable {
+    struct Day: Sendable, Equatable, Identifiable, Codable {
         /// Midnight of the day, in `BuildingStory.timeZone`.
         let date: Date
         /// Location reports in the window. Nil when the server has no data for that day (none,

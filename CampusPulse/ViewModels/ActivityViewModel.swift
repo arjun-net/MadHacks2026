@@ -87,6 +87,8 @@ enum BuildingStoryState: Equatable {
 /// that day's count at this time of day; its `sameWeekday` gives what's usual for that weekday.
 enum PastDaysState: Equatable {
     case loading
+    /// Some days are in, more are on the way (the server takes about a second per day).
+    case partial([BuildingStory])
     case loaded([BuildingStory])
     case failed(String)
 }
@@ -102,12 +104,10 @@ final class ActivityViewModel {
     /// A loaded story is reused for this long before it's fetched again.
     private static let storyLifetime: TimeInterval = 5 * 60
 
-    /// Past days by area ID, with when they were fetched.
-    private(set) var pastDays: [String: (state: PastDaysState, fetchedAt: Date)] = [:]
+    /// Past days by area ID, with the story moment they're for.
+    private(set) var pastDays: [String: (state: PastDaysState, moment: Date)] = [:]
     /// How many days back the past-days section goes.
     static let pastDayCount = 7
-    /// Past days don't change, but "this time of day" moves on, so they're refetched this often.
-    private static let pastDaysLifetime: TimeInterval = 15 * 60
 
     init(store: CampusStore) {
         self.store = store
@@ -204,11 +204,15 @@ final class ActivityViewModel {
         return store.isPreview ? SampleActivityData.insights(for: activity, campus: campus, date: snapshot.generatedAt) : nil
     }
 
-    /// The time building stories ask about: one window ago, so today's window is complete.
-    /// Asked about right now, the server cuts every day's window off at now (today has only
-    /// happened up to now), and those counts don't match the full-window past-day stories.
+    /// The time building stories ask about: one window ago, so today's window is complete,
+    /// rounded down to a quarter hour. Asked about right now, the server cuts every day's window
+    /// off at now (today has only happened up to now), and those counts don't match the
+    /// full-window past-day stories. The rounding means past days stay the same (and cached)
+    /// for 15 minutes at a time instead of changing every minute.
     static func storyMoment(now: Date = .now) -> Date {
-        now.addingTimeInterval(-Double(AppConfig.buildingStoryWindowMinutes) * 60)
+        let step: TimeInterval = 15 * 60
+        let moment = now.addingTimeInterval(-Double(AppConfig.buildingStoryWindowMinutes) * 60).timeIntervalSince1970
+        return Date(timeIntervalSince1970: (moment / step).rounded(.down) * step)
     }
 
     func storyState(for areaID: String) -> BuildingStoryState {
@@ -236,56 +240,91 @@ final class ActivityViewModel {
 
     /// The last days' counts at this time of day, oldest first; empty until past days load.
     func recentDays(for areaID: String) -> [BuildingStory.Day] {
-        guard case .loaded(let days) = pastDaysState(for: areaID) else { return [] }
-        return days.map(\.current).sorted { $0.date < $1.date }
+        switch pastDaysState(for: areaID) {
+        case .loaded(let days), .partial(let days): days.map(\.current).sorted { $0.date < $1.date }
+        case .loading, .failed: []
+        }
     }
 
     func pastDaysState(for areaID: String) -> PastDaysState {
         pastDays[areaID]?.state ?? .loading
     }
 
-    /// Loads the building's last `pastDayCount` days at the current time of day, in parallel.
-    /// A day that fails to load is left out; only if every day fails is the section an error.
+    /// Loads the building's last `pastDayCount` days at the current time of day. Days already
+    /// on disk show at once; the rest are fetched in parallel and shown as each arrives. A day
+    /// that fails to load is left out; only if every day fails is the section an error.
+    /// `force` refetches every day from the server.
     func loadPastDays(for areaID: String, force: Bool = false) async {
         guard let area = campus.area(withID: areaID) else { return }
-        if !force, let cached = pastDays[areaID], case .loaded = cached.state,
-           Date.now.timeIntervalSince(cached.fetchedAt) < Self.pastDaysLifetime {
-            return
-        }
+        let now = Self.storyMoment()
         let previous = pastDays[areaID]
-        if previous == nil { pastDays[areaID] = (.loading, .now) }
+        if !force, let previous, previous.moment == now, case .loaded = previous.state { return }
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = AppConfig.campusTimeZone
-        let now = Self.storyMoment()
         // Same wall-clock time on each earlier day (calendar math keeps it right across DST).
         let moments = (1...Self.pastDayCount).compactMap { calendar.date(byAdding: .day, value: -$0, to: now) }
-        let provider = storyProvider
-        let campus = campus
+        let cache: StoryCache? = AppConfig.usesServerBuildingStories ? .shared : nil
 
         var days: [BuildingStory] = []
+        var missing: [Date] = []
+        for moment in moments {
+            if !force, let story = await cache?.story(building: area.id, at: moment) {
+                days.append(story)
+            } else {
+                missing.append(moment)
+            }
+        }
+
+        // Shown day by day unless a full set is already on screen (a refresh replaces it whole).
+        var hasFullSet = false
+        if let previous, case .loaded = previous.state { hasFullSet = true }
+        func publish(complete: Bool) {
+            let sorted = days.sorted { $0.current.date > $1.current.date }
+            pastDays[areaID] = (complete ? .loaded(sorted) : .partial(sorted), now)
+        }
+        if missing.isEmpty { publish(complete: true); return }
+        if !hasFullSet {
+            if days.isEmpty { pastDays[areaID] = (.loading, now) } else { publish(complete: false) }
+        }
+
+        let provider = storyProvider
+        let campus = campus
         var firstError: Error?
-        await withTaskGroup(of: Result<BuildingStory, Error>.self) { group in
-            for moment in moments {
+        await withTaskGroup(of: (Date, Result<BuildingStory, Error>).self) { group in
+            // Newest first: the server works through them roughly in order.
+            for moment in missing {
                 group.addTask {
-                    do { return .success(try await provider.story(for: area, campus: campus, live: nil, at: moment)) }
-                    catch { return .failure(error) }
+                    do { return (moment, .success(try await provider.story(for: area, campus: campus, live: nil, at: moment))) }
+                    catch { return (moment, .failure(error)) }
                 }
             }
-            for await result in group {
+            for await (moment, result) in group {
                 switch result {
-                case .success(let story): days.append(story)
-                case .failure(let error): firstError = firstError ?? error
+                case .success(let story):
+                    days.append(story)
+                    // Empty days aren't kept: the server may still fill them in.
+                    if story.current.hasData { await cache?.store(story, building: area.id, at: moment) }
+                    if !hasFullSet { publish(complete: false) }
+                case .failure(let error):
+                    firstError = firstError ?? error
                 }
             }
         }
 
         if days.isEmpty, let firstError {
-            if let previous, case .loaded = previous.state { return }
-            pastDays[areaID] = (.failed(firstError.localizedDescription), .now)
+            if hasFullSet { return }
+            pastDays[areaID] = (.failed(firstError.localizedDescription), now)
             return
         }
-        pastDays[areaID] = (.loaded(days.sorted { $0.current.date > $1.current.date }), .now)
+        publish(complete: true)
+    }
+
+    /// Starts loading a building's story and past days ahead of its page opening (when it's
+    /// picked on the map), so they're likely ready by the time the page is.
+    func prefetch(areaID: String) {
+        Task { await loadStory(for: areaID) }
+        Task { await loadPastDays(for: areaID) }
     }
 
     func refresh() async {
