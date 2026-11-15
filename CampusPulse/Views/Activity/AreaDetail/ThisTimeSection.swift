@@ -70,7 +70,7 @@ private struct StoryCard: View {
                 Rectangle().fill(Theme.Colors.rule).frame(height: 1)
                 thisWeek
             }
-            Text("Devices reporting within \(story.windowMinutes) minutes of \(timeText(story)).")
+            Text("Location reports within \(story.windowMinutes) minutes of \(timeText(story)). Phones report every 2 minutes, so these compare days rather than count people.")
                 .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
         }
@@ -87,7 +87,7 @@ private struct StoryCard: View {
                     .typeStyle(.metric)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .contentTransition(.numericText())
-                Text("here now")
+                Text("reports now")
                     .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
@@ -100,18 +100,21 @@ private struct StoryCard: View {
     @ViewBuilder
     private var comparison: some View {
         let weekday = weekdayText(story.current.date, story, style: .wide)
-        if let ratio = story.ratioToUsual, let usual = story.usualDevices {
+        if let devices = story.current.devices, let baseline = story.baseline, baseline.value > 0 {
+            let ratio = Double(devices) / baseline.value
+            let usual = baseline.value
+            let against = baseline.basis == .sameWeekday ? "a usual \(weekday)" : "other days this week"
             let (symbol, text, color): (String, String, Color) = switch ratio {
-            case 1.25...: ("arrow.up.right", ratio >= 1.95 ? "\(ratio.formatted(.number.precision(.fractionLength(0...1))))× a usual \(weekday)" : "Busier than a usual \(weekday)", Theme.Colors.danger)
-            case ..<0.8: ("arrow.down.right", "Quieter than a usual \(weekday)", Theme.Colors.positive)
-            default: ("equal", "About a usual \(weekday)", Theme.Colors.textSecondary)
+            case 1.25...: ("arrow.up.right", ratio >= 1.95 ? "\(ratio.formatted(.number.precision(.fractionLength(0...1))))× \(against)" : "Busier than \(against)", Theme.Colors.danger)
+            case ..<0.8: ("arrow.down.right", "Quieter than \(against)", Theme.Colors.positive)
+            default: ("equal", "About \(against)", Theme.Colors.textSecondary)
             }
             VStack(alignment: .trailing, spacing: 2) {
                 Label(text, systemImage: symbol)
                     .typeStyle(.badge)
                     .foregroundStyle(color)
                     .multilineTextAlignment(.trailing)
-                Text("Usually ~\(Int(usual.rounded()))")
+                Text(baseline.basis == .sameWeekday ? "Usually ~\(Int(usual.rounded()))" : "Week avg ~\(Int(usual.rounded()))")
                     .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }

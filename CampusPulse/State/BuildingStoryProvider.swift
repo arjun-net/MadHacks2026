@@ -9,7 +9,7 @@ struct BuildingStoryProvider: Sendable {
     ///   story agrees with the rest of the screen.
     func story(for area: CampusArea, campus: Campus, live: AreaActivity?, at moment: Date = .now) async throws -> BuildingStory {
         if AppConfig.usesServerBuildingStories {
-            return try await api.story(building: area.name, at: moment, weeks: AppConfig.buildingStoryWeeks)
+            return try await api.story(building: area.id, at: moment, weeks: AppConfig.buildingStoryWeeks)
         }
         let capacity = max(10, area.popularity * AppConfig.simulatedPeakHeadcount)
         let current = live.map { Int(($0.intensity * capacity).rounded()) }

@@ -227,7 +227,8 @@ final class SharingState {
         let point = LocationPoint(
             lat: coordinate.latitude,
             lng: coordinate.longitude,
-            timestamp: slot
+            timestamp: slot,
+            accuracy: location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil
         )
         await deliver(adding: point)
     }

@@ -210,8 +210,8 @@ final class CampusStore {
         return buildingCounts.counts
     }
 
-    /// Everyone on campus right now: the counts endpoint's total (all rows in its 2-minute
-    /// window, every building), or nil when the counts are stale.
+    /// The counts endpoint's total (rows matched to any of the 87 buildings in the last 2
+    /// minutes), or nil when the counts are stale.
     private var freshCampusTotal: Int? {
         guard let buildingCounts, Date.now.timeIntervalSince(buildingCounts.fetchedAt) <= AppConfig.buildingCountsFreshness else { return nil }
         return buildingCounts.total
@@ -235,9 +235,11 @@ final class CampusStore {
         guard generation == rebuildGeneration, live.campus.id == campus.id else { return }
         // Live means a slot with readings in the last few minutes.
         let frame = tallies.keys.filter { $0 >= now.addingTimeInterval(-AppConfig.liveFreshness) }.max()
-        // "On campus" counts every row, buildings outside the catalog included; without fresh
-        // counts, every reading the server sent for the frame.
-        let campusTotal = freshCampusTotal ?? frame.map { (live.real[$0]?.count ?? 0) + (live.simulated[$0]?.count ?? 0) }
+        // "On campus" counts every row in the newest 2-minute slot: other buildings and rows with
+        // no building included. (`/buildings/counts`' total leaves out rows with no building, so
+        // it's only the fallback before the slot's readings arrive.)
+        let latestSlot = live.real.keys.filter { $0 >= now.addingTimeInterval(-AppConfig.liveFreshness) }.max()
+        let campusTotal = latestSlot.map { (live.real[$0]?.count ?? 0) + (live.simulated[$0]?.count ?? 0) } ?? freshCampusTotal
         let next = ActivityAggregator.snapshot(
             campus: live.campus,
             tallies: tallies,

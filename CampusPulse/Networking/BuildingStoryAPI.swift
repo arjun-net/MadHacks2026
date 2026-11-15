@@ -9,7 +9,8 @@ struct BuildingStoryAPI: Sendable {
     var session: URLSession = .shared
 
     /// - Parameters:
-    ///   - building: The server's building name (`CampusArea.name`).
+    ///   - building: The building's slug (`CampusArea.id`, e.g. `ebling_library`). The server
+    ///     knows buildings only by slug; a display name returns no data.
     ///   - moment: The date and time of day to ask about, read in `timeZone`.
     ///   - weeks: How many past same weekdays to compare with.
     func story(building: String, at moment: Date, weeks: Int = 8, timeZone: TimeZone = AppConfig.campusTimeZone) async throws -> BuildingStory {
@@ -44,7 +45,7 @@ struct BuildingStoryAPI: Sendable {
                 throw HeatmapAPI.Failure(message: "Unreadable date \(entry.date) in building story.")
             }
             let hasData = entry.status == nil || entry.status == "available"
-            return BuildingStory.Day(date: date, devices: hasData ? entry.reportingDevices : nil)
+            return BuildingStory.Day(date: date, devices: hasData ? entry.observations ?? entry.reportingDevices : nil)
         }
         guard let minute = parseTime(body.timeLocal) else {
             throw HeatmapAPI.Failure(message: "Unreadable time \(body.timeLocal) in building story.")
@@ -56,7 +57,9 @@ struct BuildingStoryAPI: Sendable {
             windowMinutes: body.windowMinutes,
             current: try day(body.current),
             sameWeekday: try body.historicalSameWeekday.map(day),
-            thisWeek: try (body.thisWeek ?? []).map(day).sorted { $0.date < $1.date }
+            thisWeek: try (body.thisWeek ?? []).map(day).sorted { $0.date < $1.date },
+            serverWeekdayAverage: body.weekdayAverage,
+            otherDaysAverage: body.otherDaysThisWeekAverage
         )
     }
 
@@ -98,12 +101,15 @@ struct BuildingStoryAPI: Sendable {
     private struct Body: Decodable {
         struct Day: Decodable {
             let date: String
+            /// Location rows in the window.
+            let observations: Int?
+            /// Older servers' name for `observations`.
             let reportingDevices: Int?
-            /// "available" or "no_data".
+            /// "available", "suppressed" (too few rows), "no_data" or "future".
             let status: String?
 
             enum CodingKeys: String, CodingKey {
-                case date, status
+                case date, status, observations
                 case reportingDevices = "reporting_devices"
             }
         }
@@ -115,9 +121,13 @@ struct BuildingStoryAPI: Sendable {
         let current: Day
         let historicalSameWeekday: [Day]
         let thisWeek: [Day]?
+        let weekdayAverage: Double?
+        let otherDaysThisWeekAverage: Double?
 
         enum CodingKeys: String, CodingKey {
             case building, timezone, current
+            case weekdayAverage = "weekday_average"
+            case otherDaysThisWeekAverage = "other_days_this_week_average"
             case timeLocal = "time_local"
             case windowMinutes = "window_minutes"
             case historicalSameWeekday = "historical_same_weekday"

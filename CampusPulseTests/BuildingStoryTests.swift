@@ -50,6 +50,26 @@ struct BuildingStoryTests {
         #expect(story.ratioToUsual == 3)
     }
 
+    @Test func readsObservationsAndServerAverages() throws {
+        let json = #"""
+        {"building":"ebling_library","date":"2026-11-15","weekday":"Sunday","time_local":"08:40",
+         "timezone":"America/Chicago","window_minutes":15,"metric":"location_observations",
+         "current":{"date":"2026-11-15","weekday":"Sunday","observations":140,"reporting_devices":140,"status":"available"},
+         "historical_same_weekday":[{"date":"2026-11-08","weekday":"Sunday","observations":null,"reporting_devices":null,"status":"no_data"}],
+         "this_week":[{"date":"2026-11-14","weekday":"Saturday","observations":104,"reporting_devices":104,"status":"available"},
+                      {"date":"2026-11-13","weekday":"Friday","observations":3,"reporting_devices":3,"status":"suppressed"}],
+         "weekday_average":null,"other_days_this_week_average":104.0}
+        """#
+        let story = try BuildingStoryAPI.decode(Data(json.utf8))
+        #expect(story.current.devices == 140)
+        #expect(story.thisWeek.map(\.devices) == [nil, 104])
+        #expect(story.usualDevices == nil)
+        // No past Sundays: compared with the week's other days instead.
+        #expect(story.baseline?.value == 104)
+        #expect(story.baseline?.basis == .thisWeek)
+        #expect(story.comparison == .busier)
+    }
+
     @Test func requestFormatsUseCampusTime() {
         let chicago = TimeZone(identifier: "America/Chicago")!
         let moment = ISO8601DateFormatter().date(from: "2026-11-14T20:30:00Z")!

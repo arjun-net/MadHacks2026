@@ -58,7 +58,7 @@ private struct PastDaysCard: View {
 
     /// Bars share one scale: the biggest count or usual among the days.
     private var scale: Double {
-        let values = days.compactMap { $0.current.devices.map(Double.init) } + days.compactMap(\.usualDevices)
+        let values = days.compactMap { $0.current.devices.map(Double.init) } + days.compactMap { $0.baseline?.value }
         return max(1, values.max() ?? 1)
     }
 
@@ -76,7 +76,7 @@ private struct PastDaysCard: View {
             }
 
             Rectangle().fill(Theme.Colors.rule).frame(height: 1)
-            Text("Devices within \(days.first?.windowMinutes ?? 15) minutes of this time. The tick marks what's usual for that weekday.")
+            Text(footnote)
                 .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -84,6 +84,14 @@ private struct PastDaysCard: View {
         }
         .padding(.horizontal, 16)
         .card(cornerRadius: Theme.Radius.sm)
+    }
+
+    private var footnote: String {
+        let window = days.first?.windowMinutes ?? 15
+        let usual = days.contains { $0.baseline?.basis == .thisWeek }
+            ? "The tick marks the usual for that weekday, or that week's other days while there are no past weeks to go on."
+            : "The tick marks the usual for that weekday."
+        return "Location reports within \(window) minutes of this time. \(usual)"
     }
 
     /// "Busier than usual on 2 of the last 7 days, quieter on 1."
@@ -120,7 +128,7 @@ private struct PastDayRow: View {
             .frame(width: 92, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 5) {
-                CountBar(devices: day.current.devices, usual: day.usualDevices, scale: scale, color: day.comparison.color)
+                CountBar(devices: day.current.devices, usual: day.baseline?.value, scale: scale, color: day.comparison.color)
                 Text(detail)
                     .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
@@ -136,12 +144,13 @@ private struct PastDayRow: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    /// "14 here · usually ~10".
+    /// "140 reports · usually ~104" (or "week avg ~104" without past weeks).
     private var detail: String {
-        guard day.current.hasData else { return "No data" }
-        let here = "\(countText(day.current.devices)) here"
-        guard let usual = day.usualDevices else { return here }
-        return "\(here) · usually ~\(Int(usual.rounded()))"
+        guard let devices = day.current.devices else { return "No data" }
+        let here = "\(Formatting.number(devices)) reports"
+        guard let baseline = day.baseline else { return here }
+        let label = baseline.basis == .sameWeekday ? "usually" : "week avg"
+        return "\(here) · \(label) ~\(Int(baseline.value.rounded()))"
     }
 
     private var accessibilityText: String {
@@ -167,7 +176,7 @@ private struct CountBar: View {
                         .fill(color)
                         .frame(width: max(2, width * min(1, Double(devices) / scale)), height: 4)
                 }
-                if let usual {
+                if devices != nil, let usual {
                     Rectangle()
                         .fill(Theme.Colors.ink)
                         .frame(width: 2, height: 10)

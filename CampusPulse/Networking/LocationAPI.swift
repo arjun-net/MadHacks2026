@@ -10,16 +10,20 @@ struct LocationPoint: Codable, Equatable, Sendable {
     let lng: Double
     /// The even-minute slot the reading belongs to (UTC), not the exact fix time.
     let timestamp: Date
+    /// Horizontal accuracy of the fix in meters. The server doesn't match a fix worse than 30 m
+    /// to a building (it still counts toward the heat).
+    var accuracy: Double? = nil
 
     enum CodingKeys: String, CodingKey {
         case deviceID = "device_id"
-        case lng, lat, timestamp
+        case lng, lat, timestamp, accuracy
     }
 
-    init(lat: Double, lng: Double, timestamp: Date) {
+    init(lat: Double, lng: Double, timestamp: Date, accuracy: Double? = nil) {
         self.lat = lat
         self.lng = lng
         self.timestamp = timestamp
+        self.accuracy = accuracy
     }
 
     /// Points queued by older builds may carry a device ID or building; both are ignored.
@@ -28,6 +32,7 @@ struct LocationPoint: Codable, Equatable, Sendable {
         lat = try container.decode(Double.self, forKey: .lat)
         lng = try container.decode(Double.self, forKey: .lng)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
+        accuracy = try container.decodeIfPresent(Double.self, forKey: .accuracy)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -36,6 +41,7 @@ struct LocationPoint: Codable, Equatable, Sendable {
         try container.encode(lng, forKey: .lng)
         try container.encode(lat, forKey: .lat)
         try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(accuracy, forKey: .accuracy)
     }
 }
 

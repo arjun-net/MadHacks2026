@@ -4,13 +4,16 @@ import Foundation
 /// past weeks' same weekday and on the other days this week. From the analytics endpoint
 /// `GET /buildings/{building}/story` (or generated, while the app runs on fake data).
 ///
-/// Counts are distinct devices that reported from the building in a window around the time.
+/// Counts are location reports (rows, `observations`) from the building in a window around the
+/// time: not distinct people. Phones report every 2 minutes, so one person in the building for the
+/// whole window adds several. Good for comparing days with each other, not as a headcount.
 struct BuildingStory: Sendable, Equatable {
     /// One day's count at the story's time of day.
     struct Day: Sendable, Equatable, Identifiable {
         /// Midnight of the day, in `BuildingStory.timeZone`.
         let date: Date
-        /// Nil when the server has no data for that day.
+        /// Location reports in the window. Nil when the server has no data for that day (none,
+        /// too few to show, or not reached yet).
         let devices: Int?
 
         var id: Date { date }
@@ -29,9 +32,15 @@ struct BuildingStory: Sendable, Equatable {
     let sameWeekday: [Day]
     /// The other days of this week so far, oldest first.
     let thisWeek: [Day]
+    /// The server's average of past same weekdays (`weekday_average`; nil under 2 days with data).
+    var serverWeekdayAverage: Double? = nil
+    /// The server's average of this week's other days (`other_days_this_week_average`).
+    var otherDaysAverage: Double? = nil
 
-    /// Average of past same-weekday counts that have data; nil when none do.
+    /// What's usual for this weekday at this time: the server's average, else the past same
+    /// weekdays that have data; nil when none do.
     var usualDevices: Double? {
+        if let serverWeekdayAverage { return serverWeekdayAverage }
         let values = sameWeekday.compactMap(\.devices)
         guard !values.isEmpty else { return nil }
         return Double(values.reduce(0, +)) / Double(values.count)
@@ -72,8 +81,23 @@ enum BusyComparison: Sendable, Equatable {
 }
 
 extension BuildingStory {
-    /// The story's day (`current`) against the usual for its weekday.
-    var comparison: BusyComparison { BusyComparison(devices: current.devices, usual: usualDevices) }
+    /// What a count is compared with.
+    enum UsualBasis: Sendable, Equatable {
+        /// Past weeks' same weekday.
+        case sameWeekday
+        /// The other days of the same week, until there are past weeks to go on.
+        case thisWeek
+    }
+
+    /// The usual count to compare `current` with, and what it's based on.
+    var baseline: (value: Double, basis: UsualBasis)? {
+        if let usual = usualDevices { return (usual, .sameWeekday) }
+        if let otherDaysAverage { return (otherDaysAverage, .thisWeek) }
+        return nil
+    }
+
+    /// The story's day (`current`) against its baseline.
+    var comparison: BusyComparison { BusyComparison(devices: current.devices, usual: baseline?.value) }
 
     /// A calendar in the story's time zone, for formatting its dates.
     var calendar: Calendar {
