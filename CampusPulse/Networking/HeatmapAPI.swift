@@ -1,7 +1,8 @@
 import Foundation
 import MapKit
 
-/// Client for `GET /heatmap`: every reading in a time range, grouped by 2-minute slot.
+/// Client for `GET /heatmap`: every reading in a time range, grouped by 2-minute slot, each with
+/// the building the server tagged it with.
 struct HeatmapAPI: Sendable {
     /// Read per request, so a server change in Settings > Developer applies right away.
     var baseURL: URL { AppConfig.apiBaseURL }
@@ -13,7 +14,7 @@ struct HeatmapAPI: Sendable {
     }
 
     /// Readings keyed by slot time (start inclusive, end exclusive), optionally limited to a map rect.
-    func points(from start: Date, to end: Date, in rect: MKMapRect? = nil, limit: Int = 200_000) async throws -> [Date: [Coordinate]] {
+    func points(from start: Date, to end: Date, in rect: MKMapRect? = nil, limit: Int = 200_000) async throws -> [Date: [Reading]] {
         var components = URLComponents(url: baseURL.appending(path: "heatmap"), resolvingAgainstBaseURL: false)!
         var items = [
             URLQueryItem(name: "start", value: LocationAPI.timestampString(start)),
@@ -34,24 +35,24 @@ struct HeatmapAPI: Sendable {
             throw Failure(message: detail ?? "The server returned HTTP \(status).")
         }
         let body = try JSONDecoder().decode(Body.self, from: data)
-        var result: [Date: [Coordinate]] = [:]
+        var result: [Date: [Reading]] = [:]
         for (key, points) in body.data {
             guard let date = try? Date(key, strategy: .iso8601) else { continue }
-            result[date] = points.map { Coordinate($0.lat, $0.lng) }
+            result[date] = points.map { Reading(coordinate: Coordinate($0.lat, $0.lng), building: $0.building) }
         }
         return result
     }
 
     /// Fetches a long range in parallel chunks so no single response hits the server's point limit.
-    func points(from start: Date, to end: Date, in rect: MKMapRect?, chunks: Int) async throws -> [Date: [Coordinate]] {
+    func points(from start: Date, to end: Date, in rect: MKMapRect?, chunks: Int) async throws -> [Date: [Reading]] {
         let step = end.timeIntervalSince(start) / Double(chunks)
-        return try await withThrowingTaskGroup(of: [Date: [Coordinate]].self) { group in
+        return try await withThrowingTaskGroup(of: [Date: [Reading]].self) { group in
             for index in 0..<chunks {
                 let chunkStart = start.addingTimeInterval(step * Double(index))
                 let chunkEnd = index == chunks - 1 ? end : start.addingTimeInterval(step * Double(index + 1))
                 group.addTask { try await points(from: chunkStart, to: chunkEnd, in: rect) }
             }
-            var merged: [Date: [Coordinate]] = [:]
+            var merged: [Date: [Reading]] = [:]
             for try await chunk in group {
                 merged.merge(chunk) { $0 + $1 }
             }
@@ -68,6 +69,8 @@ struct HeatmapAPI: Sendable {
     private struct Point: Decodable {
         let lat: Double
         let lng: Double
+        /// Set by the server; missing or null when the reading isn't in a tracked building.
+        let building: String?
     }
 
     private struct ErrorBody: Decodable { let detail: String }

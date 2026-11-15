@@ -4,19 +4,20 @@ import Foundation
 /// They are mixed into what the server returns for display only and are never uploaded.
 /// Turn off with `AppConfig.simulatesLiveData`.
 enum SimulatedLiveData {
-    /// Points for every 2-minute slot in `slots`, scattered around each campus building.
+    /// Readings for every 2-minute slot in `slots`, scattered around each campus building and
+    /// tagged with it, as the server tags real ones. Walkers between buildings have no building.
     ///
     /// Each building's headcount follows its usual curve for the time of day and weekday.
     /// Past slots are repeatable, so trends don't rewrite themselves; the newest slot gets
     /// fresh variation on every call, and every point lands in a new random spot, so each
     /// refresh looks a little different.
-    static func points(for campus: Campus, slots: [Date], capacities: Capacities) -> [Date: [Coordinate]] {
+    static func points(for campus: Campus, slots: [Date], capacities: Capacities) -> [Date: [Reading]] {
         let newest = slots.max()
-        var result: [Date: [Coordinate]] = [:]
+        var result: [Date: [Reading]] = [:]
         var generator = SystemRandomNumberGenerator()
 
         for slot in slots {
-            var points: [Coordinate] = []
+            var points: [Reading] = []
             let slotNumber = Int(slot.timeIntervalSince1970 / ActivityAggregator.slot)
             for (index, area) in campus.areas.enumerated() {
                 let usual = SampleActivityData.expectedIntensity(of: area, campus: campus, at: slot)
@@ -29,7 +30,7 @@ enum SimulatedLiveData {
                 let spread = area.radiusMeters * 0.35
                 for _ in 0..<count {
                     let (east, north) = gaussianPair(&generator)
-                    points.append(area.coordinate.offset(eastMeters: east * spread, northMeters: north * spread))
+                    points.append(Reading(coordinate: area.coordinate.offset(eastMeters: east * spread, northMeters: north * spread), building: area.id))
                 }
             }
             // A light scatter of people walking between buildings.
@@ -38,10 +39,10 @@ enum SimulatedLiveData {
                 guard let from = campus.areas.randomElement(using: &generator),
                       let to = campus.areas.randomElement(using: &generator) else { break }
                 let t = Double.random(in: 0...1, using: &generator)
-                points.append(Coordinate(
+                points.append(Reading(coordinate: Coordinate(
                     from.coordinate.latitude + (to.coordinate.latitude - from.coordinate.latitude) * t,
                     from.coordinate.longitude + (to.coordinate.longitude - from.coordinate.longitude) * t
-                ))
+                )))
             }
             result[slot] = points
         }

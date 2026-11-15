@@ -8,30 +8,29 @@ struct AggregationTests {
     let campus = CampusCatalog.madison
     var library: CampusArea { campus.area(withID: "college_library")! }
 
-    @Test func readingOnABuildingCountsForIt() {
-        let point = library.coordinate.offset(eastMeters: 5, northMeters: -5)
-        #expect(ActivityAggregator.area(containing: point, in: campus) == "college_library")
+    /// Buildings come from the server's tag on each reading, never from the coordinates.
+    @Test func readingsCountForTheBuildingTheServerTaggedThemWith() {
+        let slot = Date(timeIntervalSince1970: 1_800_000_000)
+        let readings = [
+            // The server stores full names; older rows hold ids.
+            Reading(coordinate: Coordinate(43.073141, -89.407074), building: "Morgridge Hall (College of Computing & AI)"),
+            Reading(coordinate: Coordinate(43.07328, -89.40690), building: "morgridge_hall"),
+            // Untagged: counts toward the heat and the total, but no building,
+            // even when the coordinates sit right on one.
+            Reading(coordinate: library.coordinate),
+            // A building this campus doesn't track.
+            Reading(coordinate: Coordinate(43.0764, -89.3996), building: "Memorial Union"),
+        ]
+        let tally = ActivityAggregator.tally([slot: readings], campus: campus)[slot]!
+        #expect(tally.areaCounts == ["morgridge_hall": 2])
+        #expect(tally.total == 4)
     }
 
-    /// The map and Activity list show exactly the buildings the pings are tagged with.
-    @Test func areasAreTheTrackedBuildings() throws {
-        let locator = try #require(BuildingLocator.forCampus(campus.id))
+    @Test func buildingTagsMatchByNameOrID() {
+        #expect(campus.areaID(forBuilding: "College Library (Helen C. White Hall)") == "college_library")
+        #expect(campus.areaID(forBuilding: "college_library") == "college_library")
+        #expect(campus.areaID(forBuilding: "College Library") == nil)
         #expect(campus.areas.count == 20)
-        #expect(campus.areas.map(\.id).sorted() == locator.buildings.map(\.id).sorted())
-        for building in locator.buildings {
-            #expect(campus.area(withID: building.id)?.name == building.name)
-        }
-    }
-
-    @Test func readingInMorgridgeHallCountsForIt() {
-        // A real ping from inside, and one ~10 m outside the north wall.
-        #expect(ActivityAggregator.area(containing: Coordinate(43.073141, -89.407074), in: campus) == "morgridge_hall")
-        #expect(ActivityAggregator.area(containing: Coordinate(43.07328, -89.40690), in: campus) == "morgridge_hall")
-    }
-
-    @Test func readingFarFromEveryBuildingCountsForNone() {
-        let lakeMiddle = Coordinate(43.10, -89.42)
-        #expect(ActivityAggregator.area(containing: lakeMiddle, in: campus) == nil)
     }
 
     @Test func cellsBelowThePrivacyThresholdAreDropped() {
@@ -52,8 +51,8 @@ struct AggregationTests {
 
     @Test func snapshotCountsTheFrameAndRoundsParticipants() {
         let frame = ActivityAggregator.slotStart(Date(timeIntervalSince1970: 1_800_000_000))
-        let points = Array(repeating: library.coordinate, count: 44)
-        let tallies = ActivityAggregator.tally([frame: points], campus: campus)
+        let readings = Array(repeating: Reading(coordinate: library.coordinate, building: library.name), count: 44)
+        let tallies = ActivityAggregator.tally([frame: readings], campus: campus)
 
         let snapshot = ActivityAggregator.snapshot(
             campus: campus, tallies: tallies, frame: frame,

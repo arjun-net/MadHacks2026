@@ -42,30 +42,16 @@ enum ActivityAggregator {
         Date(timeIntervalSince1970: (date.timeIntervalSince1970 / slot).rounded(.down) * slot)
     }
 
-    static func tally(_ slots: [Date: [Coordinate]], campus: Campus) -> [Date: SlotTally] {
-        slots.mapValues { points in
+    /// Counts each slot's readings per area by the building the server tagged them with.
+    /// Untagged readings still count toward the heat and the campus total.
+    static func tally(_ slots: [Date: [Reading]], campus: Campus) -> [Date: SlotTally] {
+        slots.mapValues { readings in
             var counts: [String: Int] = [:]
-            for point in points {
-                if let id = area(containing: point, in: campus) { counts[id, default: 0] += 1 }
+            for reading in readings {
+                if let id = reading.building.flatMap(campus.areaID(forBuilding:)) { counts[id, default: 0] += 1 }
             }
-            return SlotTally(points: points, areaCounts: counts)
+            return SlotTally(points: readings.map(\.coordinate), areaCounts: counts)
         }
-    }
-
-    /// The tracked area a reading counts for. Where the campus has building outlines, it's the
-    /// building the reading is in or near, by the same rule as the pings sent to the server;
-    /// elsewhere, the nearest area whose rough footprint (with a small margin) contains it.
-    static func area(containing point: Coordinate, in campus: Campus) -> String? {
-        if let locator = BuildingLocator.forCampus(campus.id) {
-            return locator.buildingID(at: point).flatMap { campus.area(withID: $0)?.id }
-        }
-        var best: (id: String, distance: Double)?
-        for area in campus.areas {
-            let distance = area.coordinate.distance(to: point)
-            guard distance <= area.radiusMeters * 1.3 else { continue }
-            if distance < best?.distance ?? .infinity { best = (area.id, distance) }
-        }
-        return best?.id
     }
 
     /// Snapshot for `frame`, with the 12 slots up to it as the trend.

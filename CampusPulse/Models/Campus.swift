@@ -103,6 +103,12 @@ struct Campus: Identifiable, Hashable, Sendable {
     func area(withID id: String) -> CampusArea? {
         areas.first { $0.id == id }
     }
+
+    /// The area for a building tag from the server: its full name (what the server stores) or
+    /// its id (older rows). Nil for buildings this campus doesn't track.
+    func areaID(forBuilding building: String) -> String? {
+        areas.first { $0.name == building || $0.id == building }?.id
+    }
 }
 
 struct CampusArea: Identifiable, Hashable, Sendable {

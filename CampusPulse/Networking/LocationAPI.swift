@@ -8,11 +8,10 @@ struct LocationPoint: Codable, Equatable, Sendable {
     /// The even-minute slot the reading belongs to (UTC), not the exact fix time.
     let timestamp: Date
     let deviceID: String
-    /// The campus building the reading is in or near (see `BuildingLocator`); left out when none.
-    var building: String? = nil
 
+    // No building: the server works out which building a reading is in when it stores it.
     enum CodingKeys: String, CodingKey {
-        case lat, lng, timestamp, building
+        case lat, lng, timestamp
         case deviceID = "device_id"
     }
 }

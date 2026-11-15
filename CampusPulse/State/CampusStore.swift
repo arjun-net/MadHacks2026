@@ -119,7 +119,7 @@ final class CampusStore {
         let currentSlot = ActivityAggregator.slotStart(now)
         let windowStart = currentSlot.addingTimeInterval(-Double(ActivityAggregator.historyLength) * ActivityAggregator.slot)
         do {
-            var raw: [Date: [Coordinate]]
+            var raw: [Date: [Reading]]
             do {
                 raw = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
             } catch where AppConfig.simulatesLiveData {

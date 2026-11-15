@@ -10,9 +10,9 @@ enum CampusCatalog {
         center: Coordinate(43.0714, -89.4074),
         latitudeSpan: 0.014,
         longitudeSpan: 0.034,
-        // The 20 tracked buildings: the same ids, names and outlines as
-        // Resources/Buildings/buildings-uw-madison.json and the server's building grid, so a
-        // reading counts for the building the database names. Popularity follows ping counts.
+        // The 20 buildings the server tracks (backend assets/buildings.json). Ids and names must
+        // match it: readings are counted by the building name the server tags them with.
+        // Popularity follows ping counts.
         areas: [
             CampusArea(id: "abbie_142", name: "The Abbie", shortName: "The Abbie",
                        category: .housing, coordinate: Coordinate(43.077493, -89.392528), radiusMeters: 12, popularity: 1.0),
