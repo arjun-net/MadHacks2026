@@ -1,5 +1,6 @@
 import CoreLocation
 import MapKit
+import Metal
 import SceneKit
 import SwiftUI
 import UIKit
@@ -62,7 +63,17 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
     // MARK: Scene
 
-    private let scnView = SCNView()
+    /// The scene is drawn by us, once per screen refresh, in the same update that moves the
+    /// markers; SceneKit's own view draws on a separate schedule, so peaks and markers drifted
+    /// a frame apart while moving.
+    private let sceneView = MetalLayerView()
+    private let device = MTLCreateSystemDefaultDevice()
+    private lazy var renderer = SCNRenderer(device: device, options: nil)
+    private lazy var commandQueue = device?.makeCommandQueue()
+    private var colorTexture: MTLTexture?
+    private var depthTexture: MTLTexture?
+    private static let sampleCount = 4
+    private var needsRender = true
     private let scene = SCNScene()
     private let cameraNode = SCNNode()
     /// Fixed lens; the projection is rebuilt from it to shift campus below the masthead.
@@ -173,6 +184,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             locationManager.stopUpdatingLocation()
         } else {
             startLocationIfAllowed()
+            setNeedsRender()
         }
     }
 
@@ -180,19 +192,23 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
 
     private func setUpScene() {
         backgroundColor = BasemapPalette.land
-        scnView.scene = scene
-        scnView.backgroundColor = .clear
-        scnView.antialiasingMode = .multisampling4X
-        scnView.rendersContinuously = false
-        scnView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        addSubview(scnView)
+        let metalLayer = sceneView.metalLayer
+        metalLayer.device = device
+        metalLayer.pixelFormat = .bgra8Unorm_srgb
+        metalLayer.framebufferOnly = true
+        // Show each frame in the same screen update as the marker positions.
+        metalLayer.presentsWithTransaction = true
+        sceneView.isOpaque = true
+        sceneView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(sceneView)
+        renderer.scene = scene
 
         overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(overlay)
 
         cameraNode.camera = SCNCamera()
         scene.rootNode.addChildNode(cameraNode)
-        scnView.pointOfView = cameraNode
+        renderer.pointOfView = cameraNode
 
         for (node, rect, order) in [(farGround, farRect, -20), (nearGround, nearRect, -10)] {
             let plane = SCNPlane(width: CGFloat(rect.width / pointsPerMeter), height: CGFloat(rect.height / pointsPerMeter))
@@ -254,7 +270,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         let rotate = UIRotationGestureRecognizer(target: self, action: #selector(handleRotate(_:)))
         for gesture in [pan, pinch, rotate] as [UIGestureRecognizer] {
             gesture.delegate = self
-            scnView.addGestureRecognizer(gesture)
+            sceneView.addGestureRecognizer(gesture)
         }
     }
 
@@ -267,6 +283,9 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     override func layoutSubviews() {
         super.layoutSubviews()
         guard bounds.width > 0, bounds.height > 0 else { return }
+        let scale = window?.screen.scale ?? traitCollection.displayScale
+        sceneView.metalLayer.contentsScale = scale
+        sceneView.metalLayer.drawableSize = CGSize(width: bounds.width * scale, height: bounds.height * scale)
         updateProjection()
         if !hasFramedCampus {
             hasFramedCampus = true
@@ -382,6 +401,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             guard let self, self.style == style else { return }
             self.farGround.geometry?.firstMaterial?.diffuse.contents = images.0
             self.nearGround.geometry?.firstMaterial?.diffuse.contents = images.1
+            self.setNeedsRender()
         }
     }
 
@@ -393,6 +413,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         applySceneColors()
         terrain.geometry?.materials = [terrainMaterial()]
         loadGroundTextures()
+        setNeedsRender()
     }
 
     private func applySceneColors() {
@@ -600,21 +621,84 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         terrain.scale = SCNVector3(1, max(0.001, verticalScale), 1)
         scene.fogStartDistance = CGFloat(camera.distance * 1.1)
         scene.fogEndDistance = CGFloat(camera.distance * 3.2)
-        updateOverlay()
+        setNeedsRender()
+    }
+
+    /// Draws on the next screen refresh (at most once per refresh, however many touches arrive).
+    private func setNeedsRender() {
+        needsRender = true
+        startTicking()
+    }
+
+    private func renderFrame() {
+        guard let device, let commandQueue, bounds.width > 0 else { return }
+        let metalLayer = sceneView.metalLayer
+        guard let drawable = metalLayer.nextDrawable(), let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+        let width = drawable.texture.width, height = drawable.texture.height
+        if colorTexture?.width != width || colorTexture?.height != height {
+            let color = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: metalLayer.pixelFormat, width: width, height: height, mipmapped: false)
+            color.textureType = .type2DMultisample
+            color.sampleCount = Self.sampleCount
+            color.usage = .renderTarget
+            color.storageMode = .private
+            colorTexture = device.makeTexture(descriptor: color)
+            let depth = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .depth32Float_stencil8, width: width, height: height, mipmapped: false)
+            depth.textureType = .type2DMultisample
+            depth.sampleCount = Self.sampleCount
+            depth.usage = .renderTarget
+            depth.storageMode = .private
+            depthTexture = device.makeTexture(descriptor: depth)
+        }
+
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = colorTexture
+        pass.colorAttachments[0].resolveTexture = drawable.texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .multisampleResolve
+        pass.depthAttachment.texture = depthTexture
+        pass.depthAttachment.loadAction = .clear
+        pass.depthAttachment.clearDepth = 1
+        pass.depthAttachment.storeAction = .dontCare
+        pass.stencilAttachment.texture = depthTexture
+        pass.stencilAttachment.loadAction = .clear
+        pass.stencilAttachment.storeAction = .dontCare
+
+        renderer.render(atTime: CACurrentMediaTime(), viewport: CGRect(x: 0, y: 0, width: width, height: height), commandBuffer: commandBuffer, passDescriptor: pass)
+        commandBuffer.commit()
+        commandBuffer.waitUntilScheduled()
+        drawable.present()
+    }
+
+    // MARK: Projection (done here rather than by SceneKit, so it matches the frame being drawn)
+
+    private var viewProjection: simd_float4x4 {
+        simd_float4x4(cameraNode.camera?.projectionTransform ?? SCNMatrix4Identity) * cameraNode.simdWorldTransform.inverse
+    }
+
+    /// Screen position of a scene point and its distance from the camera, or nil behind it.
+    private func project(_ point: SCNVector3, using matrix: simd_float4x4) -> (point: CGPoint, depth: Float)? {
+        let clip = matrix * SIMD4<Float>(point.x, point.y, point.z, 1)
+        guard clip.w > 1 else { return nil }
+        let x = clip.x / clip.w, y = clip.y / clip.w
+        return (CGPoint(x: CGFloat(x + 1) / 2 * bounds.width, y: CGFloat(1 - y) / 2 * bounds.height), clip.w)
     }
 
     /// Where a screen point lands on the ground, or nil above the horizon.
     private func groundPoint(_ point: CGPoint) -> SIMD2<Float>? {
-        let a = scnView.unprojectPoint(SCNVector3(Float(point.x), Float(point.y), 0))
-        let b = scnView.unprojectPoint(SCNVector3(Float(point.x), Float(point.y), 1))
-        let direction = SIMD3<Float>(b.x - a.x, b.y - a.y, b.z - a.z)
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+        let x = Float(point.x / bounds.width) * 2 - 1
+        let y = 1 - Float(point.y / bounds.height) * 2
+        // Any depth inside the view works: it's just a second point on the ray through the pixel.
+        let q = viewProjection.inverse * SIMD4<Float>(x, y, 0.5, 1)
+        let eye = cameraNode.simdWorldPosition
+        let direction = SIMD3<Float>(q.x, q.y, q.z) / q.w - eye
         guard direction.y < -1e-5 else { return nil }
-        let t = -a.y / direction.y
-        return SIMD2(a.x + direction.x * t, a.z + direction.z * t)
+        let t = -eye.y / direction.y
+        return SIMD2(eye.x + direction.x * t, eye.z + direction.z * t)
     }
 
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
-        let location = gesture.location(in: scnView)
+        let location = gesture.location(in: sceneView)
         switch gesture.state {
         case .began:
             cameraAnimation = nil
@@ -628,10 +712,11 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             lastPanLocation = location
         case .ended:
             // Keep gliding in the direction of the flick.
-            let v = gesture.velocity(in: scnView)
+            let v = gesture.velocity(in: sceneView)
             let ahead = CGPoint(x: location.x - v.x * 0.05, y: location.y - v.y * 0.05)
             if let a = groundPoint(location), let b = groundPoint(ahead) {
-                velocity = (b - a) / 0.05
+                // A short, quick glide: stops in about a third of a second.
+                velocity = (b - a) / 0.05 * 0.6
                 startTicking()
             }
             lastPanLocation = nil
@@ -644,7 +729,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         guard gesture.state == .changed || gesture.state == .began else { return }
         cameraAnimation = nil
         velocity = .zero
-        let location = gesture.location(in: scnView)
+        let location = gesture.location(in: sceneView)
         let before = groundPoint(location)
         camera.distance /= Float(gesture.scale)
         gesture.scale = 1
@@ -664,7 +749,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         applyCamera()
     }
 
-    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.7) {
+    private func animateCamera(to state: CameraState, duration: CFTimeInterval = 0.4) {
         velocity = .zero
         var to = clamped(state)
         // Turn the short way round.
@@ -701,20 +786,25 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             camera.distance = animation.from.distance * pow(animation.to.distance / animation.from.distance, e)
             camera.heading = animation.from.heading + (animation.to.heading - animation.from.heading) * e
             if t >= 1 { cameraAnimation = nil } else { active = true }
-        } else if simd_length(velocity) > 2 {
+        } else if simd_length(velocity) > 8 {
             camera.target += velocity * dt
-            velocity *= exp(-4.5 * dt)
+            velocity *= exp(-9 * dt)
             active = true
         }
 
         if heightScale != heightTarget {
-            let step = dt / 0.9
+            let step = dt / 0.5
             heightScale = heightTarget > heightScale ? min(heightTarget, heightScale + step) : max(heightTarget, heightScale - step)
             terrain.opacity = heatVisible || heightScale > 0.02 ? 1 : 0
             active = active || heightScale != heightTarget
         }
 
-        applyCamera()
+        if active || needsRender {
+            applyCamera()
+            renderFrame()
+            updateOverlay()
+            needsRender = false
+        }
         if !active {
             link.invalidate()
             displayLink = nil
@@ -731,27 +821,35 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
             if ($0.id == selectedAreaID) != ($1.id == selectedAreaID) { return $0.id == selectedAreaID }
             return $0.popularity > $1.popularity
         }
+        let matrix = viewProjection
         var placed: [CGRect] = []
         for area in order {
             guard let view = markers[area.id] else { continue }
             let mapPoint = MKMapPoint(area.coordinate.clCoordinate)
-            let projected = scnView.projectPoint(scenePoint(mapPoint, height: surfaceHeight(at: mapPoint) * lift + 4))
-            let visible = projected.z > 0 && projected.z < 1
-            view.center = CGPoint(x: CGFloat(projected.x) + view.centerOffset.x, y: CGFloat(projected.y) + view.centerOffset.y)
+            let projected = project(scenePoint(mapPoint, height: surfaceHeight(at: mapPoint) * lift + 4), using: matrix)
+            guard let projected else { view.isHidden = true; continue }
+            // Whole points, so markers don't shimmer between pixels while moving.
+            let center = CGPoint(x: projected.point.x + view.centerOffset.x, y: projected.point.y + view.centerOffset.y)
+            let scale = window?.screen.scale ?? 3
+            view.center = CGPoint(x: (center.x * scale).rounded() / scale, y: (center.y * scale).rounded() / scale)
+            let visible = bounds.insetBy(dx: -80, dy: -80).contains(view.center)
             let frame = view.frame.insetBy(dx: 6, dy: 3)
             let selected = area.id == selectedAreaID
             let collides = !selected && placed.contains { $0.intersects(frame) }
             view.isHidden = !visible || collides
             if !view.isHidden { placed.append(frame) }
-            view.layer.zPosition = (selected ? 2 : 1) - CGFloat(projected.z)
+            view.layer.zPosition = (selected ? 20_000 : 10_000) - CGFloat(projected.depth)
         }
 
         if let userLocation {
             let mapPoint = MKMapPoint(userLocation)
-            let projected = scnView.projectPoint(scenePoint(mapPoint, height: 2))
-            userDot.center = CGPoint(x: CGFloat(projected.x), y: CGFloat(projected.y))
-            userDot.isHidden = !(projected.z > 0 && projected.z < 1)
-            userDot.layer.zPosition = 0.5
+            if let projected = project(scenePoint(mapPoint, height: 2), using: matrix) {
+                userDot.center = projected.point
+                userDot.isHidden = false
+            } else {
+                userDot.isHidden = true
+            }
+            userDot.layer.zPosition = 5_000
         } else {
             userDot.isHidden = true
         }
@@ -802,4 +900,11 @@ private final class UserDotView: UIView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+/// A view backed by a Metal layer that the 3D scene is drawn into.
+final class MetalLayerView: UIView {
+    override class var layerClass: AnyClass { CAMetalLayer.self }
+    // swiftlint:disable:next force_cast
+    var metalLayer: CAMetalLayer { layer as! CAMetalLayer }
 }
