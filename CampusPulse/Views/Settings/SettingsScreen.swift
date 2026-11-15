@@ -4,6 +4,7 @@ struct SettingsScreen: View {
     @Bindable var viewModel: SettingsViewModel
     let sharingViewModel: LocationSharingViewModel
 
+    @State private var isConfirmingReset = false
 
     var body: some View {
         @Bindable var preferences = viewModel.preferences
@@ -106,12 +107,21 @@ struct SettingsScreen: View {
 
                     SettingsSection(
                         title: "Privacy",
-                        footer: "Readings carry no ID, name or account, so they can't be linked to you or to each other."
+                        footer: "Readings carry a random ID, never your name or account. Resetting it means future readings can't be linked to past ones."
                     ) {
                         NavigationLink {
                             PrivacyInfoView()
                         } label: {
                             SettingsRow(symbol: "hand.raised.fill", color: Theme.Colors.graphite, title: "How Your Data Is Protected")
+                        }
+                        .buttonStyle(RowButtonStyle())
+                        RowRule()
+                        Button(role: .destructive) {
+                            isConfirmingReset = true
+                        } label: {
+                            SettingsLabel(symbol: "arrow.triangle.2.circlepath", color: Theme.Colors.danger, title: "Reset Device ID", titleColor: Theme.Colors.danger)
+                                .settingsRow()
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(RowButtonStyle())
                     }
@@ -159,6 +169,17 @@ struct SettingsScreen: View {
             .background(ScreenBackground(ruled: false))
             .statusBarBackdrop()
             .toolbar(.hidden, for: .navigationBar)
+            .confirmationDialog(
+                "Reset your device ID?",
+                isPresented: $isConfirmingReset,
+                titleVisibility: .visible
+            ) {
+                Button("Reset Device ID", role: .destructive) {
+                    viewModel.resetDeviceID()
+                }
+            } message: {
+                Text("Readings sent from now on get a new random ID, and any readings still waiting to send are discarded. Sharing stays on.")
+            }
             .alert(
                 viewModel.message ?? "",
                 isPresented: Binding(

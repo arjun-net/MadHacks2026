@@ -157,6 +157,15 @@ final class SharingState {
         }
     }
 
+    /// Starts over with a new random device ID and drops readings that haven't been sent,
+    /// so nothing sent from now on can be linked to what this phone sent before.
+    func resetIdentity() {
+        DeviceIdentity.reset()
+        queue.save([])
+        pendingCount = 0
+        lastUpdateAt = nil
+    }
+
     // MARK: - Permission
 
     private func authorizationDidChange(_ status: CLAuthorizationStatus) {
@@ -302,5 +311,22 @@ final class SharingState {
             j = i
         }
         return inside
+    }
+}
+
+/// A random ID generated once per install and reused for every reading.
+enum DeviceIdentity {
+    private static let key = "device.id"
+
+    static var id: String {
+        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
+        let new = "ios-" + UUID().uuidString.lowercased()
+        UserDefaults.standard.set(new, forKey: key)
+        return new
+    }
+
+    /// The next `id` read creates a fresh one.
+    static func reset() {
+        UserDefaults.standard.removeObject(forKey: key)
     }
 }

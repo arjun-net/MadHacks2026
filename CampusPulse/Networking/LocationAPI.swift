@@ -2,14 +2,15 @@ import Foundation
 import os
 
 /// One location reading as the backend expects it:
-/// `{"device_id": null, "lng": …, "lat": …, "timestamp": "…Z"}` (keys may come in any order).
-/// No device ID (always null), so readings can't be linked to each other or to a phone.
+/// `{"device_id": "ios-…", "lng": …, "lat": …, "timestamp": "…Z", "accuracy": …}`.
+/// The device ID is a random ID for this install (`DeviceIdentity`), never a name or account.
 /// No building: the server works out which building a reading is in when it stores it.
 struct LocationPoint: Codable, Equatable, Sendable {
     let lat: Double
     let lng: Double
     /// The even-minute slot the reading belongs to (UTC), not the exact fix time.
     let timestamp: Date
+    let deviceID: String
     /// Horizontal accuracy of the fix in meters. The server doesn't match a fix worse than 30 m
     /// to a building (it still counts toward the heat).
     var accuracy: Double? = nil
@@ -19,25 +20,28 @@ struct LocationPoint: Codable, Equatable, Sendable {
         case lng, lat, timestamp, accuracy
     }
 
-    init(lat: Double, lng: Double, timestamp: Date, accuracy: Double? = nil) {
+    init(lat: Double, lng: Double, timestamp: Date, deviceID: String = DeviceIdentity.id, accuracy: Double? = nil) {
         self.lat = lat
         self.lng = lng
         self.timestamp = timestamp
+        self.deviceID = deviceID
         self.accuracy = accuracy
     }
 
-    /// Points queued by older builds may carry a device ID or building; both are ignored.
+    /// Points queued by older builds may have no device ID (or a null one): they get this
+    /// install's. A building they carry is ignored.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         lat = try container.decode(Double.self, forKey: .lat)
         lng = try container.decode(Double.self, forKey: .lng)
         timestamp = try container.decode(Date.self, forKey: .timestamp)
+        deviceID = try container.decodeIfPresent(String.self, forKey: .deviceID) ?? DeviceIdentity.id
         accuracy = try container.decodeIfPresent(Double.self, forKey: .accuracy)
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeNil(forKey: .deviceID)
+        try container.encode(deviceID, forKey: .deviceID)
         try container.encode(lng, forKey: .lng)
         try container.encode(lat, forKey: .lat)
         try container.encode(timestamp, forKey: .timestamp)

@@ -30,7 +30,7 @@ struct SharingTests {
         defer { try? FileManager.default.removeItem(at: url) }
         let queue = PendingLocationQueue(fileURL: url)
         let points = (0..<(PendingLocationQueue.capacity + 5)).map {
-            LocationPoint(lat: 43, lng: -89, timestamp: Date(timeIntervalSince1970: Double($0) * 120))
+            LocationPoint(lat: 43, lng: -89, timestamp: Date(timeIntervalSince1970: Double($0) * 120), deviceID: "ios-test")
         }
 
         queue.save(points)
@@ -45,27 +45,34 @@ struct SharingTests {
     }
 
     @Test func pointEncodesAsTheBackendExpects() throws {
-        let point = LocationPoint(lat: 43.0768, lng: -89.4013, timestamp: Date(timeIntervalSince1970: 1_800_000_000))
-        let data = try LocationAPI.encoder.encode(point)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let point = LocationPoint(lat: 43.0768, lng: -89.4013, timestamp: Date(timeIntervalSince1970: 1_800_000_000), deviceID: "ios-abc")
+        let json = try JSONSerialization.jsonObject(with: LocationAPI.encoder.encode(point)) as? [String: Any]
 
-        // No device ID: always an explicit null.
-        #expect(json?["device_id"] is NSNull)
+        #expect(json?["device_id"] as? String == "ios-abc")
         #expect(json?["lat"] as? Double == 43.0768)
-        #expect(json?["lng"] as? Double == -89.4013)
         #expect((json?["timestamp"] as? String)?.hasPrefix("2027-01-15T08:00:00") == true)
         // Only the location: the server works out the building.
+        #expect(json?["building"] == nil)
         #expect(json?.keys.sorted() == ["device_id", "lat", "lng", "timestamp"])
     }
 
-    @Test func pointsQueuedByOlderBuildsStillLoad() throws {
-        // Saved with a device ID and a building; both are ignored.
+    @Test func queuedPointsFromTheBuildingTaggingBuildStillLoad() throws {
+        // Saved by the build that tagged buildings on the phone; the extra key is ignored.
         let old = #"{"lat":43.07,"lng":-89.4,"timestamp":"2026-11-15T05:10:00Z","device_id":"ios-a","building":"Morgridge Hall"}"#
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let point = try decoder.decode(LocationPoint.self, from: Data(old.utf8))
-        #expect(point.lat == 43.07)
-        #expect(point.lng == -89.4)
+        #expect(point.deviceID == "ios-a")
+    }
+
+    @Test func queuedPointsWithoutAnIDGetThisInstallsID() throws {
+        // Saved by the build that sent device_id as null.
+        let old = #"{"lat":43.07,"lng":-89.4,"timestamp":"2026-11-15T05:10:00Z","device_id":null}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let point = try decoder.decode(LocationPoint.self, from: Data(old.utf8))
+        #expect(point.deviceID == DeviceIdentity.id)
+        #expect(point.deviceID.hasPrefix("ios-"))
     }
 
     // MARK: - Helpers
