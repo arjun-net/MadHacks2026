@@ -9,19 +9,19 @@ use crate::config::Settings;
 use crate::models::{BBox, Point, Row};
 
 const INSERT_RAW: &str = r#"
-    INSERT INTO public.location_events (device_id, latitude, longitude, "time")
-    SELECT * FROM UNNEST($1::text[], $2::float8[], $3::float8[], $4::timestamptz[])
+    INSERT INTO public.location_events (device_id, latitude, longitude, "time", building)
+    SELECT * FROM UNNEST($1::text[], $2::float8[], $3::float8[], $4::timestamptz[], $5::text[])
 "#;
 
 // Deliberately omit id: the database's sequence/default generates a non-null,
 // unique, monotonically increasing id even for concurrent API requests.
 const INSERT_BROAD: &str = r#"
-    INSERT INTO public.location_events_broad (device_id, latitude, longitude, "time")
-    SELECT * FROM UNNEST($1::text[], $2::float8[], $3::float8[], $4::timestamptz[])
+    INSERT INTO public.location_events_broad (device_id, latitude, longitude, "time", building)
+    SELECT * FROM UNNEST($1::text[], $2::float8[], $3::float8[], $4::timestamptz[], $5::text[])
 "#;
 
 const QUERY_RAW: &str = r#"
-    SELECT "time", latitude, longitude FROM public.location_events
+    SELECT "time", latitude, longitude, building FROM public.location_events
     WHERE "time" >= $1 AND "time" < $2
       AND ($3::float8 IS NULL OR
            (longitude BETWEEN $3 AND $5 AND latitude BETWEEN $4 AND $6))
@@ -29,7 +29,7 @@ const QUERY_RAW: &str = r#"
 "#;
 
 const QUERY_BROAD: &str = r#"
-    SELECT "time", latitude, longitude FROM public.location_events_broad
+    SELECT "time", latitude, longitude, building FROM public.location_events_broad
     WHERE "time" >= $1 AND "time" < $2
       AND ($3::float8 IS NULL OR
            (longitude BETWEEN $3 AND $5 AND latitude BETWEEN $4 AND $6))
@@ -104,9 +104,11 @@ impl Store {
         match self {
             Store::Memory(mutex) => {
                 let mut memory = mutex.lock().unwrap();
-                memory.raw.extend(points.iter().map(|p| (p.time, p.lat, p.lng)));
+                memory.raw.extend(points.iter().map(|p| {
+                    (p.time, p.lat, p.lng, p.building.clone())
+                }));
                 memory.broad.extend(broad.iter().map(|point| {
-                    (point.time, point.lat, point.lng)
+                    (point.time, point.lat, point.lng, point.building.clone())
                 }));
                 Ok(())
             }
@@ -117,9 +119,10 @@ impl Store {
                 let lats: Vec<f64> = points.iter().map(|p| p.lat).collect();
                 let lngs: Vec<f64> = points.iter().map(|p| p.lng).collect();
                 let times: Vec<DateTime<Utc>> = points.iter().map(|p| p.time).collect();
+                let buildings: Vec<Option<String>> = points.iter().map(|p| p.building.clone()).collect();
 
                 sqlx::query(INSERT_RAW)
-                    .bind(devices).bind(lats).bind(lngs).bind(times)
+                    .bind(devices).bind(lats).bind(lngs).bind(times).bind(buildings)
                     .execute(&mut *transaction)
                     .await
                     .map_err(|e| e.to_string())?;
@@ -129,9 +132,10 @@ impl Store {
                     let lats: Vec<f64> = broad.iter().map(|p| p.lat).collect();
                     let lngs: Vec<f64> = broad.iter().map(|p| p.lng).collect();
                     let times: Vec<DateTime<Utc>> = broad.iter().map(|p| p.time).collect();
+                    let buildings: Vec<Option<String>> = broad.iter().map(|p| p.building.clone()).collect();
 
                     sqlx::query(INSERT_BROAD)
-                        .bind(devices).bind(lats).bind(lngs).bind(times)
+                        .bind(devices).bind(lats).bind(lngs).bind(times).bind(buildings)
                         .execute(&mut *transaction)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -179,14 +183,14 @@ impl Store {
                     Dataset::Broad => &memory.broad,
                 };
                 let mut out: Vec<Row> = source.iter()
-                    .filter(|(t, lat, lng)| {
+                    .filter(|(t, lat, lng, _building)| {
                         *t >= start && *t < end
                             && bbox.is_none_or(|(min_lng, min_lat, max_lng, max_lat)| {
                                 *lat >= min_lat && *lat <= max_lat
                                     && *lng >= min_lng && *lng <= max_lng
                             })
                     })
-                    .copied()
+                    .cloned()
                     .collect();
                 out.sort_by_key(|r| r.0);
                 out.truncate(limit as usize);
@@ -231,6 +235,7 @@ mod tests {
             lng: -89.4012,
             time: Utc.with_ymd_and_hms(2026, 11, 14, hour, minute, second).unwrap(),
             device_id: device_id.to_string(),
+            building: None,
         }
     }
 
@@ -254,7 +259,25 @@ mod tests {
         assert_eq!(raw.len(), 6);
         assert_eq!(broad.len(), 5);
         assert_eq!(broad.iter().filter(|row| row.0 == start).count(), 4);
-        assert!(broad.iter().all(|(t, _, _)| t.minute() == 0 && t.second() == 0));
+        assert!(broad.iter().all(|(t, _, _, _)| t.minute() == 0 && t.second() == 0));
+    }
+
+    #[tokio::test]
+    async fn building_is_saved_to_raw_and_broad_and_not_deduplicated() {
+        let store = Store::memory();
+        let mut p1 = p(7, 0, 15, "device-a");
+        p1.building = Some("Memorial Union".into());
+        let mut p2 = p(7, 0, 35, "device-a");
+        p2.building = Some("College Library".into());
+        store.add_many(&[p1, p2]).await.unwrap();
+        let start = Utc.with_ymd_and_hms(2026, 11, 14, 7, 0, 0).unwrap();
+        let end = Utc.with_ymd_and_hms(2026, 11, 14, 8, 0, 0).unwrap();
+        for dataset in [Dataset::Raw, Dataset::Broad] {
+            let rows = store.query_dataset(dataset, start, end, None, 100).await.unwrap();
+            assert_eq!(rows.len(), 2);
+            assert_eq!(rows[0].3.as_deref(), Some("Memorial Union"));
+            assert_eq!(rows[1].3.as_deref(), Some("College Library"));
+        }
     }
 
     #[tokio::test]

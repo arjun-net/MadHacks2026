@@ -57,9 +57,9 @@ async fn broad_rows(
     pool: &sqlx::PgPool,
     device_id: &str,
     hour: DateTime<Utc>,
-) -> Result<Vec<(i64, f64, f64)>, sqlx::Error> {
-    sqlx::query_as::<_, (i64, f64, f64)>(
-        "SELECT id::bigint, latitude, longitude FROM public.location_events_broad \
+) -> Result<Vec<(i64, f64, f64, Option<String>)>, sqlx::Error> {
+    sqlx::query_as::<_, (i64, f64, f64, Option<String>)>(
+        "SELECT id::bigint, latitude, longitude, building FROM public.location_events_broad \
          WHERE device_id = $1 AND \"time\" = $2 ORDER BY id"
     )
     .bind(device_id)
@@ -95,10 +95,12 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
     let device_id = format!("hourly-api-test-{}-{}", std::process::id(), now.timestamp_micros());
     let lat = 43.0731;
     let lng = -89.4012;
+    let building = "Memorial Union";
     let payload = json!({
         "device_id": device_id,
         "lat": lat,
         "lng": lng,
+        "building": building,
         "timestamp": hour.to_rfc3339()
     });
 
@@ -128,10 +130,11 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
     let first_id = loop {
         let rows = broad_rows(&pool, &device_id, hour).await?;
-        if let Some(&(id, db_lat, db_lng)) = rows.first() {
-            assert_eq!((db_lat, db_lng), (lat, lng));
+        if let Some((id, db_lat, db_lng, db_building)) = rows.first() {
+            assert_eq!((*db_lat, *db_lng), (lat, lng));
+            assert_eq!(db_building.as_deref(), Some(building));
             println!("First PostgreSQL row confirmed: id={id} at {hour}");
-            break id;
+            break *id;
         }
         assert!(
             tokio::time::Instant::now() < deadline,
@@ -158,6 +161,7 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
             assert!(rows[0].0 > 0, "Broad id must be positive, never null");
             assert!(rows[1].0 > first_id, "Second broad id must increase");
             assert_eq!((rows[1].1, rows[1].2), (lat, lng));
+            assert_eq!(rows[1].3.as_deref(), Some(building));
             println!("Duplicate-hour append verified: ids={} and {}", rows[0].0, rows[1].0);
             break;
         }
@@ -185,11 +189,23 @@ async fn post_zero_minute_location_updates_broad_table() -> Result<(), Box<dyn E
         .get(&key)
         .and_then(Value::as_array)
         .ok_or("Broad heatmap did not contain the expected hourly timestamp")?;
-    let matching = rows.iter().filter(|p| p["lat"] == lat && p["lng"] == lng).count();
+    let matching = rows.iter().filter(|p| {
+        p["lat"] == lat && p["lng"] == lng && p["building"] == building
+    }).count();
     assert!(
         matching >= 2,
         "Broad heatmap must contain both appended points; found {matching}: {heatmap}"
     );
-    println!("GET /api/v1/heatmap/broad returned the inserted points. Test passed.");
+    // Confirm the original raw table also has the new building column.
+    let raw_buildings: Vec<(Option<String>,)> = sqlx::query_as(
+        "SELECT building FROM public.location_events WHERE device_id = $1 AND \"time\" = $2"
+    )
+    .bind(&device_id)
+    .bind(hour)
+    .fetch_all(&pool)
+    .await?;
+    assert!(raw_buildings.len() >= 2);
+    assert!(raw_buildings.iter().all(|(name,)| name.as_deref() == Some(building)));
+    println!("GET /api/v1/heatmap/broad returned both building-tagged points. Test passed.");
     Ok(())
 }
