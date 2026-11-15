@@ -164,12 +164,13 @@ final class ClusterAnnotationView: MKAnnotationView {
         ringTrack.strokeColor = paper.withAlphaComponent(0.85).cgColor
         ring.strokeColor = UIColor(level?.textColor ?? Theme.Colors.textTertiary).resolvedColor(with: traits).cgColor
 
-        let countFont = UIFont(name: FontName.sansBold, size: 14) ?? .systemFont(ofSize: 14, weight: .bold)
+        // The count in the signage face's numerals.
+        let countFont = UIFont(name: FontName.displayHeavy, size: 19) ?? .systemFont(ofSize: 15, weight: .bold)
         countLabel.font = UIFontMetrics(forTextStyle: .caption1).scaledFont(for: countFont, maximumPointSize: 17)
         countLabel.textColor = paper
         countLabel.text = "\(members.count)"
 
-        let font = UIFont(name: FontName.sansSemi, size: 11) ?? .systemFont(ofSize: 11, weight: .semibold)
+        let font = UIFont(name: FontName.textBold, size: 11.5) ?? .systemFont(ofSize: 11, weight: .semibold)
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         paragraph.lineHeightMultiple = 0.92

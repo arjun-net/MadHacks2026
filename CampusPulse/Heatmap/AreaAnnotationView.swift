@@ -188,7 +188,7 @@ final class AreaAnnotationView: MKAnnotationView {
         ringTrack.strokeColor = paper.withAlphaComponent(0.85).cgColor
         ring.strokeColor = UIColor(level?.textColor ?? Theme.Colors.textTertiary).resolvedColor(with: traits).cgColor
 
-        let font = UIFont(name: highlighted ? FontName.sansBold : FontName.sansSemi, size: highlighted ? 12 : 11)
+        let font = UIFont(name: FontName.textBold, size: highlighted ? 12.5 : 11.5)
             ?? .systemFont(ofSize: 11, weight: .semibold)
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center

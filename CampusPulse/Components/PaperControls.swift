@@ -98,9 +98,7 @@ struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.cpMicro)
-                .tracking(1.4)
-                .textCase(.uppercase)
+                .typeStyle(.micro)
                 .foregroundStyle(Theme.Colors.textSecondary)
                 .padding(.horizontal, Self.textInset)
                 .accessibilityAddTraits(.isHeader)

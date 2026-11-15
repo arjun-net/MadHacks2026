@@ -17,25 +17,24 @@ enum FontRegistrar {
             }
         }
         #if DEBUG
-        // The bundled Libre Franklin statics report their family as "Libre Franklin Thin".
-        for family in ["Playfair Display", "Libre Franklin Thin"] {
+        for family in ["Big Shoulders Display", "Atkinson Hyperlegible"] {
             log.debug("\(family): \(UIFont.fontNames(forFamilyName: family))")
         }
         #endif
     }
 
-    /// Navigation titles in the press faces: Playfair for large titles, Franklin for inline ones.
+    /// Navigation titles: the signage face for large titles, Atkinson for inline ones.
     static func styleNavigationBars() {
         let ink = UIColor(Theme.Colors.ink)
         let appearance = UINavigationBar.appearance()
-        if let large = UIFont(name: FontName.display, size: 34) {
+        if let large = UIFont(name: FontName.display, size: 40) {
             appearance.largeTitleTextAttributes = [
                 .font: UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: large),
                 .foregroundColor: ink,
-                .kern: -0.4,
+                .kern: 0.4,
             ]
         }
-        if let inline = UIFont(name: FontName.sansBold, size: 16) {
+        if let inline = UIFont(name: FontName.textBold, size: 16) {
             appearance.titleTextAttributes = [
                 .font: UIFontMetrics(forTextStyle: .headline).scaledFont(for: inline),
                 .foregroundColor: ink,

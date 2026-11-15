@@ -157,49 +157,49 @@ enum Theme {
 
 // MARK: - Typography
 //
-// Playfair Display (serif) for headlines and numbers, Libre Franklin for text.
-// Tracked uppercase Franklin ExtraBold for labels, badges, tabs and buttons.
+// Set like campus wayfinding rather than a newspaper:
+// - Big Shoulders Display, a condensed grotesque drawn for Chicago's civic signage, for the
+//   campus name, titles, section headings and the big numbers. Only at 18 pt and up; it's a
+//   display face.
+// - Atkinson Hyperlegible, drawn by the Braille Institute for telling letters apart at a glance,
+//   for everything you read: text, rows, labels, buttons.
+// Labels are sentence case and untracked; headings do the shouting, in size, not capitals.
 
 enum FontName {
-    static let display = "PlayfairDisplay-Black"
-    static let headline = "PlayfairDisplay-ExtraBold"
-    static let headlineItal = "PlayfairDisplay-ExtraBoldItalic"
-    static let serifBold = "PlayfairDisplay-Bold"
-    static let serifBoldItal = "PlayfairDisplay-BoldItalic"
-    // The bundled Libre Franklin statics report these PostScript names (see FontRegistrar).
-    static let sans = "LibreFranklinThin-Regular"
-    static let sansMedium = "LibreFranklinThin-Medium"
-    static let sansSemi = "LibreFranklinThin-SemiBold"
-    static let sansBold = "LibreFranklinThin-Bold"
-    static let sansHeavy = "LibreFranklinThin-ExtraBold"
+    static let display = "BigShouldersDisplay-Black"
+    static let displayHeavy = "BigShouldersDisplay-ExtraBold"
+    static let displayBold = "BigShouldersDisplay-Bold"
+    static let text = "AtkinsonHyperlegible-Regular"
+    static let textBold = "AtkinsonHyperlegible-Bold"
+    static let textItalic = "AtkinsonHyperlegible-Italic"
 }
 
 extension Font {
-    // Serif (Playfair Display)
-    static let cpMasthead = Font.custom(FontName.display, size: 32, relativeTo: .largeTitle)
-    static let cpLargeTitle = Font.custom(FontName.display, size: 34, relativeTo: .largeTitle)
-    static let cpTitle = Font.custom(FontName.headline, size: 24, relativeTo: .title)
-    static let cpTitleItalic = Font.custom(FontName.headlineItal, size: 24, relativeTo: .title)
-    static let cpTitle3 = Font.custom(FontName.headline, size: 19, relativeTo: .title3)
-    static let cpRank = Font.custom(FontName.headlineItal, size: 24, relativeTo: .title2)
-    static let cpMetric = Font.custom(FontName.display, size: 30, relativeTo: .title).monospacedDigit()
-    static let cpMetricSmall = Font.custom(FontName.display, size: 22, relativeTo: .title3).monospacedDigit()
+    // Display (Big Shoulders Display): a 1.25 step scale, 20 → 42.
+    static let cpMasthead = Font.custom(FontName.display, size: 42, relativeTo: .largeTitle)
+    static let cpLargeTitle = Font.custom(FontName.display, size: 40, relativeTo: .largeTitle)
+    static let cpTitle = Font.custom(FontName.displayHeavy, size: 31, relativeTo: .title)
+    static let cpTitle3 = Font.custom(FontName.displayHeavy, size: 24, relativeTo: .title3)
+    static let cpSection = Font.custom(FontName.displayHeavy, size: 21, relativeTo: .title3)
+    static let cpRank = Font.custom(FontName.display, size: 30, relativeTo: .title2)
+    static let cpMetric = Font.custom(FontName.displayHeavy, size: 44, relativeTo: .title).monospacedDigit()
+    static let cpMetricSmall = Font.custom(FontName.displayHeavy, size: 30, relativeTo: .title3).monospacedDigit()
 
-    // Sans (Libre Franklin)
-    static let cpHeadline = Font.custom(FontName.sansBold, size: 16, relativeTo: .headline)
-    static let cpRowTitle = Font.custom(FontName.sansBold, size: 15, relativeTo: .body)
-    static let cpBody = Font.custom(FontName.sans, size: 15, relativeTo: .body)
-    static let cpSubheadline = Font.custom(FontName.sansMedium, size: 14, relativeTo: .subheadline)
-    static let cpCaption = Font.custom(FontName.sansMedium, size: 12.5, relativeTo: .caption)
-    static let cpMicro = Font.custom(FontName.sansHeavy, size: 10.5, relativeTo: .caption2)
-    static let cpBadge = Font.custom(FontName.sansHeavy, size: 9.5, relativeTo: .caption2)
-    static let cpTab = Font.custom(FontName.sansHeavy, size: 9.5, relativeTo: .caption2)
-    static let cpButton = Font.custom(FontName.sansBold, size: 12, relativeTo: .callout)
+    // Text (Atkinson Hyperlegible): regular and bold only, 11 → 16.
+    static let cpHeadline = Font.custom(FontName.textBold, size: 16, relativeTo: .headline)
+    static let cpRowTitle = Font.custom(FontName.textBold, size: 15, relativeTo: .body)
+    static let cpBody = Font.custom(FontName.text, size: 15, relativeTo: .body)
+    static let cpSubheadline = Font.custom(FontName.text, size: 14, relativeTo: .subheadline)
+    static let cpCaption = Font.custom(FontName.text, size: 12.5, relativeTo: .caption)
+    static let cpMicro = Font.custom(FontName.textBold, size: 12, relativeTo: .caption)
+    static let cpBadge = Font.custom(FontName.textBold, size: 11, relativeTo: .caption2)
+    static let cpTab = Font.custom(FontName.textBold, size: 11, relativeTo: .caption2)
+    static let cpButton = Font.custom(FontName.textBold, size: 14, relativeTo: .callout)
 }
 
 /// Font + tracking pairs. Use `.typeStyle(.title)` so tracking stays consistent.
 enum TypeStyle {
-    case masthead, largeTitle, title, title3, rank, headline, rowTitle, body, subheadline, caption
+    case masthead, largeTitle, title, title3, section, rank, headline, rowTitle, body, subheadline, caption
     case micro, badge, tab, button, metric, metricSmall
 
     var font: Font {
@@ -208,6 +208,7 @@ enum TypeStyle {
         case .largeTitle: .cpLargeTitle
         case .title: .cpTitle
         case .title3: .cpTitle3
+        case .section: .cpSection
         case .rank: .cpRank
         case .headline: .cpHeadline
         case .rowTitle: .cpRowTitle
@@ -223,28 +224,24 @@ enum TypeStyle {
         }
     }
 
+    /// The condensed display face opens up a touch as it gets big; text stays as drawn.
     var tracking: CGFloat {
         switch self {
-        case .masthead, .largeTitle: -0.4
-        case .title, .title3: -0.2
-        case .micro, .badge, .tab: 1.6
-        case .button: 1.4
+        case .masthead, .largeTitle: 0.4
+        case .metric: 0.3
+        case .title, .title3, .section, .rank, .metricSmall: 0.2
         default: 0
         }
     }
 
-    /// Labels in these styles are always set in capitals.
-    var isUppercase: Bool {
-        switch self {
-        case .micro, .badge, .tab, .button: true
-        default: false
-        }
-    }
+    /// Nothing is forced into capitals any more.
+    var isUppercase: Bool { false }
 
     var lineSpacing: CGFloat {
         switch self {
-        case .body, .subheadline: 3
-        case .caption: 2
+        case .body: 5
+        case .subheadline: 4
+        case .caption: 3
         default: 0
         }
     }

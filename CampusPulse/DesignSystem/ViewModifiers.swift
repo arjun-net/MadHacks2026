@@ -76,11 +76,10 @@ extension View {
     }
 
     /// Small, tracked, uppercase section label.
+    /// Section headings: the signage face, sentence case.
     func sectionLabelStyle() -> some View {
         self
-            .font(.cpMicro)
-            .tracking(1.6)
-            .textCase(.uppercase)
+            .typeStyle(.section)
             .foregroundStyle(Theme.Colors.ink)
     }
 }
@@ -107,9 +106,7 @@ struct SectionHeader: View {
                         }
                         Text(trailing)
                     }
-                    .font(.cpMicro)
-                    .tracking(1.6)
-                    .textCase(.uppercase)
+                    .typeStyle(.micro)
                     .foregroundStyle(Theme.Colors.accent)
                 }
             }
