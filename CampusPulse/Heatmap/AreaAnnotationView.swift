@@ -115,8 +115,9 @@ final class AreaAnnotationView: MKAnnotationView {
         dot.layer.borderWidth = 0.5
         dot.layer.borderColor = ink.withAlphaComponent(0.35).cgColor
 
-        plate.backgroundColor = highlighted ? ink : paper
-        plate.layer.borderColor = ink.cgColor
+        // Unselected labels let the map and heat show through; the selected one stays solid.
+        plate.backgroundColor = highlighted ? ink : paper.withAlphaComponent(0.4)
+        plate.layer.borderColor = highlighted ? ink.cgColor : ink.withAlphaComponent(0.2).cgColor
         plate.layer.shadowColor = UIColor(Theme.Colors.hardShadow).resolvedColor(with: traits).cgColor
         plate.layer.shadowOpacity = highlighted ? 1 : 0
     }
