@@ -105,6 +105,12 @@ enum SampleActivityData {
         return clamp(baseline(of: area, campus: campus, weekday: weekday, hour: h) * wobble)
     }
 
+    /// Usual activity (0…1) for an area at a moment, from its time-of-day and weekday curves.
+    static func expectedIntensity(of area: CampusArea, campus: Campus, at date: Date) -> Double {
+        let weekday = Calendar.current.component(.weekday, from: date)
+        return clamp(baseline(of: area, campus: campus, weekday: weekday, hour: date.fractionalHour) * meanWobble)
+    }
+
     /// Expected activity before any random variation.
     private static func baseline(of area: CampusArea, campus: Campus, weekday: Int, hour: Double) -> Double {
         area.popularity * area.category.demand(atHour: hour) * weekdayFactor(area.category, weekday: weekday) * campus.participationScale

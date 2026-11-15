@@ -93,17 +93,34 @@ final class CampusStore {
         let currentSlot = ActivityAggregator.slotStart(now)
         let windowStart = currentSlot.addingTimeInterval(-Double(ActivityAggregator.historyLength) * ActivityAggregator.slot)
         do {
-            let raw = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
+            var raw: [Date: [Coordinate]]
+            do {
+                raw = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
+            } catch where AppConfig.simulatesLiveData {
+                // With simulated data on, the map still works when the server is unreachable.
+                Self.log.error("Live heatmap failed, showing simulated data only: \(error.localizedDescription, privacy: .public)")
+                raw = [:]
+            }
             guard requested.id == campus.id else { return }
-            let tallies = await Task.detached { ActivityAggregator.tally(raw, campus: requested) }.value
+            // Simulated crowds have their own fixed building sizes, so levels don't shift when history loads.
+            let capacities: Capacities = AppConfig.simulatesLiveData
+                ? .fallback(for: requested, perPopularity: AppConfig.simulatedPeakHeadcount)
+                : history?.capacities ?? .fallback(for: requested)
+            if AppConfig.simulatesLiveData {
+                let slots = (0...ActivityAggregator.historyLength).map { windowStart.addingTimeInterval(Double($0) * ActivityAggregator.slot) }
+                let simulated = await Task.detached { SimulatedLiveData.points(for: requested, slots: slots, capacities: capacities) }.value
+                raw.merge(simulated) { real, fake in real + fake }
+            }
+            let tallies = await Task.detached { [raw] in ActivityAggregator.tally(raw, campus: requested) }.value
             // Live means a slot with readings in the last few minutes.
             let frame = tallies.keys.filter { $0 >= now.addingTimeInterval(-AppConfig.liveFreshness) }.max()
             let next = ActivityAggregator.snapshot(
                 campus: requested,
                 tallies: tallies,
                 frame: frame,
-                capacities: history?.capacities ?? .fallback(for: requested),
-                generatedAt: frame ?? now
+                capacities: capacities,
+                // Stamped with the fetch time so every refresh redraws the map.
+                generatedAt: now
             )
             snapshot = next
             state = next.isEmpty ? .empty : .loaded

@@ -15,9 +15,9 @@ struct Capacities: Sendable {
     var area: [String: Double]
     var campus: Double
 
-    /// Used before any history has loaded.
-    static func fallback(for campus: Campus) -> Capacities {
-        let area = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, max(10, $0.popularity * AppConfig.fallbackAreaCapacity)) })
+    /// Scaled by each area's popularity. Used before history has loaded, and for simulated data.
+    static func fallback(for campus: Campus, perPopularity: Double = AppConfig.fallbackAreaCapacity) -> Capacities {
+        let area = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, max(10, $0.popularity * perPopularity)) })
         return Capacities(area: area, campus: max(30, area.values.reduce(0, +)))
     }
 
@@ -118,7 +118,7 @@ enum ActivityAggregator {
             for (column, count) in columns where count >= AppConfig.privacyThreshold {
                 cells.append(DensityCell(
                     coordinate: origin.offset(eastMeters: (Double(column) + 0.5) * size, northMeters: (Double(row) + 0.5) * size),
-                    weight: count
+                    weight: Int((Double(count) * AppConfig.heatWeightPerPerson).rounded())
                 ))
             }
         }
