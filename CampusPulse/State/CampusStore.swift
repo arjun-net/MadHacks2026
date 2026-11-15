@@ -6,6 +6,9 @@ import os
 /// - `snapshot`: live, from the last few 2-minute slots (the map).
 /// - `historySnapshot` / `history`: the server's stored day, replayed at the current time of day
 ///   (the Activity tab's trends and the area detail screens).
+/// - Every 15 seconds the server's people-per-building counts (`/buildings/counts`) are pulled.
+///   For the campus's tracked buildings they set the current number and heat on the map, and the
+///   current reading on the Activity tab.
 @Observable
 @MainActor
 final class CampusStore {
@@ -27,7 +30,15 @@ final class CampusStore {
 
     @ObservationIgnored let preferences: AppPreferences
     @ObservationIgnored private let api = HeatmapAPI()
+    @ObservationIgnored private let countsAPI = BuildingCountsAPI()
     @ObservationIgnored private var loopTask: Task<Void, Never>?
+    @ObservationIgnored private var countsTask: Task<Void, Never>?
+    /// The last live window fetched, kept so new building counts can be applied without refetching.
+    @ObservationIgnored private var live: LiveWindow?
+    /// The latest building counts for this campus, by area ID.
+    @ObservationIgnored private var buildingCounts: (counts: [String: Int], fetchedAt: Date)?
+    /// Bumped per rebuild, so a slower, older rebuild can't overwrite a newer one.
+    @ObservationIgnored private var rebuildGeneration = 0
     @ObservationIgnored private var historyTask: Task<Void, Never>?
     @ObservationIgnored private var isInForeground = true
     /// Called after each live refresh (used for busy/quiet alerts).
@@ -51,14 +62,32 @@ final class CampusStore {
     }
 
     func start() {
-        guard loopTask == nil, !isPreview else { return }
-        loopTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await self?.refresh()
-                let interval = self?.isInForeground == false ? AppConfig.updateInterval : AppConfig.liveRefreshInterval
-                try? await Task.sleep(for: .seconds(interval))
+        guard !isPreview else { return }
+        if loopTask == nil {
+            loopTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.refresh()
+                    let interval = self?.isInForeground == false ? AppConfig.updateInterval : AppConfig.liveRefreshInterval
+                    try? await Task.sleep(for: .seconds(interval))
+                }
             }
         }
+        // Only while the app is open: in the background nobody is looking at the counts.
+        if countsTask == nil, isInForeground {
+            countsTask = Task { [weak self] in
+                while !Task.isCancelled {
+                    await self?.refreshBuildingCounts()
+                    try? await Task.sleep(for: .seconds(AppConfig.buildingCountsInterval))
+                }
+            }
+        }
+    }
+
+    private func stopLoops() {
+        loopTask?.cancel()
+        loopTask = nil
+        countsTask?.cancel()
+        countsTask = nil
     }
 
     /// Refreshes right away on returning to the app. In the background the loop stops,
@@ -67,8 +96,7 @@ final class CampusStore {
     func setForeground(_ foreground: Bool) {
         guard !isPreview, foreground != isInForeground else { return }
         isInForeground = foreground
-        loopTask?.cancel()
-        loopTask = nil
+        stopLoops()
         isRefreshing = false
         if foreground || preferences.busyAreaAlerts || preferences.quietSpotAlerts {
             start()
@@ -104,13 +132,23 @@ final class CampusStore {
         history = nil
         historyTask?.cancel()
         historyTask = nil
+        live = nil
+        buildingCounts = nil
         isRefreshing = false
-        loopTask?.cancel()
-        loopTask = nil
+        stopLoops()
         start()
     }
 
     // MARK: - Live
+
+    /// One fetched live window: real readings from the server and simulated ones, by slot.
+    private struct LiveWindow {
+        let campus: Campus
+        let windowStart: Date
+        let real: [Date: [Reading]]
+        let simulated: [Date: [Reading]]
+        let capacities: Capacities
+    }
 
     private func refreshLive() async {
         let requested = campus
@@ -119,42 +157,86 @@ final class CampusStore {
         let currentSlot = ActivityAggregator.slotStart(now)
         let windowStart = currentSlot.addingTimeInterval(-Double(ActivityAggregator.historyLength) * ActivityAggregator.slot)
         do {
-            var raw: [Date: [Reading]]
+            let real: [Date: [Reading]]
             do {
-                raw = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
+                real = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
             } catch where AppConfig.simulatesLiveData {
                 // With simulated data on, the map still works when the server is unreachable.
                 Self.log.error("Live heatmap failed, showing simulated data only: \(error.localizedDescription, privacy: .public)")
-                raw = [:]
+                real = [:]
             }
             guard requested.id == campus.id else { return }
             // Simulated crowds have their own fixed building sizes, so levels don't shift when history loads.
             let capacities: Capacities = AppConfig.simulatesLiveData
                 ? .fallback(for: requested, perPopularity: AppConfig.simulatedPeakHeadcount)
                 : history?.capacities ?? .fallback(for: requested)
+            var simulated: [Date: [Reading]] = [:]
             if AppConfig.simulatesLiveData {
                 let slots = (0...ActivityAggregator.historyLength).map { windowStart.addingTimeInterval(Double($0) * ActivityAggregator.slot) }
-                let simulated = await Task.detached { SimulatedLiveData.points(for: requested, slots: slots, capacities: capacities) }.value
-                raw.merge(simulated) { real, fake in real + fake }
+                simulated = await Task.detached { SimulatedLiveData.points(for: requested, slots: slots, capacities: capacities) }.value
             }
-            let tallies = await Task.detached { [raw] in ActivityAggregator.tally(raw, campus: requested) }.value
-            // Live means a slot with readings in the last few minutes.
-            let frame = tallies.keys.filter { $0 >= now.addingTimeInterval(-AppConfig.liveFreshness) }.max()
-            let next = ActivityAggregator.snapshot(
-                campus: requested,
-                tallies: tallies,
-                frame: frame,
-                capacities: capacities,
-                // Stamped with the fetch time so every refresh redraws the map.
-                generatedAt: now
-            )
-            snapshot = next
-            state = next.isEmpty ? .empty : .loaded
-            onLiveUpdate?(next)
+            guard requested.id == campus.id else { return }
+            live = LiveWindow(campus: requested, windowStart: windowStart, real: real, simulated: simulated, capacities: capacities)
+            await rebuildLive(notify: true)
         } catch {
             Self.log.error("Live heatmap failed: \(error.localizedDescription, privacy: .public)")
             if snapshot == nil { state = .failed(Self.message(for: error)) }
         }
+    }
+
+    // MARK: - Building counts
+
+    private func refreshBuildingCounts() async {
+        let requested = campus
+        do {
+            let counts = try await countsAPI.counts()
+            guard requested.id == campus.id else { return }
+            let mapped = ActivityAggregator.areaCounts(fromBuildingCounts: counts.byBuilding, campus: requested)
+            buildingCounts = (mapped, .now)
+            await rebuildLive(notify: false)
+        } catch {
+            // Keep showing the last counts until they go stale.
+            Self.log.error("Building counts failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Building counts recent enough to show, or nil.
+    private var freshBuildingCounts: [String: Int]? {
+        guard let buildingCounts, Date.now.timeIntervalSince(buildingCounts.fetchedAt) <= AppConfig.buildingCountsFreshness,
+              !buildingCounts.counts.isEmpty else { return nil }
+        return buildingCounts.counts
+    }
+
+    /// Builds the live snapshot from the last fetched window, with the latest building counts
+    /// as the current numbers for their buildings, then refreshes the Activity tab's reading.
+    private func rebuildLive(notify: Bool) async {
+        guard let live, live.campus.id == campus.id else { return }
+        rebuildGeneration += 1
+        let generation = rebuildGeneration
+        let now = Date.now
+        let counts = freshBuildingCounts ?? [:]
+        let tallies = await Task.detached { () -> [Date: SlotTally] in
+            var raw = ActivityAggregator.applying(
+                buildingCounts: counts, to: live.real, at: ActivityAggregator.slotStart(now), campus: live.campus
+            )
+            raw.merge(live.simulated) { real, fake in real + fake }
+            return ActivityAggregator.tally(raw, campus: live.campus)
+        }.value
+        guard generation == rebuildGeneration, live.campus.id == campus.id else { return }
+        // Live means a slot with readings in the last few minutes.
+        let frame = tallies.keys.filter { $0 >= now.addingTimeInterval(-AppConfig.liveFreshness) }.max()
+        let next = ActivityAggregator.snapshot(
+            campus: live.campus,
+            tallies: tallies,
+            frame: frame,
+            capacities: live.capacities,
+            // Stamped with the build time so every update redraws the map.
+            generatedAt: now
+        )
+        snapshot = next
+        state = next.isEmpty ? .empty : .loaded
+        if let history { updateHistorySnapshot(from: history) }
+        if notify { onLiveUpdate?(next) }
     }
 
     // MARK: - History
@@ -185,7 +267,10 @@ final class CampusStore {
     }
 
     private func updateHistorySnapshot(from day: HistoryDay) {
-        let next = day.snapshot(for: campus)
+        var next = day.snapshot(for: campus)
+        if let counted = freshBuildingCounts, let live = snapshot {
+            next = next.withCurrentReadings(from: live, for: Set(counted.keys))
+        }
         historySnapshot = next
         historyState = next.isEmpty ? .empty : .loaded
     }

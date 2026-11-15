@@ -33,6 +33,72 @@ struct AggregationTests {
         #expect(campus.areas.count == 20)
     }
 
+    /// `/buildings/counts` lists every building it knows; only this campus's 20 are kept.
+    @Test func buildingCountsKeepOnlyTrackedBuildings() {
+        let counts = ActivityAggregator.areaCounts(fromBuildingCounts: [
+            "Morgridge Hall (College of Computing & AI)": 7,
+            "College Library (Helen C. White Hall)": 0,
+            "Memorial Union": 12,
+        ], campus: campus)
+        #expect(counts == ["morgridge_hall": 7, "college_library": 0])
+    }
+
+    /// Server counts replace a building's own readings in the current slot; others are untouched.
+    @Test func buildingCountsSetTheCurrentNumberAndHeat() {
+        let slot = Date(timeIntervalSince1970: 1_800_000_000)
+        let earlier = slot.addingTimeInterval(-ActivityAggregator.slot)
+        let morgridge = campus.area(withID: "morgridge_hall")!
+        let real: [Date: [Reading]] = [
+            slot: [
+                Reading(coordinate: morgridge.coordinate, building: morgridge.name),
+                Reading(coordinate: library.coordinate, building: library.name),
+                Reading(coordinate: library.coordinate, building: library.name),
+                Reading(coordinate: Coordinate(43.07, -89.40)),
+            ],
+            earlier: [Reading(coordinate: morgridge.coordinate, building: morgridge.name)],
+        ]
+
+        let raw = ActivityAggregator.applying(
+            buildingCounts: ["morgridge_hall": 6, "college_library": 0], to: real, at: slot, campus: campus
+        )
+        let tally = ActivityAggregator.tally(raw, campus: campus)
+
+        #expect(tally[slot]?.areaCounts == ["morgridge_hall": 6])
+        // Six at Morgridge plus the untagged reading.
+        #expect(tally[slot]?.total == 7)
+        // Earlier slots keep their readings for the trend.
+        #expect(tally[earlier]?.areaCounts == ["morgridge_hall": 1])
+        // Six people at one building clears the privacy cutoff, so it shows as heat.
+        let cells = ActivityAggregator.cells(from: tally[slot]!.points, around: campus.center)
+        #expect(cells.count == 1)
+    }
+
+    /// Zero counts still make the current slot the live one, so buildings drop to zero.
+    @Test func zeroBuildingCountsStillMakeALiveSlot() {
+        let slot = Date(timeIntervalSince1970: 1_800_000_000)
+        let raw = ActivityAggregator.applying(buildingCounts: ["morgridge_hall": 0], to: [:], at: slot, campus: campus)
+        #expect(raw[slot] == [])
+    }
+
+    @Test func activityTabTakesTheLiveReadingForCountedBuildings() {
+        let frame = ActivityAggregator.slotStart(Date(timeIntervalSince1970: 1_800_000_000))
+        let replayReadings = Array(repeating: Reading(coordinate: library.coordinate, building: library.name), count: 40)
+        let replay = ActivityAggregator.snapshot(
+            campus: campus, tallies: ActivityAggregator.tally([frame: replayReadings], campus: campus), frame: frame,
+            capacities: .fallback(for: campus), generatedAt: frame
+        )
+        let live = ActivityAggregator.snapshot(
+            campus: campus, tallies: ActivityAggregator.tally([frame: []], campus: campus), frame: frame,
+            capacities: .fallback(for: campus), generatedAt: frame
+        )
+
+        let merged = replay.withCurrentReadings(from: live, for: ["college_library"])
+
+        #expect(merged.activity(for: "college_library")?.intensity == 0)
+        #expect(merged.activity(for: "college_library")?.estimatedCount == nil)
+        #expect(merged.activity(for: "college_library")?.history.count == ActivityAggregator.historyLength)
+    }
+
     @Test func cellsBelowThePrivacyThresholdAreDropped() {
         let threshold = AppConfig.privacyThreshold
         let crowd = Array(repeating: library.coordinate, count: threshold)

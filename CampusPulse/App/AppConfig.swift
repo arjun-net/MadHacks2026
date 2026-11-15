@@ -22,6 +22,12 @@ enum AppConfig {
     /// How often the live map re-queries the server.
     static let liveRefreshInterval: TimeInterval = 30
 
+    /// How often the people-per-building counts are pulled (`/buildings/counts`) while the app is open.
+    static let buildingCountsInterval: TimeInterval = 15
+
+    /// Building counts older than this are ignored (the server counts over a 2-minute window).
+    static let buildingCountsFreshness: TimeInterval = 60
+
     /// Mix fake readings, generated on the device, into the live map so it has a crowd to show.
     /// They're never uploaded. Set to false to show only what real phones send.
     static let simulatesLiveData = true

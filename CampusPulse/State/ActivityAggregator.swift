@@ -54,6 +54,36 @@ enum ActivityAggregator {
         }
     }
 
+    /// The server's per-building counts for this campus's buildings, keyed by area ID.
+    /// Buildings the campus doesn't track are left out.
+    static func areaCounts(fromBuildingCounts byBuilding: [String: Int], campus: Campus) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for (building, count) in byBuilding {
+            if let id = campus.areaID(forBuilding: building) { counts[id, default: 0] += max(0, count) }
+        }
+        return counts
+    }
+
+    /// Makes the server's building counts the truth for `slot`: each counted building's own
+    /// readings in that slot are swapped for `count` readings at the building. Those then
+    /// drive both the building's number and its heat (still under the privacy cutoff).
+    /// Pass real readings only; simulated ones are added afterwards.
+    static func applying(buildingCounts: [String: Int], to slots: [Date: [Reading]], at slot: Date, campus: Campus) -> [Date: [Reading]] {
+        guard !buildingCounts.isEmpty else { return slots }
+        var result = slots
+        var current = (result[slot] ?? []).filter { reading in
+            guard let id = reading.building.flatMap(campus.areaID(forBuilding:)) else { return true }
+            return buildingCounts[id] == nil
+        }
+        for (id, count) in buildingCounts where count > 0 {
+            guard let area = campus.area(withID: id) else { continue }
+            current += Array(repeating: Reading(coordinate: area.coordinate, building: area.id), count: count)
+        }
+        // Present even when empty, so this slot is the live frame and zero counts show as zero.
+        result[slot] = current
+        return result
+    }
+
     /// Snapshot for `frame`, with the 12 slots up to it as the trend.
     /// A nil frame (no recent readings) produces an empty snapshot.
     static func snapshot(
