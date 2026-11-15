@@ -3,6 +3,7 @@ import SwiftUI
 struct MapScreen: View {
     @Bindable var viewModel: MapViewModel
     var onOpenSharing: () -> Void
+    var onOpenAreaDetails: (String) -> Void = { _ in }
 
     var body: some View {
         ZStack {
@@ -42,7 +43,11 @@ struct MapScreen: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     if let focused = viewModel.selectedActivity {
-                        AreaFocusCard(activity: focused) { viewModel.select(areaID: nil) }
+                        AreaFocusCard(
+                            activity: focused,
+                            onClose: { viewModel.select(areaID: nil) },
+                            onOpenDetails: { onOpenAreaDetails(focused.id) }
+                        )
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                             .id(focused.id)
                     } else if viewModel.isHeatmapVisible, viewModel.snapshot?.isEmpty == false {

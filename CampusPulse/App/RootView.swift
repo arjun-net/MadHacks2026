@@ -25,7 +25,11 @@ struct RootView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             // The map stays mounted so its camera and heatmap survive tab switches.
-            MapScreen(viewModel: mapViewModel, onOpenSharing: { isSharingSheetPresented = true })
+            MapScreen(
+                viewModel: mapViewModel,
+                onOpenSharing: { isSharingSheetPresented = true },
+                onOpenAreaDetails: openAreaDetails
+            )
                 .accessibilityHidden(selectedTab != .map)
 
             if selectedTab == .activity {
@@ -79,6 +83,11 @@ struct RootView: View {
         default: break
         }
         #endif
+    }
+
+    private func openAreaDetails(_ areaID: String) {
+        activityViewModel.path = [AreaRoute(areaID: areaID)]
+        withAnimation(Theme.Motion.snappy) { selectedTab = .activity }
     }
 
     private func showOnMap(_ areaID: String) {

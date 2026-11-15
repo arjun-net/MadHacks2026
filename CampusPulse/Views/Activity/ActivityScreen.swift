@@ -6,7 +6,7 @@ struct ActivityScreen: View {
     var onShowOnMap: (String) -> Void = { _ in }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $viewModel.path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     header

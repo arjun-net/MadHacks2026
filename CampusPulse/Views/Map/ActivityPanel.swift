@@ -220,6 +220,7 @@ struct ActivityPanel: View {
 struct AreaFocusCard: View {
     let activity: AreaActivity
     var onClose: () -> Void
+    var onOpenDetails: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -266,6 +267,27 @@ struct AreaFocusCard: View {
             }
 
             ActivityBar(intensity: activity.intensity, height: 6)
+
+            if let onOpenDetails {
+                Button(action: onOpenDetails) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.bar.xaxis")
+                            .font(.system(size: 12.5, weight: .semibold))
+                        Text("Busy times & history")
+                            .font(.system(size: 14, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundStyle(Theme.Colors.textPrimary)
+                    .padding(.horizontal, 14)
+                    .frame(height: 42)
+                    .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(RowButtonStyle())
+                .accessibilityHint("Opens \(activity.area.name) on the Activity tab")
+            }
         }
         .padding(16)
         .glass(cornerRadius: Theme.Radius.lg, tint: activity.level.color)

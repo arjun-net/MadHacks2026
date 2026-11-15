@@ -187,7 +187,7 @@ struct HeatLegend: View {
         .padding(.vertical, 8)
         .glassCapsule()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Heatmap legend: blue is quiet, red is packed")
+        .accessibilityLabel("Heatmap legend: purple is quiet, red is packed")
     }
 }
 

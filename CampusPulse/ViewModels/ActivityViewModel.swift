@@ -92,6 +92,9 @@ final class ActivityViewModel {
     private var selectedFilter: AreaFilter = .all
 
     /// Falls back to `.all` when the selected filter has no areas on the current campus.
+    /// Navigation stack for the Activity tab, so other tabs can open an area's detail.
+    var path: [AreaRoute] = []
+
     var filter: AreaFilter {
         get { availableFilters.contains(selectedFilter) ? selectedFilter : .all }
         set { selectedFilter = newValue }
