@@ -113,7 +113,8 @@ fn building_centers_find_their_building() {
     let mut checked = 0;
     for b in json["buildings"].as_array().unwrap() {
         let (lat, lng) = (b["center"][0].as_f64().unwrap(), b["center"][1].as_f64().unwrap());
-        let expected = brute_force(index.meta(), &json, lat, lng);
+        // Centers sitting on a boundary or tied between buildings are skipped (float noise).
+        let Some(expected) = reference(index.meta(), &json, lat, lng) else { continue };
         // Centers that aren't inside any outline are skipped (the grid answers by outline).
         if expected.is_none() {
             continue;

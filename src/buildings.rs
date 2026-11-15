@@ -53,7 +53,7 @@ impl Default for BuildingsConfig {
     fn default() -> Self {
         let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("assets");
         Self {
-            source: assets.join("buildings.json"),
+            source: assets.join("buildings_all.json"),
             grid_dir: assets,
             resolution_m: 2.0,
             margin_m: 10.0,
