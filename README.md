@@ -24,7 +24,7 @@ Heatmap response: `{"start","end","count","data":{"<timestamp>":[{"lat","lng"},.
 Writes are buffered and flushed every 5s or 100 points, so a heatmap read right after a POST may not include it yet.
 
 ## Building lookup
-Every ping is tagged with the campus building it falls in, saved in the `building` column on the same row (`NULL` when it's not in a building) and returned as `building` on heatmap points. A `building` sent by the client is kept only when the grid finds none.
+Every ping is tagged with the campus building it falls in, saved in the `building` column (its snake_case `id` from the JSON, e.g. `morgridge_hall`, not the display name) on the same row (`NULL` when it's not in a building) and returned as `building` on heatmap points. A `building` sent by the client is kept only when the grid finds none.
 
 - **Which buildings:** `assets/buildings_all.json` holds all 87 campus buildings and is the default source. `assets/buildings.json` is the earlier 20-building set with refined OpenStreetMap footprints; use it with `BUILDINGS_JSON=assets/buildings.json`. After changing the source, rebuild the grid with `cargo run --release --bin build_building_grid`.
 - **How:** the outlines are rasterized once into a square N × N grid of 2 m cells (1480 × 1480 now). Each cell stores a `u16` building id (0 = none, 1–87 = the buildings in file order), decided by point-in-polygon at the cell center in a flat local metric projection. A lookup is a bounds check, two multiplies and one array read: O(1), about 4 ns, about 3 MB in memory. No external API is called.

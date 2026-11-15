@@ -13,7 +13,7 @@ use madhacks_backend::store::{Dataset, Store};
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
-const MORGRIDGE: &str = "Morgridge Hall (College of Computing & AI)";
+const MORGRIDGE: &str = "morgridge_hall";
 
 fn source() -> Value {
     serde_json::from_slice(&std::fs::read(BuildingsConfig::default().source).unwrap()).unwrap()
@@ -39,7 +39,7 @@ fn reference(meta: &GridMeta, json: &Value, lat: f64, lng: f64) -> Option<Option
         let points: Vec<(f64, f64)> = b["perimeter_polygon"].as_array().unwrap().iter()
             .map(|v| project(v[0].as_f64().unwrap(), v[1].as_f64().unwrap()))
             .collect();
-        let name = b["name"].as_str().unwrap().to_string();
+        let name = b["id"].as_str().unwrap().to_string();
         let mut inside = false;
         let mut distance = f64::MAX;
         let mut j = points.len() - 1;
@@ -91,11 +91,11 @@ fn committed_grid_matches_buildings_json_and_loads_every_building() {
     assert_eq!(meta.source_checksum, checksum(&std::fs::read(BuildingsConfig::default().source).unwrap()));
     assert!(meta.skipped.is_empty(), "{:?}", meta.skipped);
     assert_eq!(meta.buildings.len(), buildings.len());
-    // Ids follow the file order and map to the exact names.
+    // Ids follow the file order and map to the building id slugs.
     for (i, b) in buildings.iter().enumerate() {
         let id = (i + 1) as u16;
         assert_eq!(meta.buildings[i].key, b["id"].as_str().unwrap());
-        assert_eq!(index.name_for_id(id).map(|n| n.as_ref()), b["name"].as_str());
+        assert_eq!(index.name_for_id(id).map(|n| n.as_ref()), b["id"].as_str());
     }
     assert_eq!(index.name_for_id(0), None);
     assert_eq!(index.name_for_id(meta.buildings.len() as u16 + 1), None);
@@ -153,7 +153,7 @@ fn grid_agrees_with_brute_force_at_every_sampled_cell() {
 fn morgridge_hall_pings_and_a_little_outside_find_it() {
     let index = committed_index();
     let name = |lat: f64, lng: f64| index.building_name(lat, lng).map(|n| n.to_string());
-    let hall = Some("Morgridge Hall (College of Computing & AI)".to_string());
+    let hall = Some("morgridge_hall".to_string());
     for (lat, lng) in [(43.073091, -89.406866), (43.073141, -89.407074), (43.073145, -89.407038), (43.072922, -89.407105)] {
         assert_eq!(name(lat, lng), hall, "{lat},{lng}");
     }

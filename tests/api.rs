@@ -123,7 +123,7 @@ async fn building_counts_last_two_minutes() {
     buffer.flush().await;
     let (st, body) = send(&app, get("/api/v1/buildings/counts")).await;
     assert_eq!(st, StatusCode::OK);
-    assert_eq!(body["counts"]["Morgridge Hall (College of Computing & AI)"], 2);
-    assert_eq!(body["counts"]["Chazen Museum of Art"], 1);
+    assert_eq!(body["counts"]["morgridge_hall"], 2);
+    assert_eq!(body["counts"]["chazen_museum"], 1);
     assert_eq!(body["total"], 3);
 }

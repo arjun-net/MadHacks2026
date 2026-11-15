@@ -272,7 +272,7 @@ impl BuildingIndex {
     fn from_parts(meta: GridMeta, cells: Vec<u16>, max_accuracy_m: Option<f64>) -> Self {
         let mut names: Vec<Option<Arc<str>>> = vec![None; meta.buildings.len() + 1];
         for building in &meta.buildings {
-            names[building.id as usize] = Some(Arc::from(building.name.as_str()));
+            names[building.id as usize] = Some(Arc::from(building.key.as_str()));
         }
         Self {
             cols_per_deg: meta.meters_per_deg_lng / meta.resolution_m,
@@ -751,7 +751,7 @@ mod tests {
     fn finds_rectangle_and_nothing_outside() {
         let index = index_from(vec![building("hall", "Hall", rect(0.0, 0.0, 40.0, 20.0))]);
         let (lat, lng) = at(20.0, 10.0);
-        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Hall"));
+        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("hall"));
         let (lat, lng) = at(50.0, 10.0); // 10 m east of the wall, still inside the grid margin
         assert_eq!(index.building_name(lat, lng), None);
         // Far away and invalid input
@@ -774,7 +774,7 @@ mod tests {
         assert_eq!(index.meta().rows, index.meta().cols);
         // The building stays in the middle: found inside, not outside.
         let (lat, lng) = at(200.0, 10.0);
-        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Long"));
+        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("long"));
         let (lat, lng) = at(200.0, 150.0);
         assert_eq!(index.building_name(lat, lng), None);
     }
@@ -784,7 +784,7 @@ mod tests {
         let index = index_with_buffer(vec![building("hall", "Hall", rect(0.0, 0.0, 40.0, 20.0))], 15.0);
         for (east, north) in [(50.0, 10.0), (20.0, 32.0), (-12.0, -8.0)] {
             let (lat, lng) = at(east, north);
-            assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Hall"), "{east},{north}");
+            assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("hall"), "{east},{north}");
         }
         for (east, north) in [(60.0, 10.0), (20.0, 40.0), (-20.0, -20.0)] {
             let (lat, lng) = at(east, north);
@@ -800,11 +800,11 @@ mod tests {
             building("east", "East", rect(50.0, 0.0, 40.0, 20.0)),
         ], 15.0);
         let name = |east: f64| { let (lat, lng) = at(east, 10.0); index.building_name(lat, lng).map(|n| n.to_string()) };
-        assert_eq!(name(41.0).as_deref(), Some("West"));
-        assert_eq!(name(43.0).as_deref(), Some("West"));
-        assert_eq!(name(47.0).as_deref(), Some("East"));
-        assert_eq!(name(51.0).as_deref(), Some("East")); // inside East, 11 m from West
-        assert_eq!(name(39.0).as_deref(), Some("West"));
+        assert_eq!(name(41.0).as_deref(), Some("west"));
+        assert_eq!(name(43.0).as_deref(), Some("west"));
+        assert_eq!(name(47.0).as_deref(), Some("east"));
+        assert_eq!(name(51.0).as_deref(), Some("east")); // inside East, 11 m from West
+        assert_eq!(name(39.0).as_deref(), Some("west"));
     }
 
     #[test]
@@ -818,9 +818,9 @@ mod tests {
             let (lat, lng) = at(e, n);
             index.building_name(lat, lng).map(|s| s.to_string())
         };
-        assert_eq!(name(10.0, 10.0).as_deref(), Some("Ell"));
-        assert_eq!(name(30.0, 10.0).as_deref(), Some("Ell"));
-        assert_eq!(name(10.0, 30.0).as_deref(), Some("Ell"));
+        assert_eq!(name(10.0, 10.0).as_deref(), Some("ell"));
+        assert_eq!(name(30.0, 10.0).as_deref(), Some("ell"));
+        assert_eq!(name(10.0, 30.0).as_deref(), Some("ell"));
         assert_eq!(name(30.0, 30.0), None, "the missing quarter must stay empty");
         // Rasterized area is close to the real 1200 m² (300 cells of 4 m²).
         let filled = index.cells().iter().filter(|&&c| c == 1).count();
@@ -834,9 +834,9 @@ mod tests {
             building("annex", "Annex", rect(20.0, 20.0, 10.0, 10.0)),
         ]);
         let (lat, lng) = at(25.0, 25.0);
-        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Annex"));
+        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("annex"));
         let (lat, lng) = at(5.0, 5.0);
-        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("Complex"));
+        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("complex"));
         let overlap = &index.meta().overlaps[0];
         assert_eq!((overlap.a.as_str(), overlap.b.as_str(), overlap.winner.as_str()), ("complex", "annex", "annex"));
         assert_eq!(overlap.cells, 25);
@@ -849,7 +849,7 @@ mod tests {
             building("second", "Second", rect(0.0, 0.0, 20.0, 20.0)),
         ]);
         let (lat, lng) = at(10.0, 10.0);
-        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("First"));
+        assert_eq!(index.building_name(lat, lng).map(|n| n.as_ref()), Some("first"));
         assert_eq!(index.meta().overlaps[0].winner, "first");
     }
 
@@ -912,8 +912,8 @@ mod tests {
     fn poor_accuracy_gets_no_building() {
         let index = index_from(vec![building("hall", "Hall", rect(0.0, 0.0, 40.0, 20.0))]);
         let (lat, lng) = at(20.0, 10.0);
-        assert_eq!(index.lookup(lat, lng, None).as_deref(), Some("Hall"));
-        assert_eq!(index.lookup(lat, lng, Some(8.0)).as_deref(), Some("Hall"));
+        assert_eq!(index.lookup(lat, lng, None).as_deref(), Some("hall"));
+        assert_eq!(index.lookup(lat, lng, Some(8.0)).as_deref(), Some("hall"));
         assert_eq!(index.lookup(lat, lng, Some(65.0)), None);
         assert_eq!(index.lookup(lat, lng, Some(-1.0)), None, "iOS reports -1 for an invalid fix");
     }

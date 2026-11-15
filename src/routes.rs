@@ -167,7 +167,7 @@ async fn building_counts(State(s): State<AppState>) -> Response {
             ).into_response();
         }
     };
-    let mut counts: BTreeMap<&str, i64> = s.buildings.meta().buildings.iter().map(|b| (b.name.as_str(), 0)).collect();
+    let mut counts: BTreeMap<&str, i64> = s.buildings.meta().buildings.iter().map(|b| (b.key.as_str(), 0)).collect();
     for (name, n) in &rows {
         if let Some(slot) = counts.get_mut(name.as_str()) {
             *slot = *n;

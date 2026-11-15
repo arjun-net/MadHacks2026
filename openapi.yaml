@@ -1,50 +1,113 @@
 openapi: 3.0.3
 info:
-  title: MadHacks 2026 Location API
-  version: 1.1.0
-  description: >
-    Phones POST their location; the server resolves the UW-Madison building from
-    lat/lng (grid built from assets/buildings.json) and stores it. Writes are
-    buffered and flushed every 5s or 100 points.
+  title: MadHacks 2026 Campus Location API
+  version: 2.0.0
+  description: |
+    Backend for the UW-Madison campus location app (Rust, axum, Lakebase/Postgres).
+
+    **Flow.** Phones send their location (`POST /locations`, `/locations/batch`). The server
+    matches each point to one of 87 campus buildings using a precomputed 2 m grid built from
+    `assets/buildings_all.json` (points up to 15 m outside a building's walls are assigned to
+    it, nearest wins) and stores `device_id, lat, lng, time, building`. Points matching no
+    building are stored with `building = null`. Writes are buffered in memory and flushed every
+    5 seconds or 100 points, so reads can lag a write by a few seconds.
+
+    **Conventions.**
+    - All timestamps are ISO-8601 *with* a timezone (`Z` or an offset). Naive timestamps are rejected.
+    - Longitude is `lng` (not `long`).
+    - Errors are JSON: `{"detail": "<message>"}`.
+    - No authentication. Anyone who can reach the server can read and write.
+
+    **Building names are slugs.** Buildings are identified by the lowercase snake_case `id` from
+    `assets/buildings_all.json` (e.g. `memorial_union`, `morgridge_hall`, `morgridge_institute`).
+    The server stores and returns this slug everywhere (`/heatmap`, `/buildings/counts`, the
+    story path parameter). Display names exist only in the JSON file. See `BuildingSlug`.
 servers:
   - url: http://localhost:8000/api/v1
+    description: Local
   - url: https://{tunnel}.trycloudflare.com/api/v1
+    description: cloudflared quick tunnel
     variables:
       tunnel: { default: example }
+
+tags:
+  - name: Ingest
+    description: Phones send locations here
+  - name: Buildings
+    description: Live building occupancy and stories
+  - name: Heatmap
+    description: Read stored points back
+  - name: Ops
+    description: Health
 
 paths:
   /locations:
     post:
+      tags: [Ingest]
+      operationId: postLocation
       summary: Submit one location point
+      description: >
+        The building is derived from `lat`/`lng` (and `accuracy`, if sent). Returns 202 once the
+        point is buffered, before it reaches the database.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/LocationIn' }
+            examples:
+              minimal:
+                summary: Required fields only
+                value: { lat: 43.07287, lng: -89.40664, timestamp: "2026-11-14T22:34:00Z" }
+              full:
+                value:
+                  lat: 43.07287
+                  lng: -89.40664
+                  timestamp: "2026-11-14T22:34:00Z"
+                  device_id: ios-7f3a
+                  accuracy: 8.0
       responses:
-        '202': { description: Accepted (buffered), content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+        '202':
+          description: Accepted (buffered)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Accepted' }
+              example: { accepted: 1 }
         '422': { $ref: '#/components/responses/Unprocessable' }
 
   /locations/batch:
     post:
+      tags: [Ingest]
+      operationId: postLocationsBatch
       summary: Submit 1-500 location points
+      description: 'All-or-nothing validation: one invalid point rejects the whole batch.'
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/BatchIn' }
+            example:
+              points:
+                - { lat: 43.07287, lng: -89.40664, timestamp: "2026-11-14T22:34:00Z", device_id: ios-7f3a }
+                - { lat: 43.07390, lng: -89.39874, timestamp: "2026-11-14T22:36:00Z", device_id: ios-7f3a }
       responses:
-        '202': { description: Accepted (buffered), content: { application/json: { schema: { $ref: '#/components/schemas/Accepted' } } } }
+        '202':
+          description: Accepted (buffered)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Accepted' }
+              example: { accepted: 2 }
         '422': { $ref: '#/components/responses/Unprocessable' }
 
   /buildings/counts:
     get:
-      summary: People per building
-      description: >
-        Counts points from the last 2 minutes (every device reports on the even
-        minute, so one point = one person), grouped by building. Every building
-        is listed, with 0 when empty. Points outside all building polygons are
-        not counted.
+      tags: [Buildings]
+      operationId: getBuildingCounts
+      summary: People per building right now
+      description: |
+        Counts stored points from the **last 2 minutes**, grouped by building. Devices report on
+        the even minute, so each point is treated as one person. Every building is listed, with
+        `0` when empty. Points matching no building are not counted. Counts are recomputed on
+        every request and lag by up to the 5 s write-buffer flush.
       responses:
         '200':
           description: OK
@@ -55,67 +118,117 @@ paths:
 
   /buildings/{building}/story:
     get:
-      summary: Activity story for one building (Databricks-backed)
-      description: >
-        Compares current activity at a building with earlier same-weekday/time
-        activity. Needs the Databricks story configuration; see story.rs.
+      tags: [Buildings]
+      operationId: getBuildingStory
+      summary: Activity story for one building
+      description: |
+        Compares distinct reporting devices near a building at a campus-local time with the same
+        time on earlier matching weekdays and on the other days of the current week. Aggregation
+        runs in Databricks SQL; the narrative is generated statistically, or by Databricks
+        `ai_query` when an AI endpoint is configured (`story_source` says which).
+
+        Requires `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_WAREHOUSE_ID` and
+        `DATABRICKS_CATALOG`; otherwise 503. Days with fewer than `STORY_MIN_DEVICES` devices
+        are `suppressed` for privacy and excluded from averages.
       parameters:
         - name: building
           in: path
           required: true
+          description: Building slug as stored, e.g. `morgridge_hall`.
           schema: { type: string, minLength: 1, maxLength: 256 }
-          description: Building name, URL-encoded
+          example: morgridge_hall
+        - name: date
+          in: query
+          description: Local calendar day `YYYY-MM-DD`. If `weekday` is also given they must agree. Cannot be in the future.
+          schema: { type: string, format: date }
         - name: weekday
           in: query
+          description: The most recent such weekday in the campus timezone (case-insensitive).
           schema: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
         - name: time
           in: query
-          schema: { type: string, example: "14:30" }
-      responses:
-        '200': { description: Story with current vs. comparison activity, content: { application/json: { schema: { type: object } } } }
-        '422': { $ref: '#/components/responses/Unprocessable' }
-        '502': { description: Databricks query failed, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-        '503': { description: Databricks not configured, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
-
-  /heatmap:
-    get:
-      summary: Raw location points in [start, end)
-      parameters:
-        - $ref: '#/components/parameters/start'
-        - $ref: '#/components/parameters/end'
-        - $ref: '#/components/parameters/bbox'
-        - $ref: '#/components/parameters/limit'
-      responses:
-        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HeatmapOut' } } } }
-        '422': { $ref: '#/components/responses/Unprocessable' }
-        '500': { $ref: '#/components/responses/DatabaseError' }
-
-  /heatmap/broad:
-    get:
-      summary: Broad (hourly) dataset in [start, end)
-      parameters:
-        - $ref: '#/components/parameters/start'
-        - $ref: '#/components/parameters/end'
-        - $ref: '#/components/parameters/bbox'
-        - $ref: '#/components/parameters/limit'
-      responses:
-        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/HeatmapOut' } } } }
-        '422': { $ref: '#/components/responses/Unprocessable' }
-        '500': { $ref: '#/components/responses/DatabaseError' }
-
-  /health:
-    get:
-      summary: Health check
+          description: Local wall-clock time `HH:MM`. Defaults to the current campus-local time. Must have already occurred on the selected day.
+          schema: { type: string, pattern: '^\d{2}:\d{2}$', example: "14:30" }
+        - name: weeks
+          in: query
+          description: Number of preceding matching weekdays to compare against.
+          schema: { type: integer, minimum: 2, maximum: 12, default: 8 }
+        - name: window_minutes
+          in: query
+          description: Minutes either side of the requested clock time.
+          schema: { type: integer, minimum: 5, maximum: 60, default: 15 }
       responses:
         '200':
           description: OK
           content:
             application/json:
-              schema:
-                type: object
-                properties:
-                  status:   { type: string, example: ok }
-                  store_ok: { type: boolean }
+              schema: { $ref: '#/components/schemas/BuildingStory' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '502':
+          description: Databricks query failed or returned no/invalid rows (details in server logs)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: Databricks storytelling not configured or client could not initialise
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /heatmap:
+    get:
+      tags: [Heatmap]
+      operationId: getHeatmap
+      summary: Raw location points in [start, end)
+      description: Points grouped by their UTC timestamp, keys in ascending order.
+      parameters:
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/end'
+        - $ref: '#/components/parameters/bbox'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HeatmapOut' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/DatabaseError' }
+
+  /heatmap/broad:
+    get:
+      tags: [Heatmap]
+      operationId: getHeatmapBroad
+      summary: Broad (hourly) dataset in [start, end)
+      description: >
+        Reads `location_events_broad`. The server no longer writes this table; it only returns
+        whatever other jobs have put there.
+      parameters:
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/end'
+        - $ref: '#/components/parameters/bbox'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HeatmapOut' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '500': { $ref: '#/components/responses/DatabaseError' }
+
+  /health:
+    get:
+      tags: [Ops]
+      operationId: getHealth
+      summary: Health check
+      responses:
+        '200':
+          description: Always 200; check `store_ok` for database reachability
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+              example: { status: ok, store_ok: true }
 
 components:
   parameters:
@@ -123,22 +236,26 @@ components:
       name: start
       in: query
       required: true
+      description: Inclusive lower bound, ISO-8601 with timezone.
       schema: { type: string, format: date-time }
-      description: ISO-8601 with timezone (inclusive)
+      example: "2026-11-14T00:00:00Z"
     end:
       name: end
       in: query
       required: true
+      description: Exclusive upper bound, ISO-8601 with timezone. Must be after `start`.
       schema: { type: string, format: date-time }
-      description: ISO-8601 with timezone (exclusive); must be after start
+      example: "2026-11-15T00:00:00Z"
     bbox:
       name: bbox
       in: query
-      schema: { type: string, example: "-89.5,43.0,-89.3,43.2" }
-      description: minLng,minLat,maxLng,maxLat (min <= max, valid lat/lng ranges)
+      description: Filter `minLng,minLat,maxLng,maxLat`. Valid lat/lng ranges, min <= max.
+      schema: { type: string }
+      example: "-89.43,43.06,-89.38,43.09"
     limit:
       name: limit
       in: query
+      description: Maximum points returned (oldest first).
       schema: { type: integer, minimum: 1, maximum: 200000, default: 50000 }
 
   responses:
@@ -147,37 +264,48 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { detail: "end must be after start" }
     DatabaseError:
       description: Database error
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+          example: { detail: database error }
 
   schemas:
     LocationIn:
       type: object
       required: [lat, lng, timestamp]
       properties:
-        lat: { type: number, minimum: -90,  maximum: 90 }
-        lng: { type: number, minimum: -180, maximum: 180 }
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
         timestamp:
           type: string
           format: date-time
-          description: ISO-8601 with explicit timezone (Z or offset). Naive timestamps are rejected.
+          description: Must include a timezone (`Z` or offset). Stored as UTC.
           example: "2026-11-14T22:34:00Z"
         device_id:
           type: string
           maxLength: 128
-          description: Optional. Trimmed; defaults to "unknown".
+          description: Optional. Trimmed; missing or blank becomes `"unknown"`.
         accuracy:
           type: number
-          description: Optional horizontal GPS accuracy in meters (alias horizontal_accuracy). Too vague a fix gets no building.
+          minimum: 0
+          description: >
+            Optional horizontal GPS accuracy in meters (alias `horizontal_accuracy`). A fix
+            worse than 30 m is not matched to a building.
         building:
           type: string
           maxLength: 256
           description: >
-            Optional. The server's grid lookup from lat/lng wins; a client-sent
-            name is kept only when the grid finds no building.
+            Optional. The server's grid lookup wins; a client-sent name is kept only when the
+            grid finds no building. Blank is treated as absent.
     BatchIn:
       type: object
       required: [points]
@@ -189,37 +317,176 @@ components:
           items: { $ref: '#/components/schemas/LocationIn' }
     Accepted:
       type: object
+      required: [accepted]
       properties:
-        accepted: { type: integer }
+        accepted: { type: integer, minimum: 1 }
     LatLng:
       type: object
+      required: [lat, lng, building]
       properties:
-        lat:      { type: number }
-        lng:      { type: number }
+        lat: { type: number }
+        lng: { type: number }
         building: { type: string, nullable: true }
     HeatmapOut:
       type: object
+      required: [start, end, count, data]
       properties:
         start: { type: string, format: date-time }
         end:   { type: string, format: date-time }
-        count: { type: integer }
+        count: { type: integer, description: Total points across all timestamps }
         data:
           type: object
-          description: Keys are UTC ISO-8601 timestamps in ascending order
+          description: Map of UTC ISO-8601 timestamp to the points recorded at it, ascending.
           additionalProperties:
             type: array
             items: { $ref: '#/components/schemas/LatLng' }
+      example:
+        start: "2026-11-14T00:00:00Z"
+        end: "2026-11-15T00:00:00Z"
+        count: 2
+        data:
+          "2026-11-14T22:34:00Z":
+            - { lat: 43.07287, lng: -89.40664, building: morgridge_hall }
+            - { lat: 43.074, lng: -89.39, building: null }
     BuildingCounts:
       type: object
+      required: [window_minutes, total, counts]
       properties:
         window_minutes: { type: integer, example: 2 }
-        total:          { type: integer }
+        total:          { type: integer, description: Sum of all counts }
         counts:
           type: object
-          description: Building name -> number of people
-          additionalProperties: { type: integer }
-          example: { "Memorial Union": 12, "Bascom Hall": 4 }
+          description: Building slug to number of people. Always contains all 87 buildings.
+          additionalProperties: { type: integer, minimum: 0 }
+      example:
+        window_minutes: 2
+        total: 15
+        counts:
+          memorial_union: 12
+          bascom_hall: 3
+          chemistry_building: 0
+    DayActivity:
+      type: object
+      required: [date, weekday, reporting_devices, status]
+      properties:
+        date:    { type: string, format: date }
+        weekday: { type: string }
+        reporting_devices:
+          type: integer
+          nullable: true
+          description: Null means no readings, not yet reached, or privacy-suppressed (never treated as 0).
+        status:
+          type: string
+          enum: [available, suppressed, no_data, future]
+    BuildingStory:
+      type: object
+      properties:
+        building:      { type: string }
+        date:          { type: string, format: date, description: Selected local day }
+        weekday:       { type: string }
+        time_local:    { type: string, example: "14:30" }
+        timezone:      { type: string, example: America/Chicago }
+        window_minutes: { type: integer }
+        metric:        { type: string, example: distinct_reporting_devices }
+        current:       { $ref: '#/components/schemas/DayActivity' }
+        historical_same_weekday:
+          type: array
+          items: { $ref: '#/components/schemas/DayActivity' }
+        this_week:
+          type: array
+          description: Monday through Sunday of the selected week
+          items: { $ref: '#/components/schemas/DayActivity' }
+        weekday_average:
+          type: number
+          nullable: true
+          description: Null unless at least 2 historical weekdays have data
+        weekday_samples: { type: integer }
+        difference_vs_weekday_average_pct:
+          type: number
+          nullable: true
+        other_days_this_week_average:
+          type: number
+          nullable: true
+        other_days_this_week_samples: { type: integer }
+        difference_vs_other_days_pct:
+          type: number
+          nullable: true
+        story:
+          type: string
+          description: Human-readable summary
+        story_source:
+          type: string
+          enum: [databricks_sql, databricks_ai_query]
+        methodology:
+          type: string
+          description: How the numbers are computed and what they do and do not mean
+    LocationEvent:
+      type: object
+      description: >
+        One row of `public.location_events` (Lakebase/Postgres), the table `/heatmap` reads and
+        the ingest endpoints write. Owned by the DB team; the server never creates it.
+      required: [id, latitude, longitude, time]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Identity column (`generated always`); never supplied on insert.
+        device_id:
+          type: string
+          nullable: true
+          description: >
+            Nullable, but if present it must not be blank (check `length(btrim(device_id)) > 0`).
+            The API stores `"unknown"` when a client sends none; the bulk CSV load stores NULL.
+            NULL rows are invisible to distinct-device counts in the story endpoint.
+        latitude:  { type: number, format: double, minimum: -90, maximum: 90 }
+        longitude: { type: number, format: double, minimum: -180, maximum: 180 }
+        time:
+          type: string
+          format: date-time
+          description: '`timestamptz`, returned in UTC. Defaults to `CURRENT_TIMESTAMP`.'
+        building:
+          type: string
+          nullable: true
+          description: >
+            Nullable `text`. NULL when no building matched. A `BuildingSlug`.
+      example:
+        id: 963129
+        device_id: null
+        latitude: 43.078209
+        longitude: -89.410181
+        time: "2026-11-15T06:30:00Z"
+        building: morgridge_institute
+    FutureCsvRow:
+      type: object
+      description: >
+        One line of `1_day_future_apicalls.csv` (162,128 rows, one per ping, 2026-11-14T23:58Z
+        to 2026-11-15T23:58Z). Header: `lat,long,timestamp,building`. Note the CSV column is
+        `long`; the API field is `lng`, and the table column is `longitude`. There is no
+        `device_id`.
+      required: [lat, long, timestamp, building]
+      properties:
+        lat:       { type: number, example: 43.078209 }
+        long:      { type: number, example: -89.410181 }
+        timestamp: { type: string, format: date-time, example: "2026-11-15T06:30:00Z" }
+        building:  { $ref: '#/components/schemas/BuildingSlug' }
+    BuildingSlug:
+      type: string
+      description: >
+        Lowercase snake_case building id (the `id` field in `assets/buildings_all.json`; also what the
+        bulk CSV load uses). 87 distinct values, e.g.
+        `ebling_library`, `kohl_center`, `memorial_union`, `morgridge_hall`,
+        `morgridge_institute`, `union_south`, `van_hise`. Morgridge has two buildings: the
+        institute (3,382 pings) and the hall (1,012).
+      pattern: '^[a-z0-9_]+$'
+      example: morgridge_institute
+    Health:
+      type: object
+      required: [status, store_ok]
+      properties:
+        status:   { type: string, example: ok }
+        store_ok: { type: boolean, description: False if the database cannot be reached }
     Error:
       type: object
+      required: [detail]
       properties:
         detail: { type: string }
