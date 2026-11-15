@@ -53,6 +53,9 @@ struct AreaDetailScreen: View {
                 LiveCard(activity: activity, insights: insights)
                 PopularTimesSection(insights: insights, liveIntensity: activity.intensity)
                 TodayVersusUsualSection(insights: insights)
+                ThisTimeSection(state: viewModel.storyState(for: areaID)) {
+                    Task { await viewModel.loadStory(for: areaID, force: true) }
+                }
                 PastWeekSection(insights: insights)
 
                 Text("History and usual times are estimates built from anonymous, aggregated activity.")
@@ -67,7 +70,11 @@ struct AreaDetailScreen: View {
             .animation(Theme.Motion.smooth, value: activity.intensity)
         }
         .scrollIndicators(.hidden)
-        .refreshable { await viewModel.refresh() }
+        .refreshable {
+            await viewModel.refresh()
+            await viewModel.loadStory(for: areaID, force: true)
+        }
+        .task(id: areaID) { await viewModel.loadStory(for: areaID) }
     }
 
     private func header(_ activity: AreaActivity) -> some View {

@@ -37,6 +37,17 @@ enum AppConfig {
     /// days and today so far) instead of the server's one stored day. Needs `simulatesLiveData`.
     static let simulatesActivityData = simulatesLiveData
 
+    /// Where each building's "this time vs. past weeks" story comes from: the analytics
+    /// endpoint `GET /buildings/{name}/story` when true, generated on the device when false.
+    /// Flip to true once the analytics database has data.
+    static let usesServerBuildingStories = false
+
+    /// How many past same weekdays a building story compares with.
+    static let buildingStoryWeeks = 8
+
+    /// Campus wall-clock time: the analytics server reads dates and times in this zone.
+    static let campusTimeZone = TimeZone(identifier: "America/Chicago") ?? .current
+
     /// Simulated headcount of a packed building (scaled by its popularity).
     static let simulatedPeakHeadcount = 120.0
 

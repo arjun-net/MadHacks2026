@@ -76,10 +76,23 @@ enum AreaSort: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// Loading a building's story for its detail screen.
+enum BuildingStoryState: Equatable {
+    case loading
+    case loaded(BuildingStory)
+    case failed(String)
+}
+
 @Observable
 @MainActor
 final class ActivityViewModel {
     let store: CampusStore
+
+    /// Building stories by area ID, with when each was fetched.
+    private(set) var stories: [String: (state: BuildingStoryState, fetchedAt: Date)] = [:]
+    @ObservationIgnored private let storyProvider = BuildingStoryProvider()
+    /// A loaded story is reused for this long before it's fetched again.
+    private static let storyLifetime: TimeInterval = 5 * 60
 
     init(store: CampusStore) {
         self.store = store
@@ -174,6 +187,29 @@ final class ActivityViewModel {
             return history.insights(for: activity, now: snapshot.generatedAt)
         }
         return store.isPreview ? SampleActivityData.insights(for: activity, campus: campus, date: snapshot.generatedAt) : nil
+    }
+
+    func storyState(for areaID: String) -> BuildingStoryState {
+        stories[areaID]?.state ?? .loading
+    }
+
+    /// Loads the building's story unless a recent one is in hand (`force` refetches anyway).
+    /// A failed fetch keeps showing the last good story, if there is one.
+    func loadStory(for areaID: String, force: Bool = false) async {
+        guard let area = campus.area(withID: areaID) else { return }
+        if !force, let cached = stories[areaID], case .loaded = cached.state,
+           Date.now.timeIntervalSince(cached.fetchedAt) < Self.storyLifetime {
+            return
+        }
+        let previous = stories[areaID]
+        if previous == nil { stories[areaID] = (.loading, .now) }
+        do {
+            let story = try await storyProvider.story(for: area, campus: campus, live: activity(for: areaID))
+            stories[areaID] = (.loaded(story), .now)
+        } catch {
+            if let previous, case .loaded = previous.state { return }
+            stories[areaID] = (.failed(error.localizedDescription), .now)
+        }
     }
 
     func refresh() async {

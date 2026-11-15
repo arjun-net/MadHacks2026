@@ -177,6 +177,55 @@ enum SampleActivityData {
         return AreaInsights(area: area, generatedAt: date, typicalByWeekday: typical, pastDays: pastDays, today: today)
     }
 
+    // MARK: - Building story
+
+    /// A fake building story shaped like the analytics endpoint's: devices at this time of day
+    /// today, on the same weekday for `weeks` past weeks, and on this week's earlier days.
+    /// Follows each building's usual curve, so it agrees with the fake live map; repeatable per
+    /// building and day. The two oldest weeks have no data, as on a database still filling up.
+    static func story(
+        for area: CampusArea,
+        campus: Campus,
+        at moment: Date = .now,
+        currentDevices: Int? = nil,
+        weeks: Int = AppConfig.buildingStoryWeeks,
+        timeZone: TimeZone = AppConfig.campusTimeZone
+    ) -> BuildingStory {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let today = calendar.startOfDay(for: moment)
+        let minute = Int(moment.timeIntervalSince(today) / 60) / 15 * 15
+        let capacity = max(10, area.popularity * AppConfig.simulatedPeakHeadcount)
+        let seed = area.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) % 100_003 }
+
+        func devices(on day: Date) -> Int {
+            let at = day.addingTimeInterval(Double(minute) * 60)
+            let dayNumber = Int(day.timeIntervalSinceReferenceDate / 86_400)
+            let usual = expectedIntensity(of: area, campus: campus, at: at)
+            return max(0, Int((capacity * usual * (1 + noise(seed, dayNumber, 99) * 0.18)).rounded()))
+        }
+
+        let pastWeeks = (1...max(1, weeks)).compactMap { calendar.date(byAdding: .day, value: -7 * $0, to: today) }
+        let sameWeekday = pastWeeks.enumerated().map { index, day in
+            BuildingStory.Day(date: day, devices: index >= weeks - 2 ? nil : devices(on: day))
+        }
+        // Monday through yesterday.
+        let daysSinceMonday = (calendar.component(.weekday, from: today) + 5) % 7
+        let thisWeek = (0..<daysSinceMonday).reversed().compactMap { back in
+            calendar.date(byAdding: .day, value: -(back + 1), to: today).map { BuildingStory.Day(date: $0, devices: devices(on: $0)) }
+        }
+
+        return BuildingStory(
+            building: area.name,
+            timeZone: timeZone,
+            minuteOfDay: minute,
+            windowMinutes: 15,
+            current: BuildingStory.Day(date: today, devices: currentDevices ?? devices(on: today)),
+            sameWeekday: sameWeekday,
+            thisWeek: thisWeek
+        )
+    }
+
     /// Repeatable pseudo-random value in -1…1.
     private static func noise(_ a: Int, _ b: Int, _ c: Int) -> Double {
         let x = sin(Double(a) * 12.9898 + Double(b) * 78.233 + Double(c) * 37.719) * 43_758.5453
