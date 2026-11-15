@@ -1,44 +1,128 @@
 import SwiftUI
+import UIKit
+
+// MARK: - Palette configuration
+
+/// Night Edition palette options. Change `ThemeConfig.dark` to swap.
+enum DarkPalette: String, CaseIterable {
+    case nightEdition, darkroom, inkOnSlate
+}
+
+enum ThemeConfig {
+    static var dark: DarkPalette = .nightEdition
+}
+
+/// An sRGB hex value with alpha.
+struct Hex {
+    let value: UInt32
+    var alpha: Double = 1
+
+    init(_ value: UInt32, alpha: Double = 1) {
+        self.value = value
+        self.alpha = alpha
+    }
+
+    var uiColor: UIColor {
+        UIColor(
+            red: CGFloat((value >> 16) & 0xFF) / 255,
+            green: CGFloat((value >> 8) & 0xFF) / 255,
+            blue: CGFloat(value & 0xFF) / 255,
+            alpha: alpha
+        )
+    }
+}
+
+extension UIColor {
+    /// Resolves to `light` or the active dark palette's value per trait collection.
+    static func adaptive(_ light: Hex, dark: @escaping (DarkPalette) -> Hex) -> UIColor {
+        UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark(ThemeConfig.dark).uiColor : light.uiColor
+        }
+    }
+}
+
+extension Color {
+    /// Adaptive color from light/dark hex values.
+    init(light: UInt32, dark: UInt32, darkAlpha: Double = 1, lightAlpha: Double = 1) {
+        self.init(uiColor: .adaptive(Hex(light, alpha: lightAlpha), dark: { _ in Hex(dark, alpha: darkAlpha) }))
+    }
+
+    /// Adaptive color whose dark value depends on the selected `DarkPalette`.
+    init(light: Hex, dark: @escaping (DarkPalette) -> Hex) {
+        self.init(uiColor: .adaptive(light, dark: dark))
+    }
+}
+
+/// Dark values for one token across the three palettes (A · Night Edition, B · Darkroom, C · Ink on Slate).
+private func night(_ a: Hex, _ b: Hex, _ c: Hex) -> (DarkPalette) -> Hex {
+    { palette in
+        switch palette {
+        case .nightEdition: a
+        case .darkroom: b
+        case .inkOnSlate: c
+        }
+    }
+}
+
+private func night(_ a: UInt32, _ b: UInt32, _ c: UInt32) -> (DarkPalette) -> Hex {
+    night(Hex(a), Hex(b), Hex(c))
+}
+
+// MARK: - Theme
 
 enum Theme {
     enum Colors {
-        static let background = Color(red: 0.02, green: 0.02, blue: 0.02)
-        static let elevated = Color(red: 0.075, green: 0.075, blue: 0.075)
-        static let surface = Color.white.opacity(0.06)
-        static let surfaceStrong = Color.white.opacity(0.10)
-        static let stroke = Color.white.opacity(0.10)
+        // Paper
+        static let background = Color(light: Hex(0xF6F1E7), dark: night(0x16130F, 0x140A0A, 0x121417))
+        static let paper = Color(light: Hex(0xFFFDF8), dark: night(0x1F1B16, 0x1E1010, 0x1B1E22))
+        static let elevated = paper
+        static let surface = Color(light: Hex(0xF3ECDF), dark: night(0x2A251F, 0x2A1717, 0x252930))
+        static let surfaceStrong = Color(light: Hex(0xEFE6D6), dark: night(0x332D26, 0x351D1D, 0x2E333B))
+        static let mapScrim = background
 
-        static let textPrimary = Color.white
-        static let textSecondary = Color.white.opacity(0.64)
-        static let textTertiary = Color.white.opacity(0.42)
+        // Ink
+        static let ink = Color(light: Hex(0x1F1B16), dark: night(0xF3ECDF, 0xF5E6E3, 0xE9ECEF))
+        static let stroke = ink
+        static let rule = Color(light: Hex(0xDDD2BE), dark: night(0x3A332B, 0x3F2626, 0x343A42))
 
-        /// Badger red (#C5050C) family.
-        static let badgerRed = Color(red: 0.773, green: 0.020, blue: 0.047)
-        static let accent = Color(red: 0.90, green: 0.10, blue: 0.13)
-        static let accentSecondary = Color(red: 0.55, green: 0.0, blue: 0.03)
-        static let live = Color(red: 1.0, green: 0.23, blue: 0.23)
-        static let warning = Color(white: 0.86)
-        static let danger = Color(red: 1.0, green: 0.30, blue: 0.30)
-        /// Neutral tile color for secondary icons.
-        static let graphite = Color(white: 0.30)
+        static let textPrimary = ink
+        static let textSecondary = Color(light: Hex(0x5E554A), dark: night(0xBDB2A2, 0xC9AFAB, 0xAEB5BE))
+        static let textTertiary = Color(light: Hex(0x6E6357), dark: night(0xA39886, 0xB0928D, 0x949CA6))
+
+        // Badger red. `accent` is for text and icons; `accentFill` for filled buttons and badges.
+        static let accent = Color(light: Hex(0x9B0000), dark: night(0xE0605A, 0xFF6B66, 0xE8605C))
+        static let accentFill = Color(light: Hex(0x9B0000), dark: night(0x9B0000, 0xC5050C, 0xA80F14))
+        static let badgerRed = accent
+        static let accentSecondary = accent
+        static let onAccent = Color(light: Hex(0xFFFDF8), dark: night(0xFFFDF8, 0xFFFFFF, 0xFFFFFF))
+        static let live = accent
+
+        // Status
+        static let positive = Color(light: Hex(0x2E6B3F), dark: night(0x6FBF83, 0x7CC48F, 0x6FBF83))
+        static let warning = Color(light: Hex(0x8A4B12), dark: night(0xE2A45A, 0xE8AE62, 0xE2A45A))
+        static let danger = Color(light: Hex(0xA33A1C), dark: night(0xF08A6B, 0xFF9A80, 0xF08A6B))
+        /// Activity-level text colors that hold contrast on paper.
+        static let brick = danger
+        static let rust = warning
+        /// Neutral icon color (kept for existing call sites).
+        static let graphite = textSecondary
+
+        // Shadows
+        static let hardShadow = Color(
+            light: Hex(0x1F1B16),
+            dark: night(Hex(0x000000, alpha: 0.6), Hex(0xC5050C), Hex(0x000000, alpha: 0.7))
+        )
+        static let softShadow = Color(
+            light: Hex(0x503C1E, alpha: 0.10),
+            dark: night(Hex(0x000000, alpha: 0.4), Hex(0x000000, alpha: 0.5), Hex(0x000000, alpha: 0.45))
+        )
     }
 
     enum Gradients {
-        static let accent = LinearGradient(
-            colors: [Colors.accent, Colors.accentSecondary],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        static let glassStroke = LinearGradient(
-            colors: [.white.opacity(0.26), .white.opacity(0.06), .white.opacity(0.02)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        static let live = LinearGradient(
-            colors: [Colors.live, Colors.badgerRed],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        // Solid now; kept so call sites compile until they're migrated.
+        static let accent = LinearGradient(colors: [Colors.accent, Colors.accent], startPoint: .top, endPoint: .bottom)
+        static let glassStroke = LinearGradient(colors: [Colors.ink, Colors.ink], startPoint: .top, endPoint: .bottom)
+        static let live = LinearGradient(colors: [Colors.accent, Colors.accent], startPoint: .top, endPoint: .bottom)
     }
 
     enum Spacing {
@@ -52,10 +136,19 @@ enum Theme {
     }
 
     enum Radius {
-        static let sm: CGFloat = 12
-        static let md: CGFloat = 18
-        static let lg: CGFloat = 24
-        static let xl: CGFloat = 30
+        static let sm: CGFloat = 2
+        static let md: CGFloat = 2
+        static let lg: CGFloat = 2
+        static let xl: CGFloat = 4
+    }
+
+    enum Stroke {
+        static let hairline: CGFloat = 1
+        static let sectionRule: CGFloat = 2
+    }
+
+    enum Shadow {
+        static let offset = CGSize(width: 4, height: 4)
     }
 
     enum Motion {
@@ -70,42 +163,67 @@ enum Theme {
 
 // MARK: - Typography
 //
-// Editorial, quiet type: New York (serif) for hero display moments, SF Pro for
-// everything else. Headlines run tight (negative tracking), labels run wide.
-// No rounded faces — they read as generic/toy-like.
+// Playfair Display (serif) for headlines and numbers, Libre Franklin for text.
+// Tracked uppercase Franklin ExtraBold for labels, badges, tabs and buttons.
+
+enum FontName {
+    static let display = "PlayfairDisplay-Black"
+    static let headline = "PlayfairDisplay-ExtraBold"
+    static let headlineItal = "PlayfairDisplay-ExtraBoldItalic"
+    static let serifBold = "PlayfairDisplay-Bold"
+    static let serifBoldItal = "PlayfairDisplay-BoldItalic"
+    // The bundled Libre Franklin statics report these PostScript names (see FontRegistrar).
+    static let sans = "LibreFranklinThin-Regular"
+    static let sansMedium = "LibreFranklinThin-Medium"
+    static let sansSemi = "LibreFranklinThin-SemiBold"
+    static let sansBold = "LibreFranklinThin-Bold"
+    static let sansHeavy = "LibreFranklinThin-ExtraBold"
+}
 
 extension Font {
-    // Display — serif, light-ish weight, set tight.
-    static let cpLargeTitle = Font.system(size: 36, weight: .medium, design: .serif)
-    static let cpTitle = Font.system(size: 26, weight: .medium, design: .serif)
+    // Serif (Playfair Display)
+    static let cpMasthead = Font.custom(FontName.display, size: 32, relativeTo: .largeTitle)
+    static let cpLargeTitle = Font.custom(FontName.display, size: 34, relativeTo: .largeTitle)
+    static let cpTitle = Font.custom(FontName.headline, size: 24, relativeTo: .title)
+    static let cpTitleItalic = Font.custom(FontName.headlineItal, size: 24, relativeTo: .title)
+    static let cpTitle3 = Font.custom(FontName.headline, size: 19, relativeTo: .title3)
+    static let cpRank = Font.custom(FontName.headlineItal, size: 24, relativeTo: .title2)
+    static let cpMetric = Font.custom(FontName.display, size: 30, relativeTo: .title).monospacedDigit()
+    static let cpMetricSmall = Font.custom(FontName.display, size: 22, relativeTo: .title3).monospacedDigit()
 
-    // Sans hierarchy.
-    static let cpTitle3 = Font.system(size: 19, weight: .semibold)
-    static let cpHeadline = Font.system(size: 16, weight: .semibold)
-    static let cpBody = Font.system(size: 15, weight: .regular)
-    static let cpSubheadline = Font.system(size: 14, weight: .medium)
-    static let cpCaption = Font.system(size: 12.5, weight: .regular)
-    static let cpMicro = Font.system(size: 10.5, weight: .semibold)
-
-    // Numbers — sans, tabular, slightly heavy so they anchor a card.
-    static let cpMetric = Font.system(size: 32, weight: .semibold).monospacedDigit()
-    static let cpMetricSmall = Font.system(size: 22, weight: .semibold).monospacedDigit()
+    // Sans (Libre Franklin)
+    static let cpHeadline = Font.custom(FontName.sansBold, size: 16, relativeTo: .headline)
+    static let cpRowTitle = Font.custom(FontName.sansBold, size: 15, relativeTo: .body)
+    static let cpBody = Font.custom(FontName.sans, size: 15, relativeTo: .body)
+    static let cpSubheadline = Font.custom(FontName.sansMedium, size: 14, relativeTo: .subheadline)
+    static let cpCaption = Font.custom(FontName.sansMedium, size: 12.5, relativeTo: .caption)
+    static let cpMicro = Font.custom(FontName.sansHeavy, size: 10.5, relativeTo: .caption2)
+    static let cpBadge = Font.custom(FontName.sansHeavy, size: 9.5, relativeTo: .caption2)
+    static let cpTab = Font.custom(FontName.sansHeavy, size: 9.5, relativeTo: .caption2)
+    static let cpButton = Font.custom(FontName.sansBold, size: 12, relativeTo: .callout)
 }
 
 /// Font + tracking pairs. Use `.typeStyle(.title)` so tracking stays consistent.
 enum TypeStyle {
-    case largeTitle, title, title3, headline, body, subheadline, caption, micro, metric, metricSmall
+    case masthead, largeTitle, title, title3, rank, headline, rowTitle, body, subheadline, caption
+    case micro, badge, tab, button, metric, metricSmall
 
     var font: Font {
         switch self {
+        case .masthead: .cpMasthead
         case .largeTitle: .cpLargeTitle
         case .title: .cpTitle
         case .title3: .cpTitle3
+        case .rank: .cpRank
         case .headline: .cpHeadline
+        case .rowTitle: .cpRowTitle
         case .body: .cpBody
         case .subheadline: .cpSubheadline
         case .caption: .cpCaption
         case .micro: .cpMicro
+        case .badge: .cpBadge
+        case .tab: .cpTab
+        case .button: .cpButton
         case .metric: .cpMetric
         case .metricSmall: .cpMetricSmall
         }
@@ -113,16 +231,19 @@ enum TypeStyle {
 
     var tracking: CGFloat {
         switch self {
-        case .largeTitle: -0.9
-        case .title: -0.5
-        case .title3: -0.35
-        case .headline: -0.25
-        case .body: -0.1
-        case .subheadline: -0.1
-        case .caption: 0
-        case .micro: 1.4
-        case .metric: -1.0
-        case .metricSmall: -0.5
+        case .masthead, .largeTitle: -0.4
+        case .title, .title3: -0.2
+        case .micro, .badge, .tab: 1.6
+        case .button: 1.4
+        default: 0
+        }
+    }
+
+    /// Labels in these styles are always set in capitals.
+    var isUppercase: Bool {
+        switch self {
+        case .micro, .badge, .tab, .button: true
+        default: false
         }
     }
 
@@ -141,5 +262,6 @@ extension View {
             .font(style.font)
             .tracking(style.tracking)
             .lineSpacing(style.lineSpacing)
+            .textCase(style.isUppercase ? .uppercase : nil)
     }
 }

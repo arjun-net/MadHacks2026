@@ -1,5 +1,30 @@
 import Foundation
 import Observation
+import SwiftUI
+
+/// Light ("Day Edition"), dark ("Night Edition"), or follow the system.
+enum Appearance: String, CaseIterable, Identifiable {
+    case light, dark, system
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .light: "Day"
+        case .dark: "Night"
+        case .system: "System"
+        }
+    }
+
+    /// `nil` follows the system setting.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .light: .light
+        case .dark: .dark
+        case .system: nil
+        }
+    }
+}
 
 /// User preferences persisted to `UserDefaults`.
 @Observable
@@ -13,6 +38,7 @@ final class AppPreferences {
     var busyAreaAlerts: Bool { didSet { defaults.set(busyAreaAlerts, forKey: Keys.busyAlerts) } }
     var quietSpotAlerts: Bool { didSet { defaults.set(quietSpotAlerts, forKey: Keys.quietAlerts) } }
     var weeklyRecap: Bool { didSet { defaults.set(weeklyRecap, forKey: Keys.weeklyRecap) } }
+    var appearance: Appearance { didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -24,6 +50,7 @@ final class AppPreferences {
             Keys.busyAlerts: false,
             Keys.quietAlerts: false,
             Keys.weeklyRecap: false,
+            Keys.appearance: Appearance.light.rawValue,
         ])
         selectedCampusID = defaults.string(forKey: Keys.campus) ?? CampusCatalog.madison.id
         sharingEnabled = defaults.bool(forKey: Keys.sharing)
@@ -32,6 +59,7 @@ final class AppPreferences {
         busyAreaAlerts = defaults.bool(forKey: Keys.busyAlerts)
         quietSpotAlerts = defaults.bool(forKey: Keys.quietAlerts)
         weeklyRecap = defaults.bool(forKey: Keys.weeklyRecap)
+        appearance = Appearance(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .light
     }
 
     private enum Keys {
@@ -42,5 +70,6 @@ final class AppPreferences {
         static let busyAlerts = "notifications.busyAreas"
         static let quietAlerts = "notifications.quietSpots"
         static let weeklyRecap = "notifications.weeklyRecap"
+        static let appearance = "display.appearance"
     }
 }

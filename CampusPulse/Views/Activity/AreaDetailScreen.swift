@@ -587,5 +587,4 @@ struct RowButtonStyle: ButtonStyle {
     NavigationStack {
         AreaDetailScreen(areaID: viewModel.allAreas.first?.id ?? "", viewModel: viewModel)
     }
-    .preferredColorScheme(.dark)
 }

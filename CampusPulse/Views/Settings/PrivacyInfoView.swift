@@ -148,9 +148,9 @@ struct AppGlyph: View {
 }
 
 #Preview("Privacy") {
-    NavigationStack { PrivacyInfoView() }.preferredColorScheme(.dark)
+    NavigationStack { PrivacyInfoView() }
 }
 
 #Preview("About") {
-    NavigationStack { AboutView(version: "1.0 (1)") }.preferredColorScheme(.dark)
+    NavigationStack { AboutView(version: "1.0 (1)") }
 }

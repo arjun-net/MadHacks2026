@@ -501,11 +501,9 @@ private struct CompactAreaRow: View {
 #Preview("Activity") {
     let container = PreviewData.container()
     ActivityScreen(viewModel: ActivityViewModel(store: container.store))
-        .preferredColorScheme(.dark)
 }
 
 #Preview("Activity – Empty") {
     let container = PreviewData.container(campus: CampusCatalog.stanford)
     ActivityScreen(viewModel: ActivityViewModel(store: container.store))
-        .preferredColorScheme(.dark)
 }

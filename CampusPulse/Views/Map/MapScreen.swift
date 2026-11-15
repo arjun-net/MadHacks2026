@@ -114,11 +114,18 @@ struct MapScreen: View {
         viewModel: MapViewModel(store: container.store, sharing: container.sharing),
         onOpenSharing: {}
     )
-    .preferredColorScheme(.dark)
 }
 
 #Preview("Map – Loading") {
     let container = PreviewData.container(preloaded: false)
+    MapScreen(
+        viewModel: MapViewModel(store: container.store, sharing: container.sharing),
+        onOpenSharing: {}
+    )
+}
+
+#Preview("Map – Night") {
+    let container = PreviewData.container()
     MapScreen(
         viewModel: MapViewModel(store: container.store, sharing: container.sharing),
         onOpenSharing: {}

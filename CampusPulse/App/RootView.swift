@@ -98,5 +98,4 @@ struct RootView: View {
 
 #Preview {
     RootView(container: PreviewData.container())
-        .preferredColorScheme(.dark)
 }

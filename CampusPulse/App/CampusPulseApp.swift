@@ -11,7 +11,7 @@ struct CampusPulseApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(container: container)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(container.preferences.appearance.colorScheme)
                 .tint(Theme.Colors.accent)
         }
     }

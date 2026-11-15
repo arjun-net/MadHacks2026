@@ -52,5 +52,4 @@ struct AreaActivityRow: View {
     }
     .padding()
     .background(ScreenBackground())
-    .preferredColorScheme(.dark)
 }

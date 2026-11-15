@@ -148,5 +148,4 @@ struct SkeletonBlock: View {
         .padding()
     }
     .background(ScreenBackground())
-    .preferredColorScheme(.dark)
 }

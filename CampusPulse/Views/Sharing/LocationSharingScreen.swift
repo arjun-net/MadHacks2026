@@ -310,7 +310,6 @@ private extension String {
     NavigationStack {
         LocationSharingScreen(viewModel: LocationSharingViewModel(sharing: container.sharing, store: container.store))
     }
-    .preferredColorScheme(.dark)
 }
 
 #Preview("Sharing – Denied") {
@@ -318,5 +317,4 @@ private extension String {
     NavigationStack {
         LocationSharingScreen(viewModel: LocationSharingViewModel(sharing: container.sharing, store: container.store))
     }
-    .preferredColorScheme(.dark)
 }

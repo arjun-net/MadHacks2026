@@ -64,6 +64,20 @@ struct SettingsScreen: View {
                 }
 
                 Section {
+                    Picker("Appearance", selection: $preferences.appearance) {
+                        ForEach(Appearance.allCases) { appearance in
+                            Text(appearance.title).tag(appearance)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Theme.Colors.paper)
+                } header: {
+                    Text("Display")
+                } footer: {
+                    Text("Day Edition is the default. Night Edition is easier on the eyes after dark.")
+                }
+
+                Section {
                     Toggle(isOn: $preferences.busyAreaAlerts) {
                         SettingsLabel(symbol: "flame.fill", color: Theme.Colors.badgerRed, title: "Busy Area Alerts")
                     }
@@ -234,5 +248,4 @@ private struct CampusBanner: View {
         viewModel: SettingsViewModel(store: container.store, preferences: container.preferences, sharing: container.sharing),
         sharingViewModel: LocationSharingViewModel(sharing: container.sharing, store: container.store)
     )
-    .preferredColorScheme(.dark)
 }

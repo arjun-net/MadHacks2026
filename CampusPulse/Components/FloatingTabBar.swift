@@ -85,5 +85,5 @@ private struct FloatingTabBarPreview: View {
 }
 
 #Preview {
-    FloatingTabBarPreview().preferredColorScheme(.dark)
+    FloatingTabBarPreview()
 }

@@ -308,5 +308,10 @@ private struct ActivityPanelPreview: View {
 }
 
 #Preview("Panel") {
-    ActivityPanelPreview().preferredColorScheme(.dark)
+    ActivityPanelPreview()
+}
+
+#Preview("Panel – Night") {
+    ActivityPanelPreview()
+        .preferredColorScheme(.dark)
 }
