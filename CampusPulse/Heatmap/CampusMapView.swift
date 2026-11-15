@@ -117,15 +117,14 @@ struct CampusMapView: UIViewRepresentable {
             // The camera center stays inside `boundary`, so zoomed out the screen can show well beyond it.
             let reachable = boundary.insetBy(dx: -boundary.width * 0.5, dy: -boundary.height * 0.5)
 
-            basemapTiles = Basemap.forCampus(campus).map {
-                BasemapTiles(basemap: $0, campusID: campus.id, style: mapView.traitCollection.userInterfaceStyle)
-            }
+            basemapTiles = nil
             heatBounds = campus.heatmapBounds
             canvas?.removeFromSuperview()
-            let canvas = MapCanvasView(mapView: mapView, tiles: basemapTiles, overviewRect: reachable, heatBounds: campus.heatmapBounds)
+            let canvas = MapCanvasView(mapView: mapView, tiles: nil, overviewRect: reachable, heatBounds: campus.heatmapBounds)
             mapView.installCanvas(canvas)
             self.canvas = canvas
             animator.attach(canvas.heatLayer)
+            loadBasemap(for: campus, in: mapView)
 
             annotations = Dictionary(uniqueKeysWithValues: campus.areas.map { ($0.id, AreaAnnotation(area: $0)) })
             mapView.addAnnotations(Array(annotations.values))
@@ -141,7 +140,6 @@ struct CampusMapView: UIViewRepresentable {
                 // Street level around the buildings; closer zooms enlarge these while drawing.
                 (focusArea, 18...18),
             ]
-            prefetchBasemap(scale: mapView.traitCollection.displayScale)
             mapView.setCameraZoomRange(
                 MKMapView.CameraZoomRange(minCenterCoordinateDistance: 250, maxCenterCoordinateDistance: 20_000),
                 animated: false
@@ -189,6 +187,21 @@ struct CampusMapView: UIViewRepresentable {
             var insets = parent.contentInsets
             insets.bottom = max(insets.bottom, 330)
             mapView.setVisibleMapRect(rect, edgePadding: insets, animated: true)
+        }
+
+        /// Reads the bundled map (a few MB of streets and buildings) off the main thread, then
+        /// hands it to the canvas and starts drawing ahead.
+        private func loadBasemap(for campus: Campus, in mapView: MKMapView) {
+            let style = mapView.traitCollection.userInterfaceStyle
+            Task { [weak self, weak mapView] in
+                let basemap = await Task.detached(priority: .userInitiated) { Basemap.forCampus(campus) }.value
+                guard let self, let mapView, self.campusID == campus.id, let basemap else { return }
+                let tiles = BasemapTiles(basemap: basemap, campusID: campus.id, style: style)
+                tiles.style = mapView.traitCollection.userInterfaceStyle
+                self.basemapTiles = tiles
+                self.canvas?.setTiles(tiles)
+                self.prefetchBasemap(scale: mapView.traitCollection.displayScale)
+            }
         }
 
         /// Redraws the basemap in the new appearance.

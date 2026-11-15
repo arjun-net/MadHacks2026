@@ -17,7 +17,7 @@ final class MapCanvasView: UIView {
     }
 
     private weak var mapView: MKMapView?
-    private let tiles: BasemapTiles?
+    private var tiles: BasemapTiles?
     /// Layer geometry is in map points relative to this origin, which keeps the numbers small
     /// enough for Core Animation's single-precision math.
     private let origin: MKMapPoint
@@ -135,6 +135,15 @@ final class MapCanvasView: UIView {
             width: bounds.width / sx, height: bounds.height / sy
         ), pointsPerMapPoint: sx)
         CATransaction.commit()
+    }
+
+    /// The campus map arrives after the canvas: it loads in the background.
+    func setTiles(_ newTiles: BasemapTiles?) {
+        tiles = newTiles
+        overviewLayer.contents = nil
+        resetTiles()
+        loadOverview()
+        sync()
     }
 
     // MARK: Appearance

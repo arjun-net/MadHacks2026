@@ -54,17 +54,17 @@ struct MapPreviewCard: View {
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(BasemapPalette.land)))
 
             if let basemap {
-                func path(_ features: [Basemap.Feature]) -> Path {
+                func path(_ index: Basemap.FeatureIndex?) -> Path {
                     var combined = Path()
-                    for feature in features where feature.bounds.intersects(visible) {
+                    for feature in index?.query(visible) ?? [] {
                         combined.addPath(Path(feature.path), transform: transform)
                     }
                     return combined
                 }
                 let fill = FillStyle(eoFill: true)
-                context.fill(path(basemap.green), with: .color(Color(BasemapPalette.green)), style: fill)
-                context.fill(path(basemap.water), with: .color(Color(BasemapPalette.water)), style: fill)
-                context.fill(path(basemap.buildings), with: .color(Color(BasemapPalette.building)), style: fill)
+                context.fill(path(basemap.greenIndex), with: .color(Color(BasemapPalette.green)), style: fill)
+                context.fill(path(basemap.waterIndex), with: .color(Color(BasemapPalette.water)), style: fill)
+                context.fill(path(basemap.buildingIndex), with: .color(Color(BasemapPalette.building)), style: fill)
 
                 let roads: [(Basemap.RoadClass, UIColor, Double)] = [
                     (.path, BasemapPalette.path, 2),
@@ -73,7 +73,7 @@ struct MapPreviewCard: View {
                 ]
                 for (roadClass, color, meters) in roads {
                     context.stroke(
-                        path(basemap.roads[roadClass] ?? []),
+                        path(basemap.roadIndex[roadClass]),
                         with: .color(Color(color)),
                         style: StrokeStyle(lineWidth: max(0.8, meters * pointsPerMeter * scale), lineCap: .round, lineJoin: .round)
                     )

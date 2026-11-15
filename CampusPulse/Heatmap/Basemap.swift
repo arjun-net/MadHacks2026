@@ -204,13 +204,24 @@ final class BasemapTiles: @unchecked Sendable {
     private var prefetchTask: Task<Void, Never>?
     /// Saved tiles for this campus. Bump `version` whenever the drawing or colors change.
     private let directory: URL
-    private static let version = 1
+    private static let version = 2
 
     init(basemap: Basemap, campusID: String, style: UIUserInterfaceStyle) {
         self.basemap = basemap
         self._style = style == .dark ? .dark : .light
         self.directory = URL.cachesDirectory.appending(path: "basemap-tiles/\(campusID)-v\(Self.version)", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        Self.removeOldVersions(campusID: campusID, keeping: directory)
+    }
+
+    /// Tiles saved by earlier versions are never read again; free the space.
+    private static func removeOldVersions(campusID: String, keeping current: URL) {
+        let parent = current.deletingLastPathComponent()
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: parent.path) else { return }
+        for name in names where name.hasPrefix("\(campusID)-v") && name != current.lastPathComponent {
+            try? manager.removeItem(at: parent.appending(path: name))
+        }
     }
 
     /// Appearance to draw in. Tiles load on background threads, so it's lock-guarded.
