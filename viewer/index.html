@@ -35,6 +35,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"/><path d="M12 5l-3 3M12 5l3 3"/><path d="M12 19l-3-3M12 19l3-3"/><path d="M4 9l4 4H4zM20 9l-4 4h4z"/></svg>
     </button>
     <span class="adock-sep"></span>
+    <button id="live-btn" class="tool-btn" title="Pull live data from the Campus Location API">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+    </button>
+    <span class="adock-sep"></span>
     <label class="tool-btn" for="csv-input" title="Load simulation CSV">
       <input type="file" id="csv-input" accept=".csv" hidden />
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
@@ -87,8 +91,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.12.0/mapbox-gl.js"></script>
+  <input id="api-base" type="text" class="api-base" placeholder="API base …/api/v1" spellcheck="false"
+         style="display:none" />
   <script src="app.js"></script>
   <script src="analytics.js"></script>
   <script src="agent.js"></script>
+  <script src="live.js"></script>
 </body>
 </html>

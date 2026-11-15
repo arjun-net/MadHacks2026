@@ -1,6 +1,6 @@
 //! Campus Pulse — persistent device-ping sender.
 //!
-//! Reads the apicalls CSV (lat,long,timestamp,building) and replays it in
+//! Reads the apicalls CSV (lat,long,timestamp,device_id) and replays it in
 //! real time against the Location API (see openapi spec in the repo): once
 //! per tick (one CSV timestamp, 2 sim-minutes = wall-clock `--tick-ms`) it
 //! submits every device's ping via `POST /locations/batch` in 500-point
@@ -48,7 +48,7 @@ struct Args {
     #[arg(long, env = "PULSE_CONCURRENCY", default_value_t = 200)]
     concurrency: usize,
 
-    /// Devices (rows) to post per tick — first N rows
+    /// Devices to post per tick — first N device_ids in each tick
     #[arg(long, env = "PULSE_DEVICES")]
     devices: Option<usize>,
 
@@ -105,20 +105,16 @@ fn load_schedule(path: &str, devices: Option<usize>) -> Result<Schedule> {
 
     for rec in rdr.records() {
         let rec = rec.with_context(|| "bad CSV record")?;
-        // columns: lat,long,timestamp,building
+        // columns: lat,long,timestamp,device_id
         let lat: f64 = rec[0].parse().unwrap_or(0.0);
         let long: f64 = rec[1].parse().unwrap_or(0.0);
         let timestamp = rec[2].to_string();
-        // TEMP: building metadata stripped — re-enable when needed.
-        // let building = rec[3].to_string();
-        let ts = timestamp.clone();
-        let slot = by_ts.entry(ts).or_default().len();
-        by_ts.entry(rec[2].to_string()).or_default().push(Point {
+        let device_id = rec[3].to_string();
+        by_ts.entry(timestamp.clone()).or_default().push(Point {
             lat,
             lng: long,
             timestamp,
-            device_id: format!("sim-{slot}"),
-            // building, // TEMP: building metadata stripped — re-enable when needed.
+            device_id,
         });
     }
 

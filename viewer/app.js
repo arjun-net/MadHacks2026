@@ -196,6 +196,7 @@ const STATE_COLORS = {
   SLEEP: "#60a5fa",
   CLASS: "#f87171",
   STUDY: "#4ade80",
+  IN_BUILDING: "#4ade80",
   TRANSIT: "#a78bfa",
   EAT: "#facc15",
   SOCIAL: "#f472b6",
@@ -223,6 +224,9 @@ const playBtn = document.getElementById("play-btn");
 const timeLabel = document.getElementById("time-label");
 const speedSelect = document.getElementById("speed-select");
 
+/* Expose script-scoped pieces for live.js (loaded after app.js) */
+window.toast = toast;
+
 fileInput.addEventListener("change", (e) => {
   if (e.target.files.length) loadCSVFile(e.target.files[0]);
 });
@@ -244,6 +248,10 @@ document.addEventListener("drop", (e) => {
 });
 
 function loadCSVFile(file) {
+  // A manual CSV load supersedes the live server feed
+  if (window.LIVE) LIVE.stopPolling();
+  const liveBtn = document.getElementById("live-btn");
+  if (liveBtn) liveBtn.classList.remove("active");
   toast("Parsing…", true);
   Papa.parse(file, {
     header: true,
@@ -263,8 +271,17 @@ function loadCSVFile(file) {
   });
 }
 
+/* Normalize a building label to the snake_case slug the configs file and
+ * the Campus Location API use ("Morgridge Hall" → "morgridge_hall"). */
+function normBuilding(name) {
+  if (!name) return null;
+  const k = String(name).trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return k || null;
+}
+
 /* ── Ingest: rows → per-step buckets + per-agent trails ── */
-function ingestRows(rows) {
+function ingestRows(rows, opts = {}) {
   if (!rows.length) throw new Error("CSV is empty");
 
   const first = rows[0];
@@ -287,35 +304,44 @@ function ingestRows(rows) {
   byAgent = new Map();
 
   for (const r of rows) {
+    // API rows use `lng`; some CSVs use `long` (e.g. 1_day_future_apicalls)
     const lat = Number(r.lat);
-    const lng = Number(r.lng);
+    const lng = Number(r.lng ?? r.long);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
     const step = hasTs ? timestampToStep(r.timestamp) : Number(r.step) || 0;
     if (step < 0) continue;
 
+    // Server rows (Campus Location API) carry a building slug + device_id
+    // and no state column: mapped buildings render as IN_BUILDING, points
+    // the server could not match render as TRANSIT dots — the same
+    // geometry the simulation CSV feeds in.
+    const building = normBuilding(r.building ?? r.building_id);
+    const agentId = r.agent_id || r.device_id || "unknown";
+    const state = r.state || (building ? "IN_BUILDING" : "TRANSIT");
+
     const f = {
       type: "Feature",
-      properties: { agent_id: r.agent_id, state: r.state, building_id: r.building_id, minute_of_day: Number(r.minute_of_day), step },
+      properties: { agent_id: agentId, state, building_id: building, minute_of_day: Number(r.minute_of_day), step },
       geometry: { type: "Point", coordinates: [lng, lat] },
     };
     allFeatures.push(f);
     if (!byStep.has(step)) byStep.set(step, []);
     byStep.get(step).push(f);
 
-    let trail = byAgent.get(r.agent_id);
+    let trail = byAgent.get(agentId);
     if (!trail) {
       trail = [];
-      byAgent.set(r.agent_id, trail);
+      byAgent.set(agentId, trail);
     }
     // Downsample trails: position jitter inside a building would
     // otherwise produce a 720-point fuzz-blob per agent. Inside a
     // building (state != TRANSIT) keep only state/building changes;
     // while TRANSITing keep every ping so the walked route survives.
     const last = trail[trail.length - 1];
-    if (!last || last.state !== r.state || last.building !== r.building_id ||
-        r.state === "TRANSIT") {
-      trail.push({ step, lng, lat, state: r.state, building: r.building_id });
+    if (!last || last.state !== state || last.building !== building ||
+        state === "TRANSIT" || state === "IN_BUILDING") {
+      trail.push({ step, lng, lat, state, building });
     }
   }
 
@@ -330,7 +356,9 @@ function ingestRows(rows) {
   if (selectedAgent !== null && !byAgent.has(selectedAgent)) clearSelection();
 
   const nAgents = new Set(allFeatures.map((f) => f.properties.agent_id)).size;
-  toast(`Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents · ${stepToClock(timeMin)}–${stepToClock(timeMax)}`);
+  if (!opts.quiet) {
+    toast(`Loaded ${allFeatures.length.toLocaleString()} pings · ${nAgents} agents · ${stepToClock(timeMin)}–${stepToClock(timeMax)}`);
+  }
 
   // Notify analytics/agent layers that fresh data is available
   window.dispatchEvent(new CustomEvent("cp:ingest"));
@@ -531,7 +559,7 @@ function setStep(step) {
     map.getSource("agents").setData({
       type: "FeatureCollection",
       features: feats
-        .filter((f) => f.properties.state === "TRANSIT")
+        .filter((f) => f.properties.state === "TRANSIT" || f.properties.state === "IN_BUILDING")
         .map(cloneDotFeature),
     });
   }
@@ -594,7 +622,7 @@ function cometTrails(step) {
       const p = trail[i];
       if (p.step > step) continue;
       if (p.step < cutoff) break;
-      if (p.state === "TRANSIT") recent.push(p);
+      if (p.state === "TRANSIT" || p.state === "IN_BUILDING") recent.push(p);
       if (recent.length >= 40) break; // safety cap
     }
     if (recent.length < 2) continue;

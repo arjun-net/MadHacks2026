@@ -85,6 +85,38 @@ html, body {
 
 .tool-btn:disabled { opacity: 0.35; cursor: default; }
 
+/* Live-feed button states (live.js) */
+.tool-btn#live-btn.active {
+  color: var(--accent);
+  border-color: rgba(74, 222, 128, 0.4);
+}
+.tool-btn#live-btn.error {
+  color: var(--accent-hot);
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+/* Hidden API base input (shift-click the live button to reveal) */
+.api-base {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 40px));
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(18, 22, 30, 0.85);
+  backdrop-filter: blur(var(--glass-blur));
+  color: var(--text);
+  font-size: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  z-index: 11;
+  outline: none;
+}
+.api-base::placeholder { color: var(--text-dim); }
+.api-base:focus { border-color: rgba(74, 222, 128, 0.4); }
+
 /* ── Timeline dock (bottom center) ── */
 .dock {
   bottom: 18px;
