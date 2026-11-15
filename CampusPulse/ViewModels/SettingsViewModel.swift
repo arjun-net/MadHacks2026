@@ -52,10 +52,4 @@ final class SettingsViewModel {
     func reloadData() {
         store.reload()
     }
-
-    /// New random device ID; unsent readings are dropped.
-    func resetDeviceID() {
-        sharing.resetIdentity()
-        message = "Your device ID was reset. Readings from now on start fresh."
-    }
 }

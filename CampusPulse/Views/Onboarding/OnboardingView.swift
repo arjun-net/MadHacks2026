@@ -78,7 +78,7 @@ struct OnboardingView: View {
                     .foregroundStyle(Theme.Colors.positive)
                 Text("What sharing means").sectionLabelStyle()
             }
-            Text("The map is built from students who share. While sharing is on, your phone sends its location every 2 minutes with a random ID, never your name or account.")
+            Text("The map is built from students who share. While sharing is on, your phone sends its location every 2 minutes with no ID, name or account.")
                 .typeStyle(.subheadline)
                 .foregroundStyle(Theme.Colors.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)

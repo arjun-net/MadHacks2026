@@ -16,6 +16,8 @@ final class AppContainer {
         isPreview: Bool = false
     ) {
         self.preferences = preferences
+        // Older builds kept a random device ID; readings no longer carry one, so drop it.
+        UserDefaults.standard.removeObject(forKey: "device.id")
         self.store = CampusStore(campuses: CampusCatalog.all, preferences: preferences, isPreview: isPreview)
         let store = self.store
         self.sharing = SharingState(preferences: preferences, permission: permission, campus: { store.campus })

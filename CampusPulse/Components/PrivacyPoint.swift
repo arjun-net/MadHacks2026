@@ -41,7 +41,7 @@ enum PrivacyContent {
         Item(symbol: "person.crop.circle.badge.xmark", title: "You're never a dot on the map",
              detail: "The heatmap shows combined density only. No one, including us, sees an individual student."),
         Item(symbol: "person.crop.circle.badge.questionmark", title: "No name attached",
-             detail: "Check-ins carry a random ID for this install, never your name, email or account."),
+             detail: "Check-ins carry no ID at all, never your name, email or account."),
         Item(symbol: "eye.slash.fill", title: "Small groups stay hidden",
              detail: "Any spot with fewer than \(AppConfig.privacyThreshold) students is removed from the map entirely, and small counts are never shown."),
         Item(symbol: "clock.arrow.circlepath", title: "No location history",

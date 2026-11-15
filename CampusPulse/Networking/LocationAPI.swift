@@ -1,18 +1,41 @@
 import Foundation
 import os
 
-/// One location reading as the backend expects it.
+/// One location reading as the backend expects it:
+/// `{"device_id": null, "lng": …, "lat": …, "timestamp": "…Z"}` (keys may come in any order).
+/// No device ID (always null), so readings can't be linked to each other or to a phone.
+/// No building: the server works out which building a reading is in when it stores it.
 struct LocationPoint: Codable, Equatable, Sendable {
     let lat: Double
     let lng: Double
     /// The even-minute slot the reading belongs to (UTC), not the exact fix time.
     let timestamp: Date
-    let deviceID: String
 
-    // No building: the server works out which building a reading is in when it stores it.
     enum CodingKeys: String, CodingKey {
-        case lat, lng, timestamp
         case deviceID = "device_id"
+        case lng, lat, timestamp
+    }
+
+    init(lat: Double, lng: Double, timestamp: Date) {
+        self.lat = lat
+        self.lng = lng
+        self.timestamp = timestamp
+    }
+
+    /// Points queued by older builds may carry a device ID or building; both are ignored.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lat = try container.decode(Double.self, forKey: .lat)
+        lng = try container.decode(Double.self, forKey: .lng)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeNil(forKey: .deviceID)
+        try container.encode(lng, forKey: .lng)
+        try container.encode(lat, forKey: .lat)
+        try container.encode(timestamp, forKey: .timestamp)
     }
 }
 
