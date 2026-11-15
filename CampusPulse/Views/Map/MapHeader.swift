@@ -66,13 +66,15 @@ extension MapHeader {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
                 ActivityLevelBadge(level: snapshot.level)
+                    .fixedSize()
                 Text("≈\(Formatting.number(snapshot.participantCount)) on campus")
                     .monospacedDigit()
                     .contentTransition(.numericText(value: Double(snapshot.participantCount)))
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .lineLimit(1)
-                    .fixedSize()
+                    .minimumScaleFactor(0.8)
             }
+            .layoutPriority(1)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Campus is \(snapshot.level.title.lowercased()), about \(snapshot.participantCount) people on campus")
 

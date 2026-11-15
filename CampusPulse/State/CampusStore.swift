@@ -4,9 +4,9 @@ import os
 
 /// Activity for the selected campus, from the backend.
 /// - `snapshot`: live, from the last few 2-minute slots (the map).
-/// - `historySnapshot` / `history`: the server's stored day, replayed at the current time of day
-///   (the Activity tab's trends and the area detail screens). With `AppConfig.simulatesActivityData`
-///   the Activity tab shows the live reading instead, and no stored day is loaded.
+/// - `historySnapshot`: the Activity tab's reading, the same as the map's.
+/// - `history`: the last 24 hours of readings, for usual busy times and how big each place gets
+///   (the area detail screens). Fetched again every 10 minutes.
 /// - Every 15 seconds the server's people-per-building counts (`/buildings/counts`) are pulled.
 ///   For the campus's tracked buildings they set the current number and heat on the map, and the
 ///   current reading on the Activity tab.
@@ -20,10 +20,11 @@ final class CampusStore {
     private(set) var snapshot: CampusSnapshot?
     private(set) var state: LoadState = .idle
 
-    /// Past data for trends.
+    /// The Activity tab's reading (the live one) and the last 24 hours, for trends.
     private(set) var historySnapshot: CampusSnapshot?
     private(set) var historyState: LoadState = .idle
     private(set) var history: HistoryDay?
+    @ObservationIgnored private var historyLoadedAt: Date?
 
     private(set) var isRefreshing = false
     /// Previews run on bundled sample data instead of the network.
@@ -109,12 +110,9 @@ final class CampusStore {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        if AppConfig.simulatesActivityData {
-            // The Activity tab follows the live reading (see `rebuildLive`); no stored day needed.
-        } else if history?.campusID != campus.id {
+        let historyIsStale = historyLoadedAt.map { Date.now.timeIntervalSince($0) > AppConfig.historyRefreshInterval } ?? true
+        if !AppConfig.simulatesActivityData, history?.campusID != campus.id || historyIsStale {
             loadHistory()
-        } else if let history {
-            updateHistorySnapshot(from: history)
         }
         await refreshLive()
     }
@@ -133,6 +131,7 @@ final class CampusStore {
         historySnapshot = nil
         historyState = .loading
         history = nil
+        historyLoadedAt = nil
         historyTask?.cancel()
         historyTask = nil
         live = nil
@@ -184,7 +183,7 @@ final class CampusStore {
         } catch {
             Self.log.error("Live heatmap failed: \(error.localizedDescription, privacy: .public)")
             if snapshot == nil { state = .failed(Self.message(for: error)) }
-            if AppConfig.simulatesActivityData, historySnapshot == nil { historyState = state }
+            if historySnapshot == nil { historyState = state }
         }
     }
 
@@ -239,12 +238,8 @@ final class CampusStore {
         )
         snapshot = next
         state = next.isEmpty ? .empty : .loaded
-        if AppConfig.simulatesActivityData {
-            historySnapshot = next
-            historyState = state
-        } else if let history {
-            updateHistorySnapshot(from: history)
-        }
+        historySnapshot = next
+        historyState = state
         if notify { onLiveUpdate?(next) }
     }
 
@@ -254,34 +249,23 @@ final class CampusStore {
         guard historyTask == nil else { return }
         let requested = campus
         let api = api
-        if historySnapshot == nil { historyState = .loading }
         historyTask = Task { [weak self] in
             defer { self?.historyTask = nil }
             do {
-                let start = AppConfig.historyDay
-                let raw = try await api.points(from: start, to: start.addingTimeInterval(86_400), in: requested.boundaryRect, chunks: 4)
+                let window = HistoryDay.window(endingAt: .now)
+                let raw = try await api.points(from: window.start, to: window.end, in: requested.boundaryRect, chunks: 4)
                 let day = await Task.detached { () -> HistoryDay in
                     let tallies = ActivityAggregator.tally(raw, campus: requested)
-                    return HistoryDay(campusID: requested.id, start: start, tallies: tallies, capacities: .peaks(of: tallies, campus: requested))
+                    return HistoryDay(campusID: requested.id, start: window.start, tallies: tallies, capacities: .peaks(of: tallies, campus: requested))
                 }.value
                 guard let self, requested.id == self.campus.id else { return }
                 self.history = day
-                self.updateHistorySnapshot(from: day)
+                self.historyLoadedAt = .now
             } catch {
+                // Trends stay as they were (or hidden) until the next try.
                 Self.log.error("History load failed: \(error.localizedDescription, privacy: .public)")
-                guard let self, requested.id == self.campus.id, self.historySnapshot == nil else { return }
-                self.historyState = .failed(Self.message(for: error))
             }
         }
-    }
-
-    private func updateHistorySnapshot(from day: HistoryDay) {
-        var next = day.snapshot(for: campus)
-        if let counted = freshBuildingCounts, let live = snapshot {
-            next = next.withCurrentReadings(from: live, for: Set(counted.keys))
-        }
-        historySnapshot = next
-        historyState = next.isEmpty ? .empty : .loaded
     }
 
     private static func message(for error: Error) -> String {

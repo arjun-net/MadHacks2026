@@ -1,10 +1,10 @@
 import Foundation
 
-/// Values shown in UI copy and used to shape the sample data.
+/// App settings, and values shown in UI copy.
 enum AppConfig {
     /// Location API. Temporary Cloudflare tunnel: it changes whenever the server or tunnel restarts.
     /// Docs at the same host under /docs.
-    static let defaultAPIBaseURL = URL(string: "https://instrumentation-variables-instructional-shine.trycloudflare.com/api/v1")!
+    static let defaultAPIBaseURL = URL(string: "https://transparent-hitachi-marion-marie.trycloudflare.com/api/v1")!
 
     /// The server in use. Override without rebuilding from Settings > Developer (debug builds),
     /// or with the launch argument `-api.baseURL https://…/api/v1`.
@@ -19,8 +19,11 @@ enum AppConfig {
     /// Location readings are sent on every even minute (10:38, 10:40, 10:42…).
     static let updateInterval: TimeInterval = 120
 
-    /// How often the live map re-queries the server.
-    static let liveRefreshInterval: TimeInterval = 30
+    /// How often the live map re-queries the server while the app is open.
+    static let liveRefreshInterval: TimeInterval = 15
+
+    /// How often the last 24 hours (usual busy times, building sizes) is fetched again.
+    static let historyRefreshInterval: TimeInterval = 10 * 60
 
     /// How often the people-per-building counts are pulled (`/buildings/counts`) while the app is open.
     static let buildingCountsInterval: TimeInterval = 15
@@ -28,19 +31,21 @@ enum AppConfig {
     /// Building counts older than this are ignored (the server counts over a 2-minute window).
     static let buildingCountsFreshness: TimeInterval = 60
 
-    /// Mix fake readings, generated on the device, into the live map so it has a crowd to show.
-    /// They're never uploaded. Set to false to show only what real phones send.
-    static let simulatesLiveData = true
+    // Everything shown comes from the backend. The switches below bring back fake data,
+    // generated on the device and never uploaded, for demos without a server.
 
-    /// Fill the Activity tab with fake data too: it shows the same reading as the map, and each
-    /// place gets a generated week of history (usual busy times per weekday, the past seven
-    /// days and today so far) instead of the server's one stored day. Needs `simulatesLiveData`.
+    /// Mix fake readings into the live map so it has a crowd to show. Off: only what real
+    /// phones send.
+    static let simulatesLiveData = false
+
+    /// Fill each place's history with a generated week (usual busy times per weekday, past
+    /// days, today so far). Off: usual busy times come from the last 24 hours of real readings.
+    /// Needs `simulatesLiveData`.
     static let simulatesActivityData = simulatesLiveData
 
     /// Where each building's "this time vs. past weeks" story comes from: the analytics
     /// endpoint `GET /buildings/{name}/story` when true, generated on the device when false.
-    /// Flip to true once the analytics database has data.
-    static let usesServerBuildingStories = false
+    static let usesServerBuildingStories = true
 
     /// How many past same weekdays a building story compares with.
     static let buildingStoryWeeks = 8
@@ -58,28 +63,9 @@ enum AppConfig {
     /// A slot counts as live if it's no older than this.
     static let liveFreshness: TimeInterval = 4 * 60
 
-    /// The stored day of readings the trends replay (the server's simulated dataset, 2026-01-01).
-    /// Its timestamps are campus wall-clock times. Point this at real days once they accumulate.
-    static let defaultHistoryDay = Date(timeIntervalSince1970: 1_767_225_600) // 2026-01-01T00:00:00Z
-
-    /// The stored day in use. Override from Settings > Developer or with `-history.day 2026-01-02`.
-    static var historyDay: Date {
-        UserDefaults.standard.string(forKey: Overrides.historyDay).flatMap(parseDay) ?? defaultHistoryDay
-    }
-
-    /// "2026-01-01" → midnight UTC that day.
-    static func parseDay(_ text: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .gmt
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: text.trimmingCharacters(in: .whitespaces))
-    }
-
     /// UserDefaults keys for the developer overrides.
     enum Overrides {
         static let apiBaseURL = "api.baseURL"
-        static let historyDay = "history.day"
     }
 
     /// Headcount per unit of area popularity treated as "packed" before history has loaded.

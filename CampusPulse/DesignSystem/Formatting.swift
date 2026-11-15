@@ -26,14 +26,7 @@ enum Formatting {
         }
     }
 
-    /// Newspaper dateline: "SAT · NOV 14".
-    /// A moment in the stored dataset, whose timestamps are campus wall-clock times: "Jan 1, 2:30 PM".
-    static func dataDay(_ date: Date) -> String {
-        var style = Date.FormatStyle.dateTime.month(.abbreviated).day().hour().minute()
-        style.timeZone = .gmt
-        return date.formatted(style)
-    }
-
+    /// Dateline: "Sat, Nov 14".
     static func dateline(_ date: Date) -> String {
         let weekday = date.formatted(.dateTime.weekday(.abbreviated))
         let day = date.formatted(.dateTime.month(.abbreviated).day())
