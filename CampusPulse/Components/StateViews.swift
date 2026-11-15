@@ -10,18 +10,12 @@ struct StatusMessageView<Actions: View>: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(tint.opacity(0.14))
-                    .frame(width: 64, height: 64)
-                Circle()
-                    .strokeBorder(tint.opacity(0.3), lineWidth: 1)
-                    .frame(width: 64, height: 64)
-                Image(systemName: symbol)
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .symbolRenderingMode(.hierarchical)
-            }
+            Image(systemName: symbol)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 60, height: 60)
+                .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
             VStack(spacing: 6) {
                 Text(title)
                     .typeStyle(.title3)
@@ -51,14 +45,14 @@ struct LoadingStateView: View {
     var body: some View {
         HStack(spacing: 10) {
             ProgressView()
-                .tint(.white)
+                .tint(Theme.Colors.ink)
             Text(message)
                 .typeStyle(.subheadline)
                 .foregroundStyle(Theme.Colors.textSecondary)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .glassCapsule()
+        .paper()
     }
 }
 
@@ -89,11 +83,11 @@ struct ErrorStateView: View {
         ) {
             Button(action: retry) {
                 Label("Try Again", systemImage: "arrow.clockwise")
-                    .typeStyle(.headline)
+                    .typeStyle(.button)
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Theme.Gradients.accent, in: Capsule())
-                    .foregroundStyle(.white)
+                    .frame(minHeight: 44)
+                    .background(Theme.Colors.accentFill, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    .foregroundStyle(Theme.Colors.onAccent)
             }
             .buttonStyle(.plain)
         }
@@ -112,12 +106,12 @@ struct PermissionDeniedView: View {
         ) {
             Button(action: openSettings) {
                 Label("Open Settings", systemImage: "gear")
-                    .typeStyle(.headline)
+                    .typeStyle(.button)
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.12), in: Capsule())
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
-                    .foregroundStyle(.white)
+                    .frame(minHeight: 44)
+                    .background(Theme.Colors.paper, in: RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.ink, lineWidth: Theme.Stroke.hairline))
+                    .foregroundStyle(Theme.Colors.ink)
             }
             .buttonStyle(.plain)
         }
@@ -130,8 +124,8 @@ struct SkeletonBlock: View {
     var height: CGFloat = 12
 
     var body: some View {
-        RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-            .fill(Color.white.opacity(0.09))
+        RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+            .fill(Theme.Colors.surfaceStrong)
             .frame(width: width, height: height)
             .shimmering()
     }

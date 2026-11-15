@@ -22,52 +22,54 @@ enum AppTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Floating glass tab bar with a sliding selection pill.
+/// Newspaper tab bar: flush square segments with ink dividers and a hard offset shadow.
+/// The selected segment is filled ink (Day) or Badger red (Night) and slides between tabs.
 struct FloatingTabBar: View {
     @Binding var selection: AppTab
     @Namespace private var namespace
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var selectedFill: Color { colorScheme == .dark ? Theme.Colors.accentFill : Theme.Colors.ink }
+    private var selectedText: Color { colorScheme == .dark ? Theme.Colors.onAccent : Theme.Colors.paper }
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(AppTab.allCases) { tab in
+        HStack(spacing: 0) {
+            ForEach(Array(AppTab.allCases.enumerated()), id: \.element) { index, tab in
+                if index > 0 {
+                    Rectangle()
+                        .fill(Theme.Colors.ink)
+                        .frame(width: Theme.Stroke.hairline)
+                }
                 let isSelected = tab == selection
                 Button {
                     withAnimation(Theme.Motion.snappy) { selection = tab }
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: 4) {
                         Image(systemName: tab.symbol)
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(height: 20)
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(height: 18)
                         Text(tab.title)
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .typeStyle(.tab)
                     }
-                    .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.5))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .foregroundStyle(isSelected ? selectedText : Theme.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background {
                         if isSelected {
-                            Capsule(style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Theme.Colors.accent.opacity(0.55), Theme.Colors.accentSecondary.opacity(0.4)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 0.5))
-                                .shadow(color: Theme.Colors.accent.opacity(0.45), radius: 10)
+                            Rectangle()
+                                .fill(selectedFill)
                                 .matchedGeometryEffect(id: "selection", in: namespace)
                         }
                     }
-                    .contentShape(Capsule())
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tab.title)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
-        .padding(5)
-        .glassCapsule()
+        .frame(height: 56)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+        .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
         .frame(maxWidth: 320)
         .padding(.horizontal, 40)
         .sensoryFeedback(.selection, trigger: selection)

@@ -59,6 +59,17 @@ enum ActivityLevel: Int, CaseIterable, Comparable, Sendable {
     }
 
     var color: Color { HeatPalette.color(at: paletteValue) }
+
+    /// Text/line color that holds contrast on paper in both appearances.
+    /// Raw ramp colors are for fills only; the pale end fails contrast as text.
+    var textColor: Color {
+        switch self {
+        case .packed: Theme.Colors.accent
+        case .busy: Theme.Colors.brick
+        case .moderate: Theme.Colors.rust
+        case .light, .quiet: Theme.Colors.textSecondary
+        }
+    }
 }
 
 enum ActivityTrend: Sendable {

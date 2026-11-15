@@ -9,16 +9,16 @@ struct AreaActivityRow: View {
         HStack(spacing: 12) {
             if let rank {
                 Text("\(rank)")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Theme.Colors.textTertiary)
-                    .frame(width: 14)
+                    .typeStyle(.rank)
+                    .foregroundStyle(rank == 1 ? Theme.Colors.accent : Theme.Colors.textTertiary)
+                    .frame(width: 22)
             }
             AreaIconTile(symbol: activity.area.symbol, color: activity.level.color)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(activity.area.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .typeStyle(.rowTitle)
                         .foregroundStyle(Theme.Colors.textPrimary)
                         .lineLimit(1)
                     Spacer(minLength: 4)
@@ -34,9 +34,10 @@ struct AreaActivityRow: View {
                 }
             }
 
-            Sparkline(values: activity.history, color: activity.level.color, lineWidth: 1.5)
+            Sparkline(values: activity.history, color: activity.level.textColor)
                 .frame(width: 44, height: 26)
         }
+        .frame(minHeight: 52)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(rank.map { "Number \($0), " } ?? "")\(activity.area.name), \(activity.level.title), \(activity.countLabel), \(activity.trend.title)")

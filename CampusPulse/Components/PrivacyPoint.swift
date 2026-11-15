@@ -4,7 +4,7 @@ struct PrivacyPoint: View {
     let symbol: String
     let title: String
     let detail: String
-    var tint: Color = Theme.Colors.accent
+    var tint: Color = Theme.Colors.positive
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -12,13 +12,14 @@ struct PrivacyPoint: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 34, height: 34)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(Theme.Colors.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline))
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .typeStyle(.headline)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Text(detail)
-                    .font(.system(size: 14))
+                    .typeStyle(.body)
                     .foregroundStyle(Theme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

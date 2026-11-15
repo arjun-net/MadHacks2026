@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Glowing dot with an expanding ripple. Driven by a timeline so it never fights other animations.
+/// Live dot with an expanding ripple. Driven by a timeline so it never fights other animations.
 struct PulsingDot: View {
     var color: Color
     var size: CGFloat = 8
     var isAnimating = true
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: !isAnimating)) { context in
@@ -12,13 +13,13 @@ struct PulsingDot: View {
             ZStack {
                 if isAnimating {
                     Circle()
-                        .fill(color.opacity(0.55))
+                        .fill(color.opacity(0.45))
                         .scaleEffect(1 + phase * 1.8)
                         .opacity(1 - phase)
                 }
                 Circle()
                     .fill(color)
-                    .shadow(color: color.opacity(0.9), radius: 4)
+                    .shadow(color: colorScheme == .dark ? color.opacity(0.8) : .clear, radius: 3)
             }
         }
         .frame(width: size, height: size)
@@ -26,6 +27,7 @@ struct PulsingDot: View {
     }
 }
 
+/// Square, tracked-caps level chip. Text always carries the level word, never color alone.
 struct ActivityLevelBadge: View {
     let level: ActivityLevel
     var showsIcon = false
@@ -33,58 +35,65 @@ struct ActivityLevelBadge: View {
     var body: some View {
         HStack(spacing: 4) {
             if showsIcon {
-                Image(systemName: level.symbol).font(.system(size: 9, weight: .bold))
+                Image(systemName: level.symbol).font(.system(size: 8.5, weight: .heavy))
             }
             Text(level.title)
+                .typeStyle(.badge)
         }
-        .font(.system(size: 11, weight: .bold))
-        .foregroundStyle(level.color)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3.5)
-        .background(level.color.opacity(0.16), in: Capsule())
-        .overlay(Capsule().strokeBorder(level.color.opacity(0.25), lineWidth: 0.5))
+        .foregroundStyle(level == .packed ? Theme.Colors.onAccent : level.textColor)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2.5)
+        .background {
+            if level == .packed {
+                RoundedRectangle(cornerRadius: Theme.Radius.sm).fill(Theme.Colors.accentFill)
+            }
+        }
+        .overlay {
+            if level != .packed {
+                RoundedRectangle(cornerRadius: Theme.Radius.sm).strokeBorder(level.textColor, lineWidth: 1)
+            }
+        }
         .accessibilityLabel("Activity: \(level.title)")
     }
 }
 
-/// Horizontal capsule that reveals the heat ramp up to `intensity`.
+/// Flat 4pt bar: track in `surfaceStrong`, solid fill in the level's ramp color.
 struct ActivityBar: View {
     var intensity: Double
-    var height: CGFloat = 6
+    /// Kept for call sites; the bar is always 4pt.
+    var height: CGFloat = 4
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.08))
-                Capsule()
-                    .fill(HeatPalette.linearGradient)
-                    .frame(width: proxy.size.width)
-                    .mask(alignment: .leading) {
-                        Capsule().frame(width: max(height, proxy.size.width * min(1, max(0, intensity))))
-                    }
+                Rectangle().fill(Theme.Colors.surfaceStrong)
+                Rectangle()
+                    .fill(ActivityLevel(intensity: intensity).color)
+                    .frame(width: max(2, proxy.size.width * min(1, max(0, intensity))))
             }
         }
-        .frame(height: height)
+        .frame(height: 4)
         .animation(Theme.Motion.smooth, value: intensity)
         .accessibilityHidden(true)
     }
 }
 
-/// Smooth mini trend line with a soft gradient fill.
+/// Mini trend line. Fill only in Night Edition.
 struct Sparkline: View {
     var values: [Double]
     var color: Color
-    var lineWidth: CGFloat = 1.75
+    var lineWidth: CGFloat = 1.6
     var showsFill = true
     var showsEndpoint = true
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { proxy in
             let points = normalizedPoints(in: proxy.size)
             ZStack {
-                if showsFill, points.count > 1 {
+                if showsFill, colorScheme == .dark, points.count > 1 {
                     fillPath(points, size: proxy.size)
-                        .fill(LinearGradient(colors: [color.opacity(0.32), color.opacity(0)], startPoint: .top, endPoint: .bottom))
+                        .fill(color.opacity(0.12))
                 }
                 linePath(points)
                     .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
@@ -92,7 +101,6 @@ struct Sparkline: View {
                     Circle()
                         .fill(color)
                         .frame(width: lineWidth * 2.6, height: lineWidth * 2.6)
-                        .shadow(color: color, radius: 3)
                         .position(last)
                 }
             }
@@ -143,25 +151,48 @@ struct Sparkline: View {
     }
 }
 
-/// 270° ring gauge painted with the heat ramp.
+/// Campus-wide intensity. `.masthead` is a 60pt ink-ringed box with the percentage;
+/// `.ring` is a single-color 270° arc for larger layouts (Activity screen).
 struct ActivityGauge: View {
+    enum Style { case masthead, ring }
+
     var intensity: Double
     var lineWidth: CGFloat = 10
+    var style: Style = .masthead
 
     private let sweep = 0.75
 
     var body: some View {
+        switch style {
+        case .masthead: masthead
+        case .ring: ring
+        }
+    }
+
+    private var masthead: some View {
+        VStack(spacing: -2) {
+            Text("\(Int((intensity * 100).rounded()))")
+                .typeStyle(.metricSmall)
+                .foregroundStyle(Theme.Colors.accent)
+                .contentTransition(.numericText())
+            Text("Pct")
+                .typeStyle(.badge)
+                .foregroundStyle(Theme.Colors.textSecondary)
+        }
+        .frame(width: 60, height: 60)
+        .overlay(Circle().strokeBorder(Theme.Colors.ink, lineWidth: 2))
+        .animation(Theme.Motion.smooth, value: intensity)
+        .accessibilityHidden(true)
+    }
+
+    private var ring: some View {
         ZStack {
             Circle()
                 .trim(from: 0, to: sweep)
-                .stroke(Color.white.opacity(0.08), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(Theme.Colors.surfaceStrong, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
             Circle()
                 .trim(from: 0, to: sweep * max(0.02, min(1, intensity)))
-                .stroke(
-                    AngularGradient(gradient: HeatPalette.gradient, center: .center, startAngle: .degrees(0), endAngle: .degrees(270)),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .shadow(color: HeatPalette.color(at: intensity).opacity(0.55), radius: lineWidth * 0.8)
+                .stroke(Theme.Colors.accent, style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
         }
         .rotationEffect(.degrees(135))
         .padding(lineWidth / 2)
@@ -172,42 +203,45 @@ struct ActivityGauge: View {
 
 /// Color key for the map: Quiet → Packed.
 struct HeatLegend: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         HStack(spacing: 8) {
             Text("Quiet")
-            Capsule()
+            Rectangle()
                 .fill(HeatPalette.linearGradient)
                 .frame(width: 70, height: 6)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5))
             Text("Packed")
         }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(Theme.Colors.textSecondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .glassCapsule()
+        .typeStyle(.micro)
+        .foregroundStyle(Theme.Colors.ink)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .paper()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Heatmap legend: purple is quiet, red is packed")
+        .accessibilityLabel(colorScheme == .dark
+            ? "Heatmap legend: dim is quiet, bright is packed"
+            : "Heatmap legend: pale is quiet, dark red is packed")
     }
 }
 
-/// Rounded tile holding an SF Symbol in a level color.
+/// Square tile holding an SF Symbol in ink. `color` is kept for call sites but no longer tints.
 struct AreaIconTile: View {
     let symbol: String
     let color: Color
     var size: CGFloat = 38
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-            .fill(color.opacity(0.15))
+        RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+            .fill(Theme.Colors.surface)
             .overlay(
-                RoundedRectangle(cornerRadius: size * 0.3, style: .continuous)
-                    .strokeBorder(color.opacity(0.22), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                    .strokeBorder(Theme.Colors.rule, lineWidth: Theme.Stroke.hairline)
             )
             .overlay(
                 Image(systemName: symbol)
                     .font(.system(size: size * 0.42, weight: .semibold))
-                    .foregroundStyle(color)
+                    .foregroundStyle(Theme.Colors.ink)
             )
             .frame(width: size, height: size)
     }
@@ -239,9 +273,10 @@ struct UpdatedAgoText: View {
             ForEach(ActivityLevel.allCases, id: \.self) { ActivityLevelBadge(level: $0) }
         }
         ActivityBar(intensity: 0.72).frame(width: 200)
-        Sparkline(values: [0.2, 0.3, 0.28, 0.45, 0.5, 0.62, 0.58, 0.7], color: ActivityLevel.busy.color)
+        Sparkline(values: [0.2, 0.3, 0.28, 0.45, 0.5, 0.62, 0.58, 0.7], color: ActivityLevel.busy.textColor)
             .frame(width: 120, height: 40)
-        ActivityGauge(intensity: 0.68).frame(width: 120, height: 120)
+        ActivityGauge(intensity: 0.68)
+        ActivityGauge(intensity: 0.68, style: .ring).frame(width: 120, height: 120)
         HeatLegend()
     }
     .padding()
