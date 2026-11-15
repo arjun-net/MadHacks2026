@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Masthead: a dateline (live, last update, date) over the campus name in display serif.
+/// Masthead: a dateline (live, last update, date) over the campus name in display serif,
+/// and a one-line summary underneath: how busy campus is, how many are sharing, and the
+/// busiest place (tap to find it on the map). The ranked lists live on the Activity tab.
 struct MapHeader: View {
     let campus: Campus
     let snapshot: CampusSnapshot?
     let isRefreshing: Bool
     let sharingStatus: SharingStatus
     var onOpenSharing: () -> Void
+    var onSelectArea: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -42,9 +45,64 @@ struct MapHeader: View {
                 Spacer(minLength: 8)
                 SharingStatusPill(status: sharingStatus, action: onOpenSharing)
             }
+
+            if let snapshot, !snapshot.isEmpty {
+                summary(snapshot)
+                    .transition(.opacity)
+            }
         }
+        .animation(Theme.Motion.smooth, value: snapshot?.isEmpty)
         .padding(EdgeInsets(top: 12, leading: 16, bottom: 14, trailing: 14))
         .paper(cornerRadius: Theme.Radius.sm, hardShadow: true)
+    }
+}
+
+extension MapHeader {
+    fileprivate func summary(_ snapshot: CampusSnapshot) -> some View {
+        HStack(spacing: 10) {
+            ActivityLevelBadge(level: snapshot.level)
+                .accessibilityLabel("Campus is \(snapshot.level.title.lowercased())")
+
+            HStack(spacing: 4) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 10))
+                Text("≈ \(Formatting.number(snapshot.participantCount)) sharing")
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: Double(snapshot.participantCount)))
+            }
+            .foregroundStyle(Theme.Colors.textSecondary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("About \(snapshot.participantCount) students sharing")
+
+            Spacer(minLength: 4)
+
+            if let top = snapshot.busiest(1).first {
+                Button { onSelectArea(top.id) } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.Colors.accent)
+                        Text(top.area.shortName)
+                            .foregroundStyle(Theme.Colors.ink)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Theme.Colors.textTertiary)
+                    }
+                    .frame(minHeight: 36)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(RowButtonStyle())
+                .accessibilityLabel("Busiest: \(top.area.name)")
+                .accessibilityHint("Shows it on the map")
+            }
+        }
+        .typeStyle(.caption)
+        .padding(.top, 2)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.Colors.rule).frame(height: Theme.Stroke.hairline).offset(y: -4)
+        }
     }
 }
 

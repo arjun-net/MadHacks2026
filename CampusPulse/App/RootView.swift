@@ -86,14 +86,13 @@ struct RootView: View {
         }
     }
 
-    /// `-screen activity|settings|sharing|panel|denied|onboarding` jumps straight to a screen (debug builds only).
+    /// `-screen activity|settings|sharing|denied|onboarding` jumps straight to a screen (debug builds only).
     private func applyDebugLaunchOptions() {
         #if DEBUG
         switch UserDefaults.standard.string(forKey: "screen") {
         case "activity": selectedTab = .activity
         case "settings": selectedTab = .settings
         case "sharing": isSharingSheetPresented = true
-        case "panel": mapViewModel.isPanelExpanded = true
         case "onboarding": isOnboardingPresented = true
         case "denied":
             container.sharing.simulate(permission: .denied)

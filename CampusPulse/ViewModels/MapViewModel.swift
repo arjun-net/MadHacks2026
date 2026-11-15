@@ -8,7 +8,6 @@ final class MapViewModel {
     private let sharing: SharingState
 
     var isHeatmapVisible = true
-    var isPanelExpanded = false
     private(set) var selectedAreaID: String?
     private(set) var recenterToken = 0
 
@@ -20,7 +19,6 @@ final class MapViewModel {
     var campus: Campus { store.campus }
     var snapshot: CampusSnapshot? { store.snapshot }
     var loadState: LoadState { store.state }
-    var topAreas: [AreaActivity] { snapshot?.busiest(5) ?? [] }
     var sharingStatus: SharingStatus { sharing.status }
 
     var selectedActivity: AreaActivity? {
@@ -41,7 +39,6 @@ final class MapViewModel {
     func select(areaID: String?) {
         withAnimation(Theme.Motion.smooth) {
             selectedAreaID = areaID
-            if areaID != nil { isPanelExpanded = false }
         }
     }
 
@@ -60,6 +57,5 @@ final class MapViewModel {
 
     func campusDidChange() {
         selectedAreaID = nil
-        isPanelExpanded = false
     }
 }

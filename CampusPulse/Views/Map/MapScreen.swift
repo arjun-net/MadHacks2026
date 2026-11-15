@@ -27,7 +27,8 @@ struct MapScreen: View {
                     snapshot: viewModel.snapshot,
                     isRefreshing: viewModel.store.isRefreshing,
                     sharingStatus: viewModel.sharingStatus,
-                    onOpenSharing: onOpenSharing
+                    onOpenSharing: onOpenSharing,
+                    onSelectArea: { viewModel.select(areaID: $0) }
                 )
 
                 HStack(alignment: .top) {
@@ -56,14 +57,6 @@ struct MapScreen: View {
                         HeatLegend()
                             .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .leading)))
                     }
-
-                    ActivityPanel(
-                        snapshot: viewModel.snapshot,
-                        loadState: viewModel.loadState,
-                        isExpanded: $viewModel.isPanelExpanded,
-                        favoriteAreaIDs: viewModel.favoriteAreaIDs,
-                        onSelectArea: { viewModel.select(areaID: $0) }
-                    )
                 }
             }
             .padding(.horizontal, Theme.Spacing.md)
@@ -82,7 +75,7 @@ struct MapScreen: View {
                 .frame(height: 180)
             Spacer()
             LinearGradient(colors: [Theme.Colors.mapScrim.opacity(0), Theme.Colors.mapScrim.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 260)
+                .frame(height: 170)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)

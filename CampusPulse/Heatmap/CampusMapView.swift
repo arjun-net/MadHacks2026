@@ -10,7 +10,8 @@ struct CampusMapView: UIViewRepresentable {
     let selectedAreaID: String?
     let recenterToken: Int
     /// Space covered by floating chrome, so recentering frames campus in the visible area.
-    var contentInsets = UIEdgeInsets(top: 130, left: 14, bottom: 230, right: 14)
+    /// Room for the masthead above and the legend and tab bar below.
+    var contentInsets = UIEdgeInsets(top: 190, left: 14, bottom: 140, right: 14)
     var onSelectArea: (String?) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
