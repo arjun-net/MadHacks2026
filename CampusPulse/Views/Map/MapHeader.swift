@@ -165,12 +165,21 @@ struct SharingStatusPill: View {
 /// Vertical paper column of map actions.
 struct MapControlStack: View {
     let isHeatmapVisible: Bool
+    var is3D = false
     var onRecenter: () -> Void
     var onToggleHeatmap: () -> Void
+    var onToggle3D: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
             MapControlButton(symbol: "scope", label: "Center on campus", action: onRecenter)
+            divider
+            MapControlButton(
+                symbol: is3D ? "map" : "view.3d",
+                label: is3D ? "Show flat map" : "Show 3D map",
+                tint: is3D ? Theme.Colors.accent : Theme.Colors.ink,
+                action: onToggle3D
+            )
             divider
             MapControlButton(
                 symbol: isHeatmapVisible ? "flame.fill" : "flame",

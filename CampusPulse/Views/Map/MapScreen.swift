@@ -17,6 +17,20 @@ struct MapScreen: View {
             )
             .ignoresSafeArea()
 
+            if viewModel.is3D {
+                Campus3DMapView(
+                    campus: viewModel.campus,
+                    snapshot: viewModel.snapshot,
+                    isHeatmapVisible: viewModel.isHeatmapVisible,
+                    selectedAreaID: viewModel.selectedAreaID,
+                    recenterToken: viewModel.recenterToken,
+                    onSelectArea: { viewModel.select(areaID: $0) }
+                )
+                .id(viewModel.campus.id)
+                .ignoresSafeArea()
+                .transition(.opacity)
+            }
+
             edgeScrims
 
             stateOverlay
@@ -35,8 +49,10 @@ struct MapScreen: View {
                     Spacer()
                     MapControlStack(
                         isHeatmapVisible: viewModel.isHeatmapVisible,
+                        is3D: viewModel.is3D,
                         onRecenter: viewModel.recenter,
-                        onToggleHeatmap: { withAnimation(Theme.Motion.snappy) { viewModel.toggleHeatmap() } }
+                        onToggleHeatmap: { withAnimation(Theme.Motion.snappy) { viewModel.toggleHeatmap() } },
+                        onToggle3D: { withAnimation(Theme.Motion.smooth) { viewModel.toggle3D() } }
                     )
                 }
 

@@ -250,11 +250,12 @@ final class BasemapTiles: @unchecked Sendable {
     }
 
     /// One low-detail picture of a whole area, shown under the tiles so the map is never empty.
-    func overview(of rect: MKMapRect, style: UIUserInterfaceStyle) -> CGImage? {
-        let file = directory.appending(path: "overview-\(style == .dark ? "d" : "l")-\(Int(rect.minX))-\(Int(rect.minY))-\(Int(rect.width)).jpg")
+    /// `longSide` is the picture's longer edge in pixels.
+    func overview(of rect: MKMapRect, style: UIUserInterfaceStyle, longSide: CGFloat = 2048) -> CGImage? {
+        let name = "overview-\(style == .dark ? "d" : "l")-\(Int(rect.minX))-\(Int(rect.minY))-\(Int(rect.width))"
+        let file = directory.appending(path: longSide == 2048 ? "\(name).jpg" : "\(name)-\(Int(longSide)).jpg")
         if let saved = try? Data(contentsOf: file), let image = Self.decode(saved) { return image }
 
-        let longSide: CGFloat = 2048
         let zoomScale = longSide / max(rect.width, rect.height)
         let size = CGSize(width: (rect.width * zoomScale).rounded(), height: (rect.height * zoomScale).rounded())
         let data = render(rect, size: size, zoomScale: zoomScale, scale: 1, style: style)

@@ -8,6 +8,9 @@ final class MapViewModel {
     private let sharing: SharingState
 
     var isHeatmapVisible = true
+    /// Angled 3D view with the heat raised into mountains, instead of the flat map.
+    /// Remembered between launches.
+    var is3D = UserDefaults.standard.bool(forKey: "map.3d")
     private(set) var selectedAreaID: String?
     private(set) var recenterToken = 0
 
@@ -44,6 +47,11 @@ final class MapViewModel {
 
     func toggleHeatmap() {
         isHeatmapVisible.toggle()
+    }
+
+    func toggle3D() {
+        is3D.toggle()
+        UserDefaults.standard.set(is3D, forKey: "map.3d")
     }
 
     func recenter() {
