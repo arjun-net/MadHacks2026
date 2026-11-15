@@ -22,9 +22,12 @@ struct PaperBackground<S: InsettableShape>: ViewModifier {
 }
 
 struct Shimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func body(content: Content) -> some View {
         content.overlay {
-            TimelineView(.animation) { context in
+            // With Reduce Motion the skeleton stays still; the placeholder shape alone says "loading".
+            TimelineView(.animation(paused: reduceMotion)) { context in
                 let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.4) / 1.4
                 GeometryReader { proxy in
                     LinearGradient(

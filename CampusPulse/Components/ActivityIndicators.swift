@@ -6,12 +6,16 @@ struct PulsingDot: View {
     var size: CGFloat = 8
     var isAnimating = true
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Reduce Motion keeps the solid dot and drops the expanding ring.
+    private var pulses: Bool { isAnimating && !reduceMotion }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !isAnimating)) { context in
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: !pulses)) { context in
             let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8
             ZStack {
-                if isAnimating {
+                if pulses {
                     Circle()
                         .fill(color.opacity(0.45))
                         .scaleEffect(1 + phase * 1.8)

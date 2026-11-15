@@ -228,11 +228,15 @@ struct LocationSharingScreen: View {
 struct SharingBeacon: View {
     let isActive: Bool
     let tint: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// With Reduce Motion the rings hold still at evenly spaced sizes instead of radiating.
+    private var radiates: Bool { isActive && !reduceMotion }
 
     var body: some View {
         ZStack {
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: !isActive)) { context in
-                let time = context.date.timeIntervalSinceReferenceDate
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: !radiates)) { context in
+                let time = radiates ? context.date.timeIntervalSinceReferenceDate : 0.4
                 ZStack {
                     ForEach(0..<3, id: \.self) { index in
                         let phase = (time / 2.6 + Double(index) / 3).truncatingRemainder(dividingBy: 1)
