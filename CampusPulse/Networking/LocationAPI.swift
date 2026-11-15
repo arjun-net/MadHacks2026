@@ -28,7 +28,8 @@ struct LocationAPI: Sendable {
 
     static let maxBatchSize = 500
 
-    var baseURL: URL = AppConfig.apiBaseURL
+    /// Read per request, so a server change in Settings > Developer applies right away.
+    var baseURL: URL { AppConfig.apiBaseURL }
     var session: URLSession = .shared
 
     private static let log = Logger(subsystem: "CampusPulse", category: "LocationAPI")

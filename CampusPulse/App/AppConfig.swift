@@ -4,7 +4,17 @@ import Foundation
 enum AppConfig {
     /// Location API. Temporary Cloudflare tunnel: it changes whenever the server or tunnel restarts.
     /// Docs at the same host under /docs.
-    static let apiBaseURL = URL(string: "https://network-durham-attachment-asks.trycloudflare.com/api/v1")!
+    static let defaultAPIBaseURL = URL(string: "https://network-durham-attachment-asks.trycloudflare.com/api/v1")!
+
+    /// The server in use. Override without rebuilding from Settings > Developer (debug builds),
+    /// or with the launch argument `-api.baseURL https://…/api/v1`.
+    static var apiBaseURL: URL {
+        if let value = UserDefaults.standard.string(forKey: Overrides.apiBaseURL),
+           let url = URL(string: value), url.scheme == "https" || url.scheme == "http", url.host() != nil {
+            return url
+        }
+        return defaultAPIBaseURL
+    }
 
     /// Location readings are sent on every even minute (10:38, 10:40, 10:42…).
     static let updateInterval: TimeInterval = 120
@@ -28,7 +38,27 @@ enum AppConfig {
 
     /// The stored day of readings the trends replay (the server's simulated dataset, 2026-01-01).
     /// Its timestamps are campus wall-clock times. Point this at real days once they accumulate.
-    static let historyDay = Date(timeIntervalSince1970: 1_767_225_600) // 2026-01-01T00:00:00Z
+    static let defaultHistoryDay = Date(timeIntervalSince1970: 1_767_225_600) // 2026-01-01T00:00:00Z
+
+    /// The stored day in use. Override from Settings > Developer or with `-history.day 2026-01-02`.
+    static var historyDay: Date {
+        UserDefaults.standard.string(forKey: Overrides.historyDay).flatMap(parseDay) ?? defaultHistoryDay
+    }
+
+    /// "2026-01-01" → midnight UTC that day.
+    static func parseDay(_ text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .gmt
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: text.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// UserDefaults keys for the developer overrides.
+    enum Overrides {
+        static let apiBaseURL = "api.baseURL"
+        static let historyDay = "history.day"
+    }
 
     /// Headcount per unit of area popularity treated as "packed" before history has loaded.
     static let fallbackAreaCapacity = 60.0

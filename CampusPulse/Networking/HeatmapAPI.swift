@@ -3,7 +3,8 @@ import MapKit
 
 /// Client for `GET /heatmap`: every reading in a time range, grouped by 2-minute slot.
 struct HeatmapAPI: Sendable {
-    var baseURL: URL = AppConfig.apiBaseURL
+    /// Read per request, so a server change in Settings > Developer applies right away.
+    var baseURL: URL { AppConfig.apiBaseURL }
     var session: URLSession = .shared
 
     struct Failure: LocalizedError {

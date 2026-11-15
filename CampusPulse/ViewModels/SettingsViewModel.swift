@@ -32,6 +32,11 @@ final class SettingsViewModel {
         store.select(campus)
     }
 
+    /// Reloads the map and trends after a developer override changes.
+    func reloadData() {
+        store.reload()
+    }
+
     /// New random device ID; unsent readings are dropped.
     func resetDeviceID() {
         sharing.resetIdentity()

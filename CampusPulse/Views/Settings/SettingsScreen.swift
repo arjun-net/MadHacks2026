@@ -145,6 +145,10 @@ struct SettingsScreen: View {
                         .settingsRow()
                         .accessibilityElement(children: .combine)
                     }
+
+                    #if DEBUG
+                    DeveloperSection(onApply: viewModel.reloadData)
+                    #endif
                 }
                 .toggleStyle(.paper)
                 .padding(.horizontal, Theme.Spacing.md)
@@ -152,6 +156,7 @@ struct SettingsScreen: View {
                 .padding(.bottom, Theme.tabBarClearance + 20)
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
             .background(ScreenBackground())
             .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog(

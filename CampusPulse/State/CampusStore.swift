@@ -91,6 +91,11 @@ final class CampusStore {
         guard newCampus.id != campus.id, newCampus.isAvailable else { return }
         campus = newCampus
         preferences.selectedCampusID = newCampus.id
+        reload()
+    }
+
+    /// Drops everything loaded and starts over (after the server or stored day changes).
+    func reload() {
         snapshot = nil
         state = .loading
         historySnapshot = nil
