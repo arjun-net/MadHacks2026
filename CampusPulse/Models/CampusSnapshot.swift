@@ -32,12 +32,10 @@ struct CampusSnapshot: Hashable, Sendable {
     let participantCount: Int
     let overallIntensity: Double
     let cells: [DensityCell]
-    var areas: [AreaActivity]
+    let areas: [AreaActivity]
     /// Campus-wide intensity, oldest → newest.
     let history: [Double]
     let privacyThreshold: Int
-    /// For trends replayed from stored data: the moment in that data being shown. Nil when live.
-    var replayOf: Date? = nil
 
     var level: ActivityLevel { ActivityLevel(intensity: overallIntensity) }
     var trend: ActivityTrend { ActivityTrend(history: history) }
@@ -63,22 +61,6 @@ struct CampusSnapshot: Hashable, Sendable {
 
     func activity(for areaID: String) -> AreaActivity? {
         areas.first { $0.id == areaID }
-    }
-
-    /// This snapshot with the given areas' current reading (level and count) taken from `live`.
-    /// Their trend keeps its earlier points and ends at the live reading.
-    func withCurrentReadings(from live: CampusSnapshot, for areaIDs: Set<String>) -> CampusSnapshot {
-        var copy = self
-        copy.areas = areas.map { activity in
-            guard areaIDs.contains(activity.id), let current = live.activity(for: activity.id) else { return activity }
-            return AreaActivity(
-                area: activity.area,
-                intensity: current.intensity,
-                estimatedCount: current.estimatedCount,
-                history: activity.history.dropLast() + [current.intensity]
-            )
-        }
-        return copy
     }
 }
 

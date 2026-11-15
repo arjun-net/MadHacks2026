@@ -54,8 +54,7 @@ enum CampusCatalog {
                        category: .housing, coordinate: Coordinate(43.074089, -89.39711), radiusMeters: 35, popularity: 0.46),
             CampusArea(id: "morgridge_hall", name: "Morgridge Hall (College of Computing & AI)", shortName: "Morgridge Hall",
                        category: .academic, coordinate: Coordinate(43.072873, -89.406636), radiusMeters: 45, popularity: 0.4, symbolOverride: "laptopcomputer"),
-        ],
-        participationScale: 1.0
+        ]
     )
 
     static let michigan = Campus(
@@ -85,7 +84,6 @@ enum CampusCatalog {
                        category: .academic, coordinate: Coordinate(42.2783, -83.7396), radiusMeters: 50, popularity: 0.6,
                        symbolOverride: "flask.fill"),
         ],
-        participationScale: 0.85,
         isAvailable: false
     )
 
@@ -111,7 +109,6 @@ enum CampusCatalog {
                        category: .dining, coordinate: Coordinate(37.4251, -122.1625), radiusMeters: 50, popularity: 0.75),
         ],
         // Just launched: too few participants yet, which exercises the privacy-suppressed empty state.
-        participationScale: 0.025,
         isAvailable: false
     )
 

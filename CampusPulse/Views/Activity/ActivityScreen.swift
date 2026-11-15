@@ -63,13 +63,7 @@ struct ActivityScreen: View {
                     .typeStyle(.largeTitle)
                     .foregroundStyle(Theme.Colors.textPrimary)
                 Spacer()
-                Group {
-                    if let replay = viewModel.snapshot?.replayOf {
-                        Text("Data from \(Formatting.dataDay(replay))")
-                    } else {
-                        UpdatedAgoText(date: viewModel.snapshot?.generatedAt)
-                    }
-                }
+                UpdatedAgoText(date: viewModel.snapshot?.generatedAt)
                 .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
             }

@@ -45,14 +45,3 @@ struct AreaActivityRow: View {
         .accessibilityLabel("\(rank.map { "Number \($0), " } ?? "")\(activity.area.name), \(activity.level.title), \(activity.countLabel), \(activity.trend.title)")
     }
 }
-
-#Preview {
-    let snapshot = PreviewData.snapshot
-    VStack(spacing: 16) {
-        ForEach(Array(snapshot.busiest(5).enumerated()), id: \.element.id) { index, activity in
-            AreaActivityRow(activity: activity, rank: index + 1)
-        }
-    }
-    .padding()
-    .background(ScreenBackground())
-}

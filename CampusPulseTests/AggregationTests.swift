@@ -80,25 +80,6 @@ struct AggregationTests {
         #expect(raw[slot] == [])
     }
 
-    @Test func activityTabTakesTheLiveReadingForCountedBuildings() {
-        let frame = ActivityAggregator.slotStart(Date(timeIntervalSince1970: 1_800_000_000))
-        let replayReadings = Array(repeating: Reading(coordinate: library.coordinate, building: library.name), count: 40)
-        let replay = ActivityAggregator.snapshot(
-            campus: campus, tallies: ActivityAggregator.tally([frame: replayReadings], campus: campus), frame: frame,
-            capacities: .fallback(for: campus), generatedAt: frame
-        )
-        let live = ActivityAggregator.snapshot(
-            campus: campus, tallies: ActivityAggregator.tally([frame: []], campus: campus), frame: frame,
-            capacities: .fallback(for: campus), generatedAt: frame
-        )
-
-        let merged = replay.withCurrentReadings(from: live, for: ["college_library"])
-
-        #expect(merged.activity(for: "college_library")?.intensity == 0)
-        #expect(merged.activity(for: "college_library")?.estimatedCount == nil)
-        #expect(merged.activity(for: "college_library")?.history.count == ActivityAggregator.historyLength)
-    }
-
     @Test func cellsBelowThePrivacyThresholdAreDropped() {
         let threshold = AppConfig.privacyThreshold
         let crowd = Array(repeating: library.coordinate, count: threshold)
@@ -147,33 +128,41 @@ struct AggregationTests {
     }
 }
 
-/// The stored day replayed at the current time of day.
+/// The last 24 hours of real readings.
 struct HistoryDayTests {
     let campus = CampusCatalog.madison
-    let start = AppConfig.defaultHistoryDay
 
-    @Test func wallClockTimeMapsOntoTheStoredDay() {
+    var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = .gmt
-        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 14, hour: 14, minute: 31))!
-        let day = HistoryDay(campusID: campus.id, start: start, tallies: [:], capacities: .fallback(for: campus))
-
-        let mapped = day.dataTime(matching: now, calendar: calendar)
-
-        #expect(mapped == start.addingTimeInterval(14 * 3600 + 31 * 60))
+        return calendar
     }
 
-    @Test func frameLooksBackUpToTenMinutes() {
-        let slot = start.addingTimeInterval(10 * 3600)
-        let tallies = [slot: SlotTally(points: [], areaCounts: [:])]
-        let day = HistoryDay(campusID: campus.id, start: start, tallies: tallies, capacities: .fallback(for: campus))
-
-        #expect(day.frame(atOrBefore: slot.addingTimeInterval(9 * 60)) == slot)
-        #expect(day.frame(atOrBefore: slot.addingTimeInterval(11 * 60)) == nil)
+    @Test func windowIsTheTwentyFourHoursUpToTheCurrentSlot() {
+        let now = Date(timeIntervalSince1970: 1_800_000_050)
+        let window = HistoryDay.window(endingAt: now)
+        #expect(window.end == ActivityAggregator.slotStart(now).addingTimeInterval(ActivityAggregator.slot))
+        #expect(window.end.timeIntervalSince(window.start) == HistoryDay.length)
     }
 
-    @Test func oneStoredDayDoesNotVaryByWeekday() {
-        let day = HistoryDay(campusID: campus.id, start: start, tallies: [:], capacities: .fallback(for: campus))
+    /// Busy times by local hour; slots without readings count as nobody there.
+    @Test func hourlyAveragesEachHourOfTheDay() {
+        let start = calendar.date(from: DateComponents(year: 2026, month: 11, day: 14, hour: 0))!
+        let slotAt2PM = start.addingTimeInterval(14 * 3600)
+        let tallies = [slotAt2PM: SlotTally(points: [], areaCounts: ["college_library": 30])]
+        let capacities = Capacities(area: ["college_library": 10], campus: 30)
+        let day = HistoryDay(campusID: campus.id, start: start, tallies: tallies, capacities: capacities)
+
+        let hourly = day.hourly(for: "college_library", calendar: calendar)
+
+        #expect(hourly.count == 24)
+        // 30 people in one of the hour's 30 slots: an average of one, against a capacity of 10.
+        #expect(abs(hourly[14].intensity - 0.1) < 1e-9)
+        #expect(hourly[13].intensity == 0)
+    }
+
+    @Test func oneDayOfHistoryDoesNotVaryByWeekday() {
+        let day = HistoryDay(campusID: campus.id, start: .now, tallies: [:], capacities: .fallback(for: campus))
         let activity = AreaActivity(area: campus.areas[0], intensity: 0.5, estimatedCount: nil, history: [0.5])
 
         let insights = day.insights(for: activity, now: .now)

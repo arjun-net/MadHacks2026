@@ -65,12 +65,6 @@ struct SharingTests {
         #expect(point.deviceID == "ios-a")
     }
 
-    @Test func developerDayOverrideParsesAsUTCMidnight() {
-        #expect(AppConfig.parseDay("2026-01-01") == AppConfig.defaultHistoryDay)
-        #expect(AppConfig.parseDay(" 2026-01-02 ") == AppConfig.defaultHistoryDay.addingTimeInterval(86_400))
-        #expect(AppConfig.parseDay("Jan 1") == nil)
-    }
-
     // MARK: - Helpers
 
     private static func utc(_ time: String) -> Date {

@@ -12,10 +12,11 @@ final class AppContainer {
         preferences: AppPreferences = AppPreferences(),
         /// nil uses the real system permission; previews pass a fixed value.
         permission: PermissionDisplay? = nil,
-        initialSnapshot: CampusSnapshot? = nil
+        /// Previews stay off the network.
+        isPreview: Bool = false
     ) {
         self.preferences = preferences
-        self.store = CampusStore(campuses: CampusCatalog.all, preferences: preferences, initialSnapshot: initialSnapshot)
+        self.store = CampusStore(campuses: CampusCatalog.all, preferences: preferences, isPreview: isPreview)
         let store = self.store
         self.sharing = SharingState(preferences: preferences, permission: permission, campus: { store.campus })
         let alerts = AlertCenter(preferences: preferences)

@@ -95,12 +95,3 @@ struct AreaFocusCard: View {
         .paper(cornerRadius: Theme.Radius.sm, elevated: true)
     }
 }
-
-#Preview("Focus card") {
-    VStack {
-        Spacer()
-        AreaFocusCard(activity: PreviewData.snapshot.busiest(1)[0], onClose: {})
-    }
-    .padding()
-    .background(ScreenBackground())
-}

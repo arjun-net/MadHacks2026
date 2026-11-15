@@ -9,8 +9,6 @@ struct Campus: Identifiable, Hashable, Sendable {
     let latitudeSpan: Double
     let longitudeSpan: Double
     let areas: [CampusArea]
-    /// Relative share of students using the app (drives mock data volume).
-    let participationScale: Double
     /// Hand-drawn campus outline. When nil, an outline is derived from the campus areas.
     var customBoundary: [Coordinate]? = nil
     /// Whether the backend collects data here yet. Unavailable campuses are listed as "Coming soon".
@@ -117,7 +115,7 @@ struct CampusArea: Identifiable, Hashable, Sendable {
     let shortName: String
     let category: AreaCategory
     let coordinate: Coordinate
-    /// Rough footprint of the area, used for clustering mock students.
+    /// Rough footprint of the area (sizes its glow on the map preview).
     let radiusMeters: Double
     /// 0…1 baseline draw of the area relative to the busiest place on campus.
     let popularity: Double

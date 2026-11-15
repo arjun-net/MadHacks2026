@@ -3,29 +3,28 @@ import Observation
 import os
 
 /// Activity for the selected campus, from the backend.
-/// - `snapshot`: live, from the last few 2-minute slots (the map).
-/// - `historySnapshot` / `history`: the server's stored day, replayed at the current time of day
-///   (the Activity tab's trends and the area detail screens).
+/// Only real readings: nothing is simulated or replayed.
+/// - `snapshot`: live, from the last few 2-minute slots (the map and the Activity tab).
+/// - `history`: the last 24 hours, for usual busy times and how big each place gets
+///   (the area detail screens). Fetched again every 10 minutes.
 /// - Every 15 seconds the server's people-per-building counts (`/buildings/counts`) are pulled.
-///   For the campus's tracked buildings they set the current number and heat on the map, and the
-///   current reading on the Activity tab.
+///   For the campus's tracked buildings they set the current number and heat.
 @Observable
 @MainActor
 final class CampusStore {
     let campuses: [Campus]
     private(set) var campus: Campus
 
-    /// Live activity for the map.
+    /// Live activity for the map and the Activity tab.
     private(set) var snapshot: CampusSnapshot?
     private(set) var state: LoadState = .idle
 
-    /// Past data for trends.
-    private(set) var historySnapshot: CampusSnapshot?
-    private(set) var historyState: LoadState = .idle
+    /// The last 24 hours, for trends.
     private(set) var history: HistoryDay?
+    @ObservationIgnored private var historyLoadedAt: Date?
 
     private(set) var isRefreshing = false
-    /// Previews run on bundled sample data instead of the network.
+    /// Previews never touch the network; they show the loading state.
     let isPreview: Bool
 
     @ObservationIgnored let preferences: AppPreferences
@@ -45,20 +44,14 @@ final class CampusStore {
     @ObservationIgnored var onLiveUpdate: ((CampusSnapshot) -> Void)?
     private static let log = Logger(subsystem: "CampusPulse", category: "CampusStore")
 
-    init(campuses: [Campus], preferences: AppPreferences, initialSnapshot: CampusSnapshot? = nil) {
+    init(campuses: [Campus], preferences: AppPreferences, isPreview: Bool = false) {
         self.campuses = campuses
         self.preferences = preferences
         // A campus saved before it was marked "Coming soon" falls back to one with data.
         // (Previews may show an unavailable campus, to exercise its empty state.)
-        self.campus = campuses.first { $0.id == preferences.selectedCampusID && ($0.isAvailable || initialSnapshot != nil) }
+        self.campus = campuses.first { $0.id == preferences.selectedCampusID && ($0.isAvailable || isPreview) }
             ?? campuses.first(where: \.isAvailable) ?? campuses[0]
-        self.isPreview = initialSnapshot != nil
-        if let initialSnapshot, initialSnapshot.campusID == campus.id {
-            snapshot = initialSnapshot
-            historySnapshot = initialSnapshot
-            state = initialSnapshot.isEmpty ? .empty : .loaded
-            historyState = state
-        }
+        self.isPreview = isPreview
     }
 
     func start() {
@@ -108,10 +101,9 @@ final class CampusStore {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        if history?.campusID != campus.id {
+        let historyIsStale = historyLoadedAt.map { Date.now.timeIntervalSince($0) > AppConfig.historyRefreshInterval } ?? true
+        if history?.campusID != campus.id || historyIsStale {
             loadHistory()
-        } else if let history {
-            updateHistorySnapshot(from: history)
         }
         await refreshLive()
     }
@@ -123,13 +115,12 @@ final class CampusStore {
         reload()
     }
 
-    /// Drops everything loaded and starts over (after the server or stored day changes).
+    /// Drops everything loaded and starts over (after the server changes).
     func reload() {
         snapshot = nil
         state = .loading
-        historySnapshot = nil
-        historyState = .loading
         history = nil
+        historyLoadedAt = nil
         historyTask?.cancel()
         historyTask = nil
         live = nil
@@ -141,12 +132,10 @@ final class CampusStore {
 
     // MARK: - Live
 
-    /// One fetched live window: real readings from the server and simulated ones, by slot.
+    /// One fetched live window: the server's readings, by slot.
     private struct LiveWindow {
         let campus: Campus
-        let windowStart: Date
-        let real: [Date: [Reading]]
-        let simulated: [Date: [Reading]]
+        let readings: [Date: [Reading]]
         let capacities: Capacities
     }
 
@@ -157,26 +146,9 @@ final class CampusStore {
         let currentSlot = ActivityAggregator.slotStart(now)
         let windowStart = currentSlot.addingTimeInterval(-Double(ActivityAggregator.historyLength) * ActivityAggregator.slot)
         do {
-            let real: [Date: [Reading]]
-            do {
-                real = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
-            } catch where AppConfig.simulatesLiveData {
-                // With simulated data on, the map still works when the server is unreachable.
-                Self.log.error("Live heatmap failed, showing simulated data only: \(error.localizedDescription, privacy: .public)")
-                real = [:]
-            }
+            let readings = try await api.points(from: windowStart, to: currentSlot.addingTimeInterval(ActivityAggregator.slot), in: requested.boundaryRect)
             guard requested.id == campus.id else { return }
-            // Simulated crowds have their own fixed building sizes, so levels don't shift when history loads.
-            let capacities: Capacities = AppConfig.simulatesLiveData
-                ? .fallback(for: requested, perPopularity: AppConfig.simulatedPeakHeadcount)
-                : history?.capacities ?? .fallback(for: requested)
-            var simulated: [Date: [Reading]] = [:]
-            if AppConfig.simulatesLiveData {
-                let slots = (0...ActivityAggregator.historyLength).map { windowStart.addingTimeInterval(Double($0) * ActivityAggregator.slot) }
-                simulated = await Task.detached { SimulatedLiveData.points(for: requested, slots: slots, capacities: capacities) }.value
-            }
-            guard requested.id == campus.id else { return }
-            live = LiveWindow(campus: requested, windowStart: windowStart, real: real, simulated: simulated, capacities: capacities)
+            live = LiveWindow(campus: requested, readings: readings, capacities: history?.capacities ?? .fallback(for: requested))
             await rebuildLive(notify: true)
         } catch {
             Self.log.error("Live heatmap failed: \(error.localizedDescription, privacy: .public)")
@@ -208,7 +180,7 @@ final class CampusStore {
     }
 
     /// Builds the live snapshot from the last fetched window, with the latest building counts
-    /// as the current numbers for their buildings, then refreshes the Activity tab's reading.
+    /// as the current numbers for their buildings.
     private func rebuildLive(notify: Bool) async {
         guard let live, live.campus.id == campus.id else { return }
         rebuildGeneration += 1
@@ -216,10 +188,9 @@ final class CampusStore {
         let now = Date.now
         let counts = freshBuildingCounts ?? [:]
         let tallies = await Task.detached { () -> [Date: SlotTally] in
-            var raw = ActivityAggregator.applying(
-                buildingCounts: counts, to: live.real, at: ActivityAggregator.slotStart(now), campus: live.campus
+            let raw = ActivityAggregator.applying(
+                buildingCounts: counts, to: live.readings, at: ActivityAggregator.slotStart(now), campus: live.campus
             )
-            raw.merge(live.simulated) { real, fake in real + fake }
             return ActivityAggregator.tally(raw, campus: live.campus)
         }.value
         guard generation == rebuildGeneration, live.campus.id == campus.id else { return }
@@ -235,7 +206,6 @@ final class CampusStore {
         )
         snapshot = next
         state = next.isEmpty ? .empty : .loaded
-        if let history { updateHistorySnapshot(from: history) }
         if notify { onLiveUpdate?(next) }
     }
 
@@ -245,34 +215,23 @@ final class CampusStore {
         guard historyTask == nil else { return }
         let requested = campus
         let api = api
-        if historySnapshot == nil { historyState = .loading }
         historyTask = Task { [weak self] in
             defer { self?.historyTask = nil }
             do {
-                let start = AppConfig.historyDay
-                let raw = try await api.points(from: start, to: start.addingTimeInterval(86_400), in: requested.boundaryRect, chunks: 4)
+                let window = HistoryDay.window(endingAt: .now)
+                let raw = try await api.points(from: window.start, to: window.end, in: requested.boundaryRect, chunks: 4)
                 let day = await Task.detached { () -> HistoryDay in
                     let tallies = ActivityAggregator.tally(raw, campus: requested)
-                    return HistoryDay(campusID: requested.id, start: start, tallies: tallies, capacities: .peaks(of: tallies, campus: requested))
+                    return HistoryDay(campusID: requested.id, start: window.start, tallies: tallies, capacities: .peaks(of: tallies, campus: requested))
                 }.value
                 guard let self, requested.id == self.campus.id else { return }
                 self.history = day
-                self.updateHistorySnapshot(from: day)
+                self.historyLoadedAt = .now
             } catch {
+                // Trends stay as they were (or hidden) until the next try.
                 Self.log.error("History load failed: \(error.localizedDescription, privacy: .public)")
-                guard let self, requested.id == self.campus.id, self.historySnapshot == nil else { return }
-                self.historyState = .failed(Self.message(for: error))
             }
         }
-    }
-
-    private func updateHistorySnapshot(from day: HistoryDay) {
-        var next = day.snapshot(for: campus)
-        if let counted = freshBuildingCounts, let live = snapshot {
-            next = next.withCurrentReadings(from: live, for: Set(counted.keys))
-        }
-        historySnapshot = next
-        historyState = next.isEmpty ? .empty : .loaded
     }
 
     private static func message(for error: Error) -> String {

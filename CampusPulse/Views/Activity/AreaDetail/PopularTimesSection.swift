@@ -37,7 +37,7 @@ struct PopularTimesSection: View {
     var body: some View {
         DetailSection(title: "Popular times", trailing: trailing) {
             VStack(alignment: .leading, spacing: 14) {
-                // With one stored day every weekday looks the same, so there's nothing to pick.
+                // With 24 hours of history every weekday looks the same, so there's nothing to pick.
                 if insights.variesByWeekday {
                     dayPicker
                 }
