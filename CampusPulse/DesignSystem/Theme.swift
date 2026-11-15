@@ -73,25 +73,25 @@ private func night(_ a: UInt32, _ b: UInt32, _ c: UInt32) -> (DarkPalette) -> He
 enum Theme {
     enum Colors {
         // Paper
-        static let background = Color(light: Hex(0xF6F1E7), dark: night(0x0F1611, 0x140A0A, 0x121417))
-        static let paper = Color(light: Hex(0xFFFDF8), dark: night(0x161F19, 0x1E1010, 0x1B1E22))
+        static let background = Color(light: Hex(0xF6F1E7), dark: night(0x16130F, 0x140A0A, 0x121417))
+        static let paper = Color(light: Hex(0xFFFDF8), dark: night(0x1F1B16, 0x1E1010, 0x1B1E22))
         static let elevated = paper
-        static let surface = Color(light: Hex(0xF3ECDF), dark: night(0x1F2A22, 0x2A1717, 0x252930))
-        static let surfaceStrong = Color(light: Hex(0xEFE6D6), dark: night(0x27332A, 0x351D1D, 0x2E333B))
+        static let surface = Color(light: Hex(0xF3ECDF), dark: night(0x2A251F, 0x2A1717, 0x252930))
+        static let surfaceStrong = Color(light: Hex(0xEFE6D6), dark: night(0x332D26, 0x351D1D, 0x2E333B))
         static let mapScrim = background
 
         // Ink
         static let ink = Color(light: Hex(0x1F1B16), dark: night(0xF3ECDF, 0xF5E6E3, 0xE9ECEF))
         static let stroke = ink
-        static let rule = Color(light: Hex(0xDDD2BE), dark: night(0x2E3B32, 0x3F2626, 0x343A42))
+        static let rule = Color(light: Hex(0xDDD2BE), dark: night(0x3A332B, 0x3F2626, 0x343A42))
 
         // Lines. Surfaces separate by fill and shadow; outlines stay quiet so screens don't read as a grid of boxes.
         /// Card and panel outlines.
-        static let border = Color(light: Hex(0xE4DACA), dark: night(0x243029, 0x301C1C, 0x2B2F35))
+        static let border = Color(light: Hex(0xE4DACA), dark: night(0x2E2822, 0x301C1C, 0x2B2F35))
         /// Edges of interactive controls (chips, switches, segmented pickers, small buttons).
-        static let borderStrong = Color(light: Hex(0xC4B7A1), dark: night(0x3D4B41, 0x4E3030, 0x464D56))
+        static let borderStrong = Color(light: Hex(0xC4B7A1), dark: night(0x4A4137, 0x4E3030, 0x464D56))
         /// Section and masthead rules: ink in Day for the newspaper feel, softened in Night.
-        static let sectionRule = Color(light: Hex(0x1F1B16), dark: night(0x4A5A4E, 0x5E3B39, 0x535A64))
+        static let sectionRule = Color(light: Hex(0x1F1B16), dark: night(0x5A5045, 0x5E3B39, 0x535A64))
         /// Selected chip, segment and tab: ink in Day, press red in Night (a cream block glares on dark).
         static let selectionFill = Color(light: Hex(0x1F1B16), dark: night(0x9B0000, 0xC5050C, 0xA80F14))
         static let onSelection = Color(light: Hex(0xFFFDF8), dark: night(0xFFFDF8, 0xFFFFFF, 0xFFFFFF))
