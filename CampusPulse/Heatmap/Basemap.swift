@@ -167,14 +167,14 @@ enum BasemapPalette {
         }
     }
 
-    static let land = color(0xEFE8DA, 0x1A1612, 0x170D0D, 0x16191C)
-    static let green = color(0xE2E1C8, 0x1E1C16, 0x1A1210, 0x181D1C)
-    static let water = color(0xC5D1CF, 0x0D0B09, 0x0D0606, 0x0C0E10)
-    static let waterEdge = color(0x9DAFAC, 0x3A332B, 0x3F2626, 0x343A42)
-    static let building = color(0xE0D5C1, 0x25201A, 0x231414, 0x20242A)
-    static let path = color(0xE6DCC9, 0x29241E, 0x261717, 0x23272D)
-    static let minor = color(0xFBF7EF, 0x332D26, 0x311E1E, 0x2C3138)
-    static let major = color(0xFFFDF8, 0x433B32, 0x422828, 0x3A4048)
+    static let land = color(0xEFE8DA, 0x121A14, 0x170D0D, 0x16191C)
+    static let green = color(0xE2E1C8, 0x17251B, 0x1A1210, 0x181D1C)
+    static let water = color(0xC5D1CF, 0x090F0C, 0x0D0606, 0x0C0E10)
+    static let waterEdge = color(0x9DAFAC, 0x2E3B32, 0x3F2626, 0x343A42)
+    static let building = color(0xE0D5C1, 0x1C261F, 0x231414, 0x20242A)
+    static let path = color(0xE6DCC9, 0x202B23, 0x261717, 0x23272D)
+    static let minor = color(0xFBF7EF, 0x29352C, 0x311E1E, 0x2C3138)
+    static let major = color(0xFFFDF8, 0x37443A, 0x422828, 0x3A4048)
 }
 
 /// The campus basemap as 256-point square tiles (the usual web map grid), drawn by the app
@@ -204,7 +204,7 @@ final class BasemapTiles: @unchecked Sendable {
     private var prefetchTask: Task<Void, Never>?
     /// Saved tiles for this campus. Bump `version` whenever the drawing or colors change.
     private let directory: URL
-    private static let version = 2
+    private static let version = 3
 
     init(basemap: Basemap, campusID: String, style: UIUserInterfaceStyle) {
         self.basemap = basemap
