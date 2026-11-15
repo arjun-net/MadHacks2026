@@ -6,7 +6,7 @@ use serde_json::Value;
 async fn test_morgridge_hall_story() {
     let client = reqwest::Client::new();
 
-    let building = "Morgridge Hall (College of Computing & AI)";
+    let building = "morgridge_hall";
 
     // Construct and URL-encode the building name automatically.
     let url = format!(

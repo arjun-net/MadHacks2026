@@ -122,14 +122,16 @@ paths:
       operationId: getBuildingStory
       summary: Activity story for one building
       description: |
-        Compares distinct reporting devices near a building at a campus-local time with the same
-        time on earlier matching weekdays and on the other days of the current week. Aggregation
+        Compares the number of location rows (`observations`) near a building at a campus-local
+        time with the same time on earlier matching weekdays and on the other days of the current week. Aggregation
         runs in Databricks SQL; the narrative is generated statistically, or by Databricks
         `ai_query` when an AI endpoint is configured (`story_source` says which).
 
         Requires `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_WAREHOUSE_ID` and
-        `DATABRICKS_CATALOG`; otherwise 503. Days with fewer than `STORY_MIN_DEVICES` devices
-        are `suppressed` for privacy and excluded from averages.
+        `DATABRICKS_CATALOG`; otherwise 503. `device_id` is not used: every row counts, including
+        repeat reports from one device, so this is an observation count, not unique people or
+        occupancy. Days with fewer than `STORY_MIN_OBSERVATIONS` rows (falls back to the old
+        `STORY_MIN_DEVICES`, default 5) are `suppressed` and excluded from averages.
       parameters:
         - name: building
           in: path
@@ -181,10 +183,10 @@ paths:
       operationId: getBuildingPrediction
       summary: Typical activity for a building at a future (or past) time
       description: |
-        A **descriptive baseline**, not an ML forecast or occupancy count. Takes the distinct
-        reporting devices near the building at the same campus-local time on completed previous
-        matching weekdays and averages them. Days that are missing or privacy-suppressed (fewer
-        than `STORY_MIN_DEVICES` devices) are omitted, never counted as zero. With at least four
+        A **descriptive baseline**, not an ML forecast or occupancy count. Takes the number of
+        location rows (`observations`, `device_id` is not used) near the building at the same
+        campus-local time on completed previous matching weekdays and averages them. Days that
+        are missing or below `STORY_MIN_OBSERVATIONS` rows are omitted, never counted as zero. With at least four
         usable days an IQR rule drops unusually high or low days before computing the mean and
         the 25th-75th percentile range. `typical_p25`/`typical_p75` are the observed spread, not
         a confidence interval.
@@ -430,14 +432,19 @@ components:
           chemistry_building: 0
     DayActivity:
       type: object
-      required: [date, weekday, reporting_devices, status]
+      required: [date, weekday, observations, reporting_devices, status]
       properties:
         date:    { type: string, format: date }
         weekday: { type: string }
+        observations:
+          type: integer
+          nullable: true
+          description: Count of `location_events` rows in the window. Null means no readings, not yet reached, or below the minimum (never treated as 0).
         reporting_devices:
           type: integer
           nullable: true
-          description: Null means no readings, not yet reached, or privacy-suppressed (never treated as 0).
+          deprecated: true
+          description: Legacy alias for `observations` (kept for existing mobile clients). It is a row count, not distinct devices.
         status:
           type: string
           enum: [available, suppressed, no_data, future]
@@ -450,7 +457,7 @@ components:
         time_local:    { type: string, example: "14:30" }
         timezone:      { type: string, example: America/Chicago }
         window_minutes: { type: integer }
-        metric:        { type: string, example: distinct_reporting_devices }
+        metric:        { type: string, example: location_observations }
         current:       { $ref: '#/components/schemas/DayActivity' }
         historical_same_weekday:
           type: array
@@ -500,7 +507,7 @@ components:
           description: >
             Nullable, but if present it must not be blank (check `length(btrim(device_id)) > 0`).
             The API stores `"unknown"` when a client sends none; the bulk CSV load stores NULL.
-            NULL rows are invisible to distinct-device counts in the story endpoint.
+            Stories and predictions no longer use `device_id`, so NULL rows are counted normally.
         latitude:  { type: number, format: double, minimum: -90, maximum: 90 }
         longitude: { type: number, format: double, minimum: -180, maximum: 180 }
         time:
@@ -544,14 +551,19 @@ components:
       example: morgridge_institute
     HistoricalObservation:
       type: object
-      required: [date, weekday, reporting_devices, status, excluded_as_outlier, used_for_prediction]
+      required: [date, weekday, observations, reporting_devices, status, excluded_as_outlier, used_for_prediction]
       properties:
         date:    { type: string, format: date }
         weekday: { type: string, example: Saturday }
+        observations:
+          type: integer
+          nullable: true
+          description: Row count for that day's window. Null when `status` is not `available`.
         reporting_devices:
           type: integer
           nullable: true
-          description: Null when `status` is not `available`.
+          deprecated: true
+          description: Legacy alias for `observations`.
         status:  { type: string, enum: [available, suppressed, no_data] }
         excluded_as_outlier: { type: boolean, description: Dropped by the IQR rule }
         used_for_prediction: { type: boolean }
@@ -560,8 +572,10 @@ components:
       required: [status, reliability]
       properties:
         status: { type: string, enum: [available, insufficient_history] }
-        expected_reporting_devices: { type: number, nullable: true, description: Mean of the used days }
-        rounded_reporting_devices:  { type: integer, nullable: true }
+        expected_observations: { type: number, nullable: true, description: Mean row count of the used days }
+        rounded_observations:  { type: integer, nullable: true }
+        expected_reporting_devices: { type: number, nullable: true, deprecated: true, description: Legacy alias for `expected_observations` }
+        rounded_reporting_devices:  { type: integer, nullable: true, deprecated: true, description: Legacy alias for `rounded_observations` }
         typical_p25: { type: number, nullable: true, description: Observed 25th percentile, not a prediction interval }
         typical_p75: { type: number, nullable: true, description: Observed 75th percentile, not a prediction interval }
         reliability:
@@ -578,7 +592,7 @@ components:
         time_local:     { type: string, example: "14:30" }
         timezone:       { type: string, example: America/Chicago }
         window_minutes: { type: integer }
-        metric:         { type: string, example: distinct_reporting_devices }
+        metric:         { type: string, example: location_observations }
         method:         { type: string, example: robust_same_weekday_mean }
         prediction:     { $ref: '#/components/schemas/PredictionEstimate' }
         samples_inspected: { type: integer }
