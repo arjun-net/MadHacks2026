@@ -21,6 +21,7 @@ struct BuildingStoryAPI: Sendable {
             URLQueryItem(name: "date", value: Self.dayString(moment, in: timeZone)),
             URLQueryItem(name: "time", value: Self.timeString(moment, in: timeZone)),
             URLQueryItem(name: "weeks", value: String(weeks)),
+            URLQueryItem(name: "window_minutes", value: String(AppConfig.buildingStoryWindowMinutes)),
         ]
 
         var request = URLRequest(url: components.url!)

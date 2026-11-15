@@ -204,6 +204,13 @@ final class ActivityViewModel {
         return store.isPreview ? SampleActivityData.insights(for: activity, campus: campus, date: snapshot.generatedAt) : nil
     }
 
+    /// The time building stories ask about: one window ago, so today's window is complete.
+    /// Asked about right now, the server cuts every day's window off at now (today has only
+    /// happened up to now), and those counts don't match the full-window past-day stories.
+    static func storyMoment(now: Date = .now) -> Date {
+        now.addingTimeInterval(-Double(AppConfig.buildingStoryWindowMinutes) * 60)
+    }
+
     func storyState(for areaID: String) -> BuildingStoryState {
         stories[areaID]?.state ?? .loading
     }
@@ -219,12 +226,18 @@ final class ActivityViewModel {
         let previous = stories[areaID]
         if previous == nil { stories[areaID] = (.loading, .now) }
         do {
-            let story = try await storyProvider.story(for: area, campus: campus, live: activity(for: areaID))
+            let story = try await storyProvider.story(for: area, campus: campus, live: activity(for: areaID), at: Self.storyMoment())
             stories[areaID] = (.loaded(story), .now)
         } catch {
             if let previous, case .loaded = previous.state { return }
             stories[areaID] = (.failed(error.localizedDescription), .now)
         }
+    }
+
+    /// The last days' counts at this time of day, oldest first; empty until past days load.
+    func recentDays(for areaID: String) -> [BuildingStory.Day] {
+        guard case .loaded(let days) = pastDaysState(for: areaID) else { return [] }
+        return days.map(\.current).sorted { $0.date < $1.date }
     }
 
     func pastDaysState(for areaID: String) -> PastDaysState {
@@ -244,7 +257,7 @@ final class ActivityViewModel {
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = AppConfig.campusTimeZone
-        let now = Date.now
+        let now = Self.storyMoment()
         // Same wall-clock time on each earlier day (calendar math keeps it right across DST).
         let moments = (1...Self.pastDayCount).compactMap { calendar.date(byAdding: .day, value: -$0, to: now) }
         let provider = storyProvider

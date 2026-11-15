@@ -53,6 +53,10 @@ enum AppConfig {
     /// endpoint `GET /buildings/{name}/story` when true, generated on the device when false.
     static let usesServerBuildingStories = true
 
+    /// Minutes either side of the asked-about time that a building story counts (the server's
+    /// `window_minutes` default).
+    static let buildingStoryWindowMinutes = 15
+
     /// How many past same weekdays a building story compares with.
     static let buildingStoryWeeks = 8
 

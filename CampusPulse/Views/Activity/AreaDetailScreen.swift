@@ -53,7 +53,7 @@ struct AreaDetailScreen: View {
                 LiveCard(activity: activity, insights: insights)
                 PopularTimesSection(insights: insights, liveIntensity: activity.intensity)
                 TodayVersusUsualSection(insights: insights)
-                ThisTimeSection(state: viewModel.storyState(for: areaID)) {
+                ThisTimeSection(state: viewModel.storyState(for: areaID), recentDays: viewModel.recentDays(for: areaID)) {
                     Task { await viewModel.loadStory(for: areaID, force: true) }
                 }
                 PastDaysSection(state: viewModel.pastDaysState(for: areaID)) {

@@ -1,17 +1,21 @@
 import Charts
 import SwiftUI
 
-/// "Around 2:30 PM": how busy the building is right now against the same time on past weeks'
-/// same weekday, and on the other days this week. Drawn from a `BuildingStory`.
+/// "Around 2:30 PM": how busy the building is right now against what's usual, with a bar for each
+/// of the last 7 days at this time (or, switched, each past week's same weekday). Drawn from a
+/// `BuildingStory`, plus the past days' stories for the last 7 days.
 struct ThisTimeSection: View {
     let state: BuildingStoryState
+    /// The last 7 days' counts at this time, oldest first (from the past-days stories). Empty
+    /// until they load; the story's own days this week stand in meanwhile.
+    var recentDays: [BuildingStory.Day] = []
     var onRetry: () -> Void = {}
 
     var body: some View {
         switch state {
         case .loaded(let story):
-            DetailSection(title: "Around \(timeText(story))", trailing: "\(weekdayText(story.current.date, story, style: .wide))s") {
-                StoryCard(story: story)
+            DetailSection(title: "Around \(timeText(story))", trailing: weekdayText(story.current.date, story, style: .wide)) {
+                StoryCard(story: story, recentDays: recentDays.isEmpty ? story.thisWeek.filter { $0.date < story.current.date } : recentDays)
             }
         case .loading:
             DetailSection(title: "This time of day", trailing: "") {
@@ -42,8 +46,19 @@ struct ThisTimeSection: View {
 
 private struct StoryCard: View {
     let story: BuildingStory
+    let recentDays: [BuildingStory.Day]
 
-    /// One bar per past same weekday (oldest first), then today.
+    /// Which days the bars are.
+    enum Range: Hashable {
+        /// The last 7 days, then today.
+        case recent
+        /// Past weeks' same weekday, then today.
+        case sameWeekday
+    }
+
+    @State private var range: Range = .recent
+
+    /// One bar per day (oldest first), then today.
     private struct Bar: Identifiable {
         let id: Date
         let label: String
@@ -52,24 +67,36 @@ private struct StoryCard: View {
     }
 
     private var bars: [Bar] {
-        story.sameWeekdayOldestFirst.map {
-            // Short numeric dates ("10/18"): nine "Oct 18"s don't fit side by side.
-            Bar(id: $0.date, label: $0.date.formatted(dayFormat(.defaultDigits)), devices: $0.devices, isToday: false)
-        } + [Bar(id: story.current.date, label: "Today", devices: story.current.devices, isToday: true)]
+        let past: [Bar] = switch range {
+        case .recent:
+            recentDays.suffix(7).map {
+                Bar(id: $0.date, label: weekdayText($0.date, story, style: .abbreviated), devices: $0.devices, isToday: false)
+            }
+        case .sameWeekday:
+            story.sameWeekdayOldestFirst.map {
+                // Short numeric dates ("10/18"): nine "Oct 18"s don't fit side by side.
+                Bar(id: $0.date, label: $0.date.formatted(dayFormat(.defaultDigits)), devices: $0.devices, isToday: false)
+            }
+        }
+        return past + [Bar(id: story.current.date, label: "Today", devices: story.current.devices, isToday: true)]
+    }
+
+    /// The dashed line: what's usual, when there's a usual to draw.
+    private var rule: (value: Double, label: String)? {
+        guard let baseline = story.baseline else { return nil }
+        return (baseline.value, baseline.basis == .sameWeekday ? "Usual" : "Week avg")
     }
 
     private var maxDevices: Double {
-        Double(max(1, (bars.compactMap(\.devices) + [Int(story.usualDevices ?? 0)]).max() ?? 1))
+        Double(max(1, (bars.compactMap(\.devices) + [Int(rule?.value ?? 0)]).max() ?? 1))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             headline
+            Rectangle().fill(Theme.Colors.rule).frame(height: 1)
+            rangePicker
             chart
-            if !story.thisWeek.isEmpty {
-                Rectangle().fill(Theme.Colors.rule).frame(height: 1)
-                thisWeek
-            }
             Text("Location reports within \(story.windowMinutes) minutes of \(timeText(story)). Phones report every 2 minutes, so these compare days rather than count people.")
                 .typeStyle(.caption)
                 .foregroundStyle(Theme.Colors.textTertiary)
@@ -87,7 +114,7 @@ private struct StoryCard: View {
                     .typeStyle(.metric)
                     .foregroundStyle(Theme.Colors.textPrimary)
                     .contentTransition(.numericText())
-                Text("reports now")
+                Text("reports, today")
                     .typeStyle(.caption)
                     .foregroundStyle(Theme.Colors.textTertiary)
             }
@@ -125,7 +152,36 @@ private struct StoryCard: View {
         }
     }
 
-    // MARK: Same weekday, past weeks
+    // MARK: Chart
+
+    private var rangePicker: some View {
+        let weekday = weekdayText(story.current.date, story, style: .wide)
+        return HStack(spacing: 18) {
+            rangeButton("Last 7 days", .recent)
+            rangeButton("Past \(weekday)s", .sameWeekday)
+            Spacer(minLength: 0)
+        }
+        .sensoryFeedback(.selection, trigger: range)
+    }
+
+    private func rangeButton(_ title: String, _ value: Range) -> some View {
+        let isSelected = range == value
+        return Button {
+            withAnimation(Theme.Motion.snappy) { range = value }
+        } label: {
+            Text(title)
+                .typeStyle(.badge)
+                .foregroundStyle(isSelected ? Theme.Colors.ink : Theme.Colors.textTertiary)
+                .padding(.bottom, 4)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(isSelected ? Theme.Colors.accent : .clear).frame(height: 2)
+                }
+                .frame(minHeight: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
 
     private var chart: some View {
         Chart {
@@ -146,12 +202,12 @@ private struct StoryCard: View {
                     }
                 }
             }
-            if let usual = story.usualDevices {
-                RuleMark(y: .value("Usual", usual))
+            if let rule {
+                RuleMark(y: .value("Usual", rule.value))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .foregroundStyle(Theme.Colors.textTertiary)
                     .annotation(position: .top, alignment: .leading, spacing: 2) {
-                        Text("Usual")
+                        Text(rule.label)
                             .typeStyle(.badge)
                             .foregroundStyle(Theme.Colors.textTertiary)
                     }
@@ -180,35 +236,11 @@ private struct StoryCard: View {
     }
 
     private var accessibilitySummary: String {
-        let past = story.sameWeekdayOldestFirst.map { day in
-            "\(day.date.formatted(dayFormat(.wide))): \(day.devices.map(String.init) ?? "no data")"
+        bars.reversed().map { bar in
+            let name = bar.isToday ? "Today" : bar.id.formatted(Date.FormatStyle(timeZone: story.timeZone).weekday(.wide).month(.wide).day())
+            return "\(name): \(bar.devices.map(String.init) ?? "no data")"
         }
-        return (["Today: \(countText(story.current.devices))"] + past).joined(separator: ", ")
-    }
-
-    // MARK: This week
-
-    private var thisWeek: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("This week at \(timeText(story))")
-                .typeStyle(.micro)
-                .foregroundStyle(Theme.Colors.textSecondary)
-            HStack(spacing: 0) {
-                ForEach(story.thisWeek.filter { $0.date != story.current.date } + [story.current]) { day in
-                    let isToday = day.date == story.current.date
-                    VStack(spacing: 3) {
-                        Text(weekdayText(day.date, story, style: .abbreviated))
-                            .typeStyle(.badge)
-                            .foregroundStyle(isToday ? Theme.Colors.accent : Theme.Colors.textTertiary)
-                        Text(countText(day.devices))
-                            .typeStyle(.rowTitle)
-                            .foregroundStyle(isToday ? Theme.Colors.accent : Theme.Colors.textPrimary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-        }
+        .joined(separator: ", ")
     }
 
     private func dayFormat(_ month: Date.FormatStyle.Symbol.Month) -> Date.FormatStyle {
