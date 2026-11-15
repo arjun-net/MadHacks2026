@@ -159,7 +159,7 @@ struct CampusMapView: UIViewRepresentable {
                 (focusArea, 18...18),
             ]
             mapView.setCameraZoomRange(
-                MKMapView.CameraZoomRange(minCenterCoordinateDistance: 250, maxCenterCoordinateDistance: 20_000),
+                MKMapView.CameraZoomRange(minCenterCoordinateDistance: 150, maxCenterCoordinateDistance: 20_000),
                 animated: false
             )
             mapView.region = campus.region

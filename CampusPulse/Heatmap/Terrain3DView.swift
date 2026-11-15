@@ -145,7 +145,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
     private var camera = CameraState(target: .zero, distance: 3000, heading: 0)
     /// Angle from straight down.
     private let pitch: Float = 54 * .pi / 180
-    private let distanceRange: ClosedRange<Float> = 300...6500
+    private let distanceRange: ClosedRange<Float> = 200...6500
     private var velocity = SIMD2<Float>.zero
     private var cameraAnimation: (from: CameraState, to: CameraState, start: CFTimeInterval, duration: CFTimeInterval, softLanding: Bool)?
     private var displayLink: CADisplayLink?
