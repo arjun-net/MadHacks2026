@@ -38,7 +38,8 @@ final class CampusStore {
         self.campuses = campuses
         self.preferences = preferences
         // A campus saved before it was marked "Coming soon" falls back to one with data.
-        self.campus = campuses.first { $0.id == preferences.selectedCampusID && $0.isAvailable }
+        // (Previews may show an unavailable campus, to exercise its empty state.)
+        self.campus = campuses.first { $0.id == preferences.selectedCampusID && ($0.isAvailable || initialSnapshot != nil) }
             ?? campuses.first(where: \.isAvailable) ?? campuses[0]
         self.isPreview = initialSnapshot != nil
         if let initialSnapshot, initialSnapshot.campusID == campus.id {
