@@ -187,9 +187,9 @@ final class ClusterAnnotationView: MKAnnotationView {
 /// How far to zoom in when a group is opened, so its places show one by one.
 enum GroupZoom {
     /// Room one marker with its name needs from its neighbors, in screen points.
-    private static let markerRoom = CGSize(width: 150, height: 74)
+    private static let markerRoom = CGSize(width: 170, height: 84)
     /// Opening a group always zooms in at least this much, when the places still fit.
-    private static let minimumFactor: CGFloat = 2.5
+    private static let minimumFactor: CGFloat = 3.5
 
     /// `points` are the places' positions on screen now. Returns how many times closer to zoom
     /// (at least 1, at most `maxFactor`): enough that no two places overlap, with room to
@@ -204,7 +204,8 @@ enum GroupZoom {
             }
         }
         let xs = points.map(\.x), ys = points.map(\.y)
-        let spread = CGSize(width: xs.max()! - xs.min()! + markerRoom.width, height: ys.max()! - ys.min()! + markerRoom.height)
+        // Half a marker's room at each edge: enough for the outermost names to stay on screen.
+        let spread = CGSize(width: xs.max()! - xs.min()! + markerRoom.width / 2, height: ys.max()! - ys.min()! + markerRoom.height / 2)
         let fit = min(available.width / spread.width, available.height / spread.height)
         return max(1, min(max(needed, minimumFactor), fit, maxFactor))
     }
