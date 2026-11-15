@@ -42,7 +42,7 @@ struct CampusMapView: UIViewRepresentable {
         // Re-color the heat overlay and labels live when the appearance changes.
         mapView.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak coordinator = context.coordinator] (view: MKMapView, _: UITraitCollection) in
             coordinator?.animator.setStyle(view.traitCollection.userInterfaceStyle)
-            coordinator?.setBasemapStyle(view.traitCollection.userInterfaceStyle)
+            coordinator?.setBasemapStyle(view.traitCollection.userInterfaceStyle, scale: view.traitCollection.displayScale)
             coordinator?.refreshAnnotationStyles(in: view)
         }
         return mapView
@@ -91,6 +91,7 @@ struct CampusMapView: UIViewRepresentable {
 
         private var overlay: HeatmapOverlay?
         private var basemapOverlay: BasemapTileOverlay?
+        private var prefetchJobs: [(area: MKMapRect, zooms: ClosedRange<Int>)] = []
         private weak var basemapRenderer: MKTileOverlayRenderer?
         private var annotations: [String: AreaAnnotation] = [:]
         private var gridTask: Task<Void, Never>?
@@ -113,7 +114,7 @@ struct CampusMapView: UIViewRepresentable {
             let campusRect = campus.boundaryRect
 
             if let basemap = Basemap.forCampus(campus) {
-                let basemapOverlay = BasemapTileOverlay(basemap: basemap, style: mapView.traitCollection.userInterfaceStyle)
+                let basemapOverlay = BasemapTileOverlay(basemap: basemap, campusID: campus.id, style: mapView.traitCollection.userInterfaceStyle)
                 self.basemapOverlay = basemapOverlay
                 mapView.addOverlay(basemapOverlay, level: .aboveLabels)
             } else {
@@ -131,6 +132,17 @@ struct CampusMapView: UIViewRepresentable {
             let focusArea = campus.focusRect
             let boundary = campusRect.union(focusArea).insetBy(dx: -focusArea.width, dy: -focusArea.height * 1.5)
             mapView.setCameraBoundary(MKMapView.CameraBoundary(mapRect: boundary), animated: false)
+            // Draw ahead of time what the camera can reach. The camera center stays inside
+            // `boundary`, so zoomed out the screen can show well beyond it; zoomed in, people
+            // stay around campus. Wider areas at coarse zooms keep the count near 1,000 tiles.
+            prefetchJobs = [
+                (boundary.insetBy(dx: -boundary.width * 0.5, dy: -boundary.height * 0.5), 12...15),
+                (boundary, 16...16),
+                (focusArea.insetBy(dx: -focusArea.width * 0.5, dy: -focusArea.height * 0.5), 17...17),
+                // Street level around the buildings; closer zooms enlarge these while drawing.
+                (focusArea, 18...18),
+            ]
+            prefetchBasemap(scale: mapView.traitCollection.displayScale)
             mapView.setCameraZoomRange(
                 MKMapView.CameraZoomRange(minCenterCoordinateDistance: 250, maxCenterCoordinateDistance: 20_000),
                 animated: false
@@ -181,10 +193,18 @@ struct CampusMapView: UIViewRepresentable {
         }
 
         /// Redraws the basemap tiles in the new appearance.
-        func setBasemapStyle(_ style: UIUserInterfaceStyle) {
+        func setBasemapStyle(_ style: UIUserInterfaceStyle, scale: CGFloat) {
             guard let basemapOverlay, basemapOverlay.style != (style == .dark ? .dark : .light) else { return }
             basemapOverlay.style = style
             basemapRenderer?.reloadData()
+            prefetchBasemap(scale: scale)
+        }
+
+        /// Zoom levels from fully zoomed out (~20 km camera) to a building's block; closer
+        /// tiles draw on demand while MapKit shows these scaled up.
+        private func prefetchBasemap(scale: CGFloat) {
+            guard let basemapOverlay, !prefetchJobs.isEmpty else { return }
+            basemapOverlay.prefetch(prefetchJobs, scale: max(scale, 1))
         }
 
         // MARK: MKMapViewDelegate
