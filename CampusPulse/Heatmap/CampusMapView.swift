@@ -187,10 +187,34 @@ struct CampusMapView: UIViewRepresentable {
             }
         }
 
+        /// The selected place and an opened group's places stay out of group markers.
+        private func isGroupable(_ id: String) -> Bool {
+            id != selectedAreaID && !openedIDs.contains(id)
+        }
+
         func refreshAnnotationStyles(in mapView: MKMapView) {
+            // A marker whose grouping must change is re-added rather than changed in place,
+            // which crashes MapKit (see `AreaAnnotationView.setGroupable`).
+            let clustered = Set(mapView.annotations.lazy.compactMap { $0 as? MKClusterAnnotation }
+                .flatMap(\.memberAnnotations).compactMap { ($0 as? AreaAnnotation)?.area.id })
+            var readd: [AreaAnnotation] = []
             for annotation in annotations.values {
-                guard let view = mapView.view(for: annotation) as? AreaAnnotationView else { continue }
-                view.configure(area: annotation.area, level: annotation.level, highlighted: annotation.area.id == selectedAreaID, groupable: !openedIDs.contains(annotation.area.id))
+                let id = annotation.area.id
+                let wanted = isGroupable(id) ? ClusterAnnotationView.clusteringIdentifier : nil
+                if let view = mapView.view(for: annotation) as? AreaAnnotationView, !clustered.contains(id) {
+                    if view.clusteringIdentifier != wanted {
+                        readd.append(annotation)
+                    } else {
+                        view.configure(area: annotation.area, level: annotation.level, highlighted: id == selectedAreaID)
+                    }
+                } else if wanted == nil, clustered.contains(id) {
+                    // Selected while inside a group: bring it out on its own.
+                    readd.append(annotation)
+                }
+            }
+            if !readd.isEmpty {
+                mapView.removeAnnotations(readd)
+                mapView.addAnnotations(readd)
             }
             for cluster in mapView.annotations.compactMap({ $0 as? MKClusterAnnotation }) {
                 (mapView.view(for: cluster) as? ClusterAnnotationView).map { configure($0, for: cluster) }
@@ -426,7 +450,8 @@ struct CampusMapView: UIViewRepresentable {
                 for: annotation
             ) as? AreaAnnotationView
             let id = annotation.area.id
-            view?.configure(area: annotation.area, level: annotation.level, highlighted: id == selectedAreaID, groupable: !openedIDs.contains(id))
+            view?.setGroupable(isGroupable(id))
+            view?.configure(area: annotation.area, level: annotation.level, highlighted: id == selectedAreaID)
             if poppingIDs.remove(id) != nil {
                 view?.popIn(delay: Double(poppingIDs.count) * 0.025)
             }

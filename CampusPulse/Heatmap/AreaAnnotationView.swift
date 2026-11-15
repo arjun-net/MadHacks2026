@@ -98,12 +98,18 @@ final class AreaAnnotationView: MKAnnotationView {
         }
     }
 
-    /// `groupable` false keeps the marker out of group markers (an opened group's places).
-    func configure(area: CampusArea, level: ActivityLevel?, highlighted: Bool, groupable: Bool = true) {
+    /// Whether MapKit may merge this marker into a group marker. Set only before MapKit shows
+    /// the view (in `mapView(_:viewFor:)`): changing it on a marker already on the map, above
+    /// all to nil, crashes MapKit ("setObject:forKey: key cannot be nil"). To change it, remove
+    /// and re-add the annotation.
+    func setGroupable(_ groupable: Bool) {
+        clusteringIdentifier = groupable ? ClusterAnnotationView.clusteringIdentifier : nil
+    }
+
+    func configure(area: CampusArea, level: ActivityLevel?, highlighted: Bool) {
         // Data refreshes reconfigure every marker; skip the ones that haven't changed, since a
-        // relayout animates and touching the grouping settings makes MapKit regroup the map.
-        let groupID = highlighted || !groupable ? nil : ClusterAnnotationView.clusteringIdentifier
-        if self.area?.id == area.id, self.level == level, isHighlightedArea == highlighted, clusteringIdentifier == groupID {
+        // relayout animates.
+        if self.area?.id == area.id, self.level == level, isHighlightedArea == highlighted {
             return
         }
         self.area = area
@@ -117,9 +123,8 @@ final class AreaAnnotationView: MKAnnotationView {
         applyColors()
 
         // Nothing is dropped when markers overlap: they merge into a group marker instead
-        // (the selected place stays on its own).
+        // (see `setGroupable`).
         displayPriority = .required
-        clusteringIdentifier = groupID
         zPriority = highlighted ? .max : MKAnnotationViewZPriority(rawValue: Float(area.popularity) * 100)
         accessibilityLabel = [area.name, level?.title].compactMap { $0 }.joined(separator: ", ")
 
