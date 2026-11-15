@@ -1,0 +1,10 @@
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/sender/target/release/build/idna/9b3646baaf6b44b4/out/idna-9b3646baaf6b44b4.d: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/sender/target/release/build/idna/9b3646baaf6b44b4/out/libidna-9b3646baaf6b44b4.rlib: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/sender/target/release/build/idna/9b3646baaf6b44b4/out/libidna-9b3646baaf6b44b4.rmeta: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs
+
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/lib.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/deprecated.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/punycode.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/idna-1.1.0/src/uts46.rs:

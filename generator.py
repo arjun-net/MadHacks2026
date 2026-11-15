@@ -345,13 +345,19 @@ def simulate(schedules, buildings_by_id, pools):
     global PING_JITTER_M
     PING_JITTER_M = float(sim.get("ping_jitter_meters", PING_JITTER_M))
 
-    sim_day = datetime(2026, 1, 1, tzinfo=timezone.utc)  # fixed sim day, UTC
+    n_days = int(sim.get("days", 1))
+    # End at 11:58pm LOCAL today; start n_days × 24h earlier. Timestamps are
+    # written in local wall time (Z suffix kept for API compatibility).
+    end = datetime.now().replace(hour=23, minute=58, second=0, microsecond=0)
+    start = end - timedelta(days=n_days)
     rows, coord_rows = [], []
     t = 0
-    while t < DAY_MINUTES:
-        stamp = (sim_day + timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    total_min = DAY_MINUTES * n_days
+    while t <= total_min:
+        stamp = (start + timedelta(minutes=t)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        day_t = t % DAY_MINUTES
         for agent in agents:
-            pos = locate(agent, t)
+            pos = locate(agent, day_t)
             if pos is None:
                 continue  # commuter off campus
             state, target, lat, lng = pos
@@ -369,6 +375,7 @@ def simulate(schedules, buildings_by_id, pools):
                 "lat": f"{lat:.6f}",
                 "long": f"{lng:.6f}",
                 "timestamp": stamp,
+                "building": target,
             })
         t += ping
     return rows, coord_rows
@@ -515,7 +522,7 @@ def main():
     )
     rows, coord_rows = simulate(schedules, buildings_by_id, pools)
     write_csv(rows, out)
-    write_csv(coord_rows, out_coords, fieldnames=["lat", "long", "timestamp"])
+    write_csv(coord_rows, out_coords, fieldnames=["lat", "long", "timestamp", "building"])
     print(f"Wrote {len(rows):,} pings for "
           f"{schedules['simulation']['agents']} agents → {out}")
     print(f"Wrote {len(coord_rows):,} coordinate rows → {out_coords}")

@@ -1,0 +1,10 @@
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/sender/target/release/build/ppv-lite86/377cbc57f1fdcec4/out/ppv_lite86-377cbc57f1fdcec4.d: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/soft.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/types.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/generic.rs
+
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/sender/target/release/build/ppv-lite86/377cbc57f1fdcec4/out/libppv_lite86-377cbc57f1fdcec4.rlib: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/soft.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/types.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/generic.rs
+
+/Users/joshua.colcord/Desktop/campusmap/MadHacks2026/sender/target/release/build/ppv-lite86/377cbc57f1fdcec4/out/libppv_lite86-377cbc57f1fdcec4.rmeta: /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/lib.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/soft.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/types.rs /Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/generic.rs
+
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/lib.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/soft.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/types.rs:
+/Users/joshua.colcord/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ppv-lite86-0.2.21/src/generic.rs:

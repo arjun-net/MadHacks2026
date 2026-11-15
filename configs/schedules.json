@@ -6,7 +6,8 @@
     "ping_interval_minutes": 2,
     "seed": 42,
     "output": "data/campus_simulation_history.csv",
-    "output_coords": "data/campus_simulation_coords.csv"
+    "output_coords": "data/campus_simulation_apicalls.csv",
+    "days": 3
   },
   "behavior": {
     "commuter_share": 0.6,
