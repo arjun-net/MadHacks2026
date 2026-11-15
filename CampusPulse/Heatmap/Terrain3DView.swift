@@ -619,6 +619,8 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         cameraNode.position = SCNVector3(target.x + offset.x, offset.y, target.z + offset.z)
         cameraNode.look(at: target, up: SCNVector3(0, 1, 0), localFront: SCNVector3(0, 0, -1))
         terrain.scale = SCNVector3(1, max(0.001, verticalScale), 1)
+        // Shown while heat is on or the mountains are still sinking away.
+        terrain.isHidden = grid == nil || !(heatVisible || heightScale > 0.02)
         scene.fogStartDistance = CGFloat(camera.distance * 1.1)
         scene.fogEndDistance = CGFloat(camera.distance * 3.2)
         setNeedsRender()
@@ -630,10 +632,14 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         startTicking()
     }
 
-    private func renderFrame() {
-        guard let device, let commandQueue, bounds.width > 0 else { return }
+    /// False when the frame couldn't be drawn yet (no drawable available), so it's tried again.
+    @discardableResult
+    private func renderFrame() -> Bool {
+        // Nothing to draw into until there's a size; layout asks for a frame once there is.
+        guard let device, let commandQueue, bounds.width > 0, bounds.height > 0 else { return true }
         let metalLayer = sceneView.metalLayer
-        guard let drawable = metalLayer.nextDrawable(), let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+        guard metalLayer.drawableSize.width > 0, let drawable = metalLayer.nextDrawable(),
+              let commandBuffer = commandQueue.makeCommandBuffer() else { return false }
         let width = drawable.texture.width, height = drawable.texture.height
         if colorTexture?.width != width || colorTexture?.height != height {
             let color = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: metalLayer.pixelFormat, width: width, height: height, mipmapped: false)
@@ -667,6 +673,7 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         commandBuffer.commit()
         commandBuffer.waitUntilScheduled()
         drawable.present()
+        return true
     }
 
     // MARK: Projection (done here rather than by SceneKit, so it matches the frame being drawn)
@@ -795,17 +802,16 @@ final class Terrain3DView: UIView, CLLocationManagerDelegate, UIGestureRecognize
         if heightScale != heightTarget {
             let step = dt / 0.5
             heightScale = heightTarget > heightScale ? min(heightTarget, heightScale + step) : max(heightTarget, heightScale - step)
-            terrain.opacity = heatVisible || heightScale > 0.02 ? 1 : 0
             active = active || heightScale != heightTarget
         }
 
         if active || needsRender {
             applyCamera()
-            renderFrame()
+            let drawn = renderFrame()
             updateOverlay()
-            needsRender = false
+            needsRender = !drawn
         }
-        if !active {
+        if !active && !needsRender {
             link.invalidate()
             displayLink = nil
         }
